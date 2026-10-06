@@ -11,7 +11,7 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
-| <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73% and a Codex ring at 21%"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel: Claude and Codex tiles, the sessions, and the Ideas box with recent ideas from Notion"> |
+| <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73%, a Codex ring at 21%, and the calendar ring filling during a meeting, marked now"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel: Claude and Codex tiles, the sessions, the Calendar tile with today's and tomorrow's events and tasks, and the Ideas box with recent ideas from Notion"> |
 
 *The pictures here and below show the solid look. On Windows 11 the glass is clear, with the windows behind it blurred live.*
 
@@ -36,9 +36,13 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add one to it.
 
+| Hover the calendar | The month page |
+|:---:|:---:|
+| <img src="docs/images/calendar-card.png" width="328" alt="The calendar card: the rest of today, with the meeting under way highlighted and a task, then tomorrow's first events and a task"> | <img src="docs/images/month.png" width="340" alt="The month page: the month's days with coloured dots, today picked, and today's events and tasks with a pencil and a bin on each"> |
+
 | Working | Waiting on you |
 |:---:|:---:|
-| <img src="docs/images/notch-working.png" width="116" alt="A white arc spinning inside the Claude ring and another inside the Codex ring"> | <img src="docs/images/notch-waiting.png" width="116" alt="The whole Claude ring pulsing amber"> |
+| <img src="docs/images/notch-working.png" width="116" alt="A white arc spinning inside the Claude ring and another inside the Codex ring, above the calendar ring"> | <img src="docs/images/notch-waiting.png" width="116" alt="The whole Claude ring pulsing amber, above the Codex and calendar rings"> |
 
 ## Approve and answer Claude from the capsule
 
@@ -245,6 +249,11 @@ calendars.
 #### The month page
 
 Click the calendar button at the top right of the panel's Calendar tile.
+
+| + Add event | Delete, asked first |
+|:---:|:---:|
+| <img src="docs/images/month-add.png" width="340" alt="The month page with the add form open: a title, All day, a start and end time, and Add or Cancel"> | <img src="docs/images/month-delete.png" width="340" alt="The month page with one event's row asking Delete this?, with Delete and Cancel"> |
+
 - **The month:** six weeks of days, with a dot for each event in its calendar's colour, and a grey one for a task.
   A small **+** means there are more than three. ‹ and › change the month, **Today** comes back, and ← returns to
   the tiles.
