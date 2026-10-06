@@ -31,6 +31,7 @@ namespace Capsule
             AMonthIsReadWithItsTasks();
             AMonthPickedMeanwhileIsReadNext();
             EventsAndTasksAreChangedAndDeleted();
+            TheTileReadsTodaysAndTomorrowsTasks();
             AnOlderSignInAsksForANewOne();
             AddingAnEventReadsTheMonthAgain();
             AddingATaskAndTickingIt();
@@ -158,6 +159,25 @@ namespace Capsule
             string log = Files.ReadText(Paths.LogFile) ?? "";
             TestRunner.Check(log.Contains("calendar: deleted an event") && log.Contains("calendar: changed a task") && !log.Contains("Send the invoice today"), "the log says what was done, never a title");
             rig.Module.SignOut();
+        }
+
+        static void TheTileReadsTodaysAndTomorrowsTasks()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            rig.Module.Refresh();
+            rig.Settle();
+            DateTime today = CalendarDay.LocalDay(Clock.NowMs(), CalendarDayTests.Zone);
+            TestRunner.Check(tasksSeen.Any(r => r.Path.Contains("dueMin=" + Uri.EscapeDataString(GoogleTasksClient.DueText(today)) + "&dueMax=" + Uri.EscapeDataString(GoogleTasksClient.DueText(today.AddDays(2))))),
+                "the tile's pass reads the tasks due today and tomorrow");
+            TestRunner.Check(rig.Module.Snapshot.Tasks.Count > 0 && rig.Module.Snapshot.Events.Count > 0, "and keeps them for the tile, with the events");
+            rig.Module.SignOut();
+            var oldSeen = new List<CalendarRequest>();
+            var old = MonthRig(OldTokens, oldSeen);
+            old.Module.Refresh();
+            old.Settle();
+            TestRunner.Check(oldSeen.Count == 0 && old.Module.Snapshot.Events.Count > 0, "a sign-in that may not read tasks isn't asked for them");
+            old.Module.SignOut();
         }
 
         static void AnOlderSignInAsksForANewOne()
@@ -400,6 +420,13 @@ namespace Capsule
                 {
                     var client = new GoogleCalendarClient(token);
                     client.Transport = r => Transport(r);
+                    return client;
+                };
+                // No tasks.googleapis.com here: unless a test answers for it, it can't be reached.
+                Module.NewTasks = token =>
+                {
+                    var client = new GoogleTasksClient(token);
+                    client.Transport = r => new HttpResult { Status = 0, Error = "ConnectFailure" };
                     return client;
                 };
             }

@@ -31,6 +31,7 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
   - Hover it for the rest of today and tomorrow's first three events.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
+  Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add one to it.
 

@@ -12,6 +12,7 @@ namespace Capsule
         public bool SignedIn;
         public bool Loaded;                 // a pass has filled the events since signing in (or since Capsule started)
         public List<CalendarEvent> Events = new List<CalendarEvent>();
+        public List<GoogleTask> Tasks = new List<GoogleTask>();   // signed in: the tasks due today and tomorrow
         public long DataAtMs;               // when the events were read
         public bool LastFailed;             // the last pass didn't get them; they are the last ones read
         public string Problem = "";         // what went wrong, for the tile and the card
@@ -67,6 +68,7 @@ namespace Capsule
         public const string Nothing = "—";
         public const long StaleMs = 15 * 60 * 1000;   // kept events dim once they are this old and Google can't be reached
         public const int TileRows = 6, TomorrowOnCard = 3;
+        public const string TaskTime = "Task";
         public const string SignInHint = "Connect Google Calendar in ⚙";
 
         // The event happening now: started, not yet ended. When several are, the one that started first.
@@ -194,15 +196,24 @@ namespace Capsule
                 return t;
             }
             t.CanOpenMonth = true;
+            DateTime today = LocalDay(now, zone);
             t.Today = RestOfToday(s.Events, now, zone, culture);
+            t.Today.AddRange(TaskRows(s.Tasks, today));
             if (t.Today.Count > TileRows) t.Today.RemoveRange(TileRows, t.Today.Count - TileRows);
             t.Tomorrow = TomorrowRows(s.Events, now, zone, culture, TileRows);
+            t.Tomorrow.AddRange(TaskRows(s.Tasks, today.AddDays(1)));
             int room = TileRows - t.Today.Count;
             if (t.Tomorrow.Count > room) t.Tomorrow.RemoveRange(room, t.Tomorrow.Count - room);
             t.Note = s.Problem;
             t.Dimmed = IsDimmed(s, now);
             if (t.Today.Count + t.Tomorrow.Count == 0) t.Hint = s.Loaded ? "Nothing on today or tomorrow" : s.Problem != "" ? "" : "Checking…";
             return t;
+        }
+
+        // A day's tasks not done yet, after its events: a grey dot, and "Task" where the time goes.
+        static IEnumerable<CalendarRow> TaskRows(IList<GoogleTask> tasks, DateTime day)
+        {
+            return (tasks ?? new List<GoogleTask>()).Where(x => x.Due.Date == day && !x.Done).Select(x => new CalendarRow { Time = TaskTime, Title = x.Title, Color = CalendarMonth.TaskDot });
         }
 
         static List<CalendarRow> RestOfToday(IList<CalendarEvent> events, long now, TimeZoneInfo zone, CultureInfo culture)

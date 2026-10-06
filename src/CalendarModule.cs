@@ -167,30 +167,32 @@ namespace Capsule
                 events.AddRange(some);
             }
             r.Events = events.OrderBy(e => e.AllDay ? 0 : 1).ThenBy(e => e.StartMs).ToList();
-            if (withTasks)
-            {
-                GoogleTasksClient tasks = newTasks(r.AccessToken);
-                List<TaskList> lists = tasks.Lists();
-                if (lists == null)
-                {
-                    r.TasksDenied = tasks.LastFailure != null && tasks.LastFailure.Status == 403;
-                }
-                else
-                {
-                    var all = new List<GoogleTask>();
-                    foreach (TaskList list in lists)
-                    {
-                        List<GoogleTask> some = tasks.Tasks(list, firstDay, lastDay);
-                        if (some != null) all.AddRange(some);
-                    }
-                    r.Lists = lists;
-                    r.Tasks = all;
-                }
-            }
+            if (withTasks) ReadTasks(newTasks, r, firstDay, lastDay);
             r.LogText = "month: " + r.Events.Count + " event" + (r.Events.Count == 1 ? "" : "s")
                 + (r.Tasks != null ? ", " + r.Tasks.Count + " task" + (r.Tasks.Count == 1 ? "" : "s") : "")
                 + (r.TasksDenied ? ", tasks not allowed by this sign-in" : "");
             return r;
+        }
+
+        // The tasks due from 'first' through 'last' in every list, into r (Tasks and Lists); a 403 for the lists marks a
+        // sign-in that may not read tasks. A list that can't be read is left out.
+        public static void ReadTasks(Func<string, GoogleTasksClient> newTasks, CalendarPassResult r, DateTime first, DateTime last)
+        {
+            GoogleTasksClient tasks = newTasks(r.AccessToken);
+            List<TaskList> lists = tasks.Lists();
+            if (lists == null)
+            {
+                r.TasksDenied = tasks.LastFailure != null && tasks.LastFailure.Status == 403;
+                return;
+            }
+            var all = new List<GoogleTask>();
+            foreach (TaskList list in lists)
+            {
+                List<GoogleTask> some = tasks.Tasks(list, first, last);
+                if (some != null) all.AddRange(some);
+            }
+            r.Lists = lists;
+            r.Tasks = all;
         }
 
         // Adds an event, with a fresh access token if needed and once more after a 401.
@@ -517,8 +519,22 @@ namespace Capsule
             string token = accessToken;
             long expires = accessExpiresAtMs;
             int run = generation, id = ++passId;
-            LastPass = Task.Run(() => CalendarPass.Run(auth, refresh, token, expires, make, c => Shown(c, picked), from, to, now))
-                .ContinueWith(t => Apply(t, run, id), ui);
+            // The tile lists today's and tomorrow's tasks too, once the sign-in may read them (a refresh this pass says).
+            Func<string, GoogleTasksClient> makeTasks = NewTasks;
+            bool tasksAllowed = !tasksDenied;
+            string scope = grantedScope;
+            DateTime today = CalendarDay.LocalDay(now, zone);
+            LastPass = Task.Run(() =>
+            {
+                CalendarPassResult r = CalendarPass.Run(auth, refresh, token, expires, make, c => Shown(c, picked), from, to, now);
+                string granted = !string.IsNullOrEmpty(r.Scope) ? r.Scope : scope;
+                if (r.Events != null && r.AccessToken != null && tasksAllowed && (granted == null || GoogleOAuth.CanAdd(granted)))
+                {
+                    CalendarPass.ReadTasks(makeTasks, r, today, today.AddDays(1));
+                    if (r.Tasks != null) r.LogText += ", " + r.Tasks.Count + " task" + (r.Tasks.Count == 1 ? "" : "s");
+                }
+                return r;
+            }).ContinueWith(t => Apply(t, run, id), ui);
         }
 
         void LinkPass()
@@ -579,7 +595,10 @@ namespace Capsule
                 unreachable = false;
                 retries = 0;
                 consecutive429 = 0;
-                snap = new CalendarSnapshot { SignedIn = true, Loaded = true, Events = r.Events, DataAtMs = Clock.NowMs() };
+                if (r.TasksDenied) tasksDenied = true;
+                if (r.Lists != null) taskLists = r.Lists;
+                // Tasks that couldn't be read this time stay as last read.
+                snap = new CalendarSnapshot { SignedIn = true, Loaded = true, Events = r.Events, Tasks = r.Tasks ?? (r.FromLink ? new List<GoogleTask>() : snap.Tasks), DataAtMs = Clock.NowMs() };
                 due = Clock.NowMs() + Every;
             }
             catch (Exception e)

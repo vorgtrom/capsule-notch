@@ -23,6 +23,7 @@ namespace Capsule
             CardListsTheRestOfTodayAndTomorrow();
             TileHasSixRowsAtMost();
             TileHints();
+            TheTileListsTasksNotDone();
             ReadsTodayAndTomorrow();
         }
 
@@ -30,6 +31,24 @@ namespace Capsule
         public static long At(int month, int day, int hour, int minute)
         {
             return Clock.ToMs(new DateTime(2026, month, day, hour, minute, 0, DateTimeKind.Utc).AddHours(7));
+        }
+
+        static void TheTileListsTasksNotDone()
+        {
+            CalendarSnapshot snap = Snapshot(new List<CalendarEvent>(), At(10, 6, 0, 0));
+            snap.Tasks = new List<GoogleTask>
+            {
+                new GoogleTask { Id = "a", Title = "Send the invoice", Due = new DateTime(2026, 10, 6) },
+                new GoogleTask { Id = "b", Title = "Water the plants", Due = new DateTime(2026, 10, 6), Done = true },
+                new GoogleTask { Id = "c", Title = "Book flights", Due = new DateTime(2026, 10, 7) },
+                new GoogleTask { Id = "d", Title = "Later", Due = new DateTime(2026, 10, 9) },
+            };
+            CalendarTile t = CalendarDay.Tile(snap, At(10, 6, 8, 0), Zone, En);
+            TestRunner.Check(t.Today.Count == 1 && t.Today[0].Title == "Send the invoice" && t.Today[0].Time == CalendarDay.TaskTime && t.Today[0].Color == CalendarMonth.TaskDot
+                && t.Tomorrow.Count == 1 && t.Tomorrow[0].Title == "Book flights" && t.Hint == "", "the tile lists today's and tomorrow's tasks not done yet");
+            snap.Events = Fixture();
+            t = CalendarDay.Tile(snap, At(10, 6, 22, 0), Zone, En);
+            TestRunner.Check(t.Today.Count > 1 && t.Today.Last().Title == "Send the invoice", "after the day's events");
         }
 
         public static List<CalendarEvent> Fixture()
