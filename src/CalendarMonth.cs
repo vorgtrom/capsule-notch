@@ -43,6 +43,8 @@ namespace Capsule
         public bool Loading;                              // the month hasn't been read yet
         public List<CalendarChoice> Calendars = new List<CalendarChoice>();   // the ones events can be added to, primary first
         public List<TaskList> Lists = new List<TaskList>();
+        public bool AllDayDefault;                        // the event form starts all-day for a day other than today
+        public string StartText = "", EndText = "";       // and with these times
     }
 
     // The month page (month spec §2): the six weeks of a month, a selected day's events and tasks, and the add forms'
@@ -99,6 +101,10 @@ namespace Capsule
                 m.Days.Add(day);
             }
             m.SelectedTitle = m.Selected.ToString("ddd d MMM", culture);
+            m.AllDayDefault = m.Selected != today;
+            TimeSpan from = DefaultStart(m.Selected, CalendarDay.Local(now, zone));
+            m.StartText = TimeText(from, culture);
+            m.EndText = TimeText(DefaultEnd(from), culture);
             DayRows(m, events, tasks, now, zone, culture);
             m.Empty = "Nothing on this day";
             return m;

@@ -41,6 +41,7 @@ namespace Capsule
 
         // The settings sheet (spec §3): the Notion secret (write-only), the database link, and the shortcut.
         readonly StackPanel settings = new StackPanel();
+        readonly MonthView month = new MonthView();   // the month page (month spec §2), in the tiles' place like the settings
         readonly PasswordBox secretBox = new PasswordBox();
         readonly TextBox linkBox = new TextBox();
         readonly TextBlock secretHint = new TextBlock();
@@ -124,6 +125,10 @@ namespace Capsule
             Children.Add(glass);
             Children.Add(board);
             Children.Add(settings);
+            month.Visibility = Visibility.Collapsed;
+            month.BackClicked += ShowBoard;
+            month.Resized += RaiseResized;
+            Children.Add(month);
             Restyle();
         }
 
@@ -137,6 +142,22 @@ namespace Capsule
 
         public TextBox IdeaBox { get { return ideaBox; } }
         public bool ShowingSettings { get { return settings.Visibility == Visibility.Visible; } }
+        public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
+        public MonthView Month { get { return month; } }
+        public event Action MonthClicked;      // the Calendar tile's month button: the Controller calls ShowMonth
+        public event Action MonthClosed;       // the month page gave way to the tiles (←, or the panel closing)
+
+        // The month page in the tiles' place, or redrawn in place when it already shows.
+        public void ShowMonth(MonthModel m)
+        {
+            month.Update(m);
+            bool appearing = !ShowingMonth;
+            board.Visibility = Visibility.Collapsed;
+            settings.Visibility = Visibility.Collapsed;
+            month.Visibility = Visibility.Visible;
+            if (appearing) RaiseResized();
+            else Relayout();
+        }
 
         // The panel's glass, from the panel's top-left (inside the shadow margin).
         public Geometry Outline { get { return glass.Outline; } }
@@ -145,6 +166,7 @@ namespace Capsule
         public void Restyle()
         {
             Theme theme = Theme.Current;
+            month.Restyle();
             foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, ideasTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
@@ -358,6 +380,11 @@ namespace Capsule
             shortcutText.Text = currentShortcut;
             shortcutResult.Text = "Click, then press a new shortcut.";
             shortcutResult.Foreground = NotchView.Brush(Palette.Secondary);
+            if (ShowingMonth)
+            {
+                month.Visibility = Visibility.Collapsed;
+                if (MonthClosed != null) MonthClosed();
+            }
             board.Visibility = Visibility.Collapsed;
             settings.Visibility = Visibility.Visible;
             RaiseResized();
@@ -373,6 +400,14 @@ namespace Capsule
             secretBox.Clear();
             clientSecretBox.Clear();
             calendarLinkBox.Clear();
+            if (ShowingMonth)
+            {
+                month.Visibility = Visibility.Collapsed;
+                board.Visibility = Visibility.Visible;
+                if (MonthClosed != null) MonthClosed();
+                RaiseResized();
+                return;
+            }
             if (!ShowingSettings) return;
             settings.Visibility = Visibility.Collapsed;
             board.Visibility = Visibility.Visible;
@@ -421,6 +456,7 @@ namespace Capsule
         readonly StackPanel googleSignedIn = new StackPanel();  // the account, Sign out and Change client
         readonly TextBlock googleAccount = new TextBlock();
         readonly Border googleSignOutHost = new Border();
+        readonly Border signInAgainHost = new Border();         // "Sign in again", when the sign-in predates adding
         readonly Border changeClientHost = new Border();
         readonly StackPanel calendarChoices = new StackPanel();
         readonly TextBlock googleResult = new TextBlock();
@@ -477,6 +513,8 @@ namespace Capsule
             googleAccount.Margin = new Thickness(0, 0, 0, 6);
             googleSignedIn.Children.Add(googleAccount);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            signInAgainHost.Margin = new Thickness(0, 0, 8, 0);
+            buttons.Children.Add(signInAgainHost);
             buttons.Children.Add(googleSignOutHost);
             changeClientHost.Margin = new Thickness(8, 0, 0, 0);
             changeClientHost.VerticalAlignment = VerticalAlignment.Center;
@@ -568,8 +606,14 @@ namespace Capsule
             googleButtonHost.Child = google.SigningIn
                 ? PillButton("Cancel", delegate { if (GoogleSignInCancelled != null) GoogleSignInCancelled(); })
                 : PillButton("Sign in with Google", delegate { if (GoogleSignInClicked != null) GoogleSignInClicked(clientIdBox.Text, clientSecretBox.Password); });
-            googleAccount.Text = google.Account != "" ? "Signed in as " + google.Account : "Signed in";
+            googleAccount.Text = (google.Account != "" ? "Signed in as " + google.Account : "Signed in")
+                + (google.NeedsSignInAgain ? ". Sign in again to let Capsule add events and tasks." : "");
             googleSignOutHost.Child = PillButton("Sign out", delegate { if (GoogleSignOutClicked != null) GoogleSignOutClicked(); });
+            // A sign-in from before adding existed reads, but may not add: a new one asks Google for that too.
+            signInAgainHost.Child = google.NeedsSignInAgain && !google.SigningIn
+                ? PillButton("Sign in again", delegate { if (GoogleSignInClicked != null) GoogleSignInClicked("", ""); })
+                : null;
+            signInAgainHost.Visibility = signInAgainHost.Child != null ? Visibility.Visible : Visibility.Collapsed;
             changeClientHost.Child = LinkButton("Change client", delegate
             {
                 clientOpen = true;
@@ -715,11 +759,18 @@ namespace Capsule
         }
 
         // The Calendar tile (calendar spec §2): today's events, then tomorrow's under its label, or a hint; the last list
-        // dims when it is old and Google can't be reached, with why.
-        static UIElement CalendarContent(CalendarTile t)
+        // dims when it is old and Google can't be reached, with why. Connected, its month button opens the month page.
+        UIElement CalendarContent(CalendarTile t)
         {
             var box = new StackPanel();
             var top = new DockPanel { LastChildFill = false };
+            if (t.CanOpenMonth)
+            {
+                Border open = IconButton(CalendarDay.Glyph, "Month", delegate { if (MonthClicked != null) MonthClicked(); });
+                open.Margin = new Thickness(4, -4, -6, 0);
+                DockPanel.SetDock(open, Dock.Right);
+                top.Children.Add(open);
+            }
             TextBlock where = CardView.MakeText("Google", 11.5, Palette.Secondary, FontWeights.Normal);
             DockPanel.SetDock(where, Dock.Right);
             top.Children.Add(where);

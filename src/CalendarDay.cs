@@ -49,6 +49,7 @@ namespace Capsule
         public string Hint = "";    // instead of rows: not signed in, checking, or nothing coming up
         public string Note = "";    // what went wrong ("Couldn't reach Google"); the rows are then the last ones read
         public bool Dimmed;
+        public bool CanOpenMonth;   // connected: the tile offers the month page
     }
 
     // The calendar's "now" and "next", and what its cell, card and tile show (calendar spec §2). Pure: every function takes
@@ -187,6 +188,7 @@ namespace Capsule
                 t.Hint = SignInHint;
                 return t;
             }
+            t.CanOpenMonth = true;
             t.Today = RestOfToday(s.Events, now, zone, culture);
             if (t.Today.Count > TileRows) t.Today.RemoveRange(TileRows, t.Today.Count - TileRows);
             t.Tomorrow = TomorrowRows(s.Events, now, zone, culture, TileRows);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -24,6 +25,150 @@ namespace Capsule
             SettingsSignInAndOut();
             SettingsCalendarLink();
             SettingsKeepTheClientWhenClosed();
+            TheTileOpensTheMonth();
+            TheMonthPageShowsAMonth();
+            TheMonthPageAddsAndTicks();
+            OlderSignInsAreAskedToSignInAgain();
+        }
+
+        static MonthModel MonthSample(bool canAdd)
+        {
+            var tasks = new List<GoogleTask>
+            {
+                new GoogleTask { Id = "t1", ListId = "l1", Title = "Send the invoice", Due = new DateTime(2026, 10, 6) },
+                new GoogleTask { Id = "t2", ListId = "l1", Title = "Water the plants", Due = new DateTime(2026, 10, 6), Done = true },
+            };
+            MonthModel m = CalendarMonth.Build(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.Fixture(), tasks, CalendarDayTests.At(10, 6, 8, 0), CalendarDayTests.Zone, En);
+            m.CanAdd = canAdd;
+            m.ShowTasks = canAdd;
+            m.Note = canAdd ? "" : CalendarModule.AddNeedsSignIn;
+            m.Calendars.Add(new CalendarChoice { Id = "primary@example.com", Name = "primary@example.com" });
+            m.Calendars.Add(new CalendarChoice { Id = "family", Name = "Family" });
+            m.Lists.Add(new TaskList { Id = "l1", Title = "My Tasks" });
+            return m;
+        }
+
+        // The element the automation name is on, or null.
+        static FrameworkElement Named(DependencyObject root, string name)
+        {
+            var e = root as FrameworkElement;
+            if (e != null && e.Visibility != Visibility.Visible) return null;
+            if (e != null && System.Windows.Automation.AutomationProperties.GetName(e) == name) return e;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                FrameworkElement found = Named(VisualTreeHelper.GetChild(root, i), name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        static void TheTileOpensTheMonth()
+        {
+            var view = new PanelView();
+            view.Update(Model(TileAt(8, 0)));
+            Lay(view);
+            int clicks = 0;
+            view.MonthClicked += delegate { clicks++; };
+            TestRunner.Check(HasText(view, CalendarGlyph), "a connected Calendar tile has the month button, U+E787");
+            Click(Holder(view, CalendarGlyph));
+            TestRunner.Eq(1, clicks, "which asks for the month page");
+            view.Update(Model(CalendarDay.Tile(new CalendarSnapshot(), CalendarDayTests.At(10, 6, 8, 0), CalendarDayTests.Zone, En)));
+            Lay(view);
+            TestRunner.Check(!HasText(view, CalendarGlyph), "not connected, there's no month to open");
+        }
+
+        static void TheMonthPageShowsAMonth()
+        {
+            var view = new PanelView();
+            view.Update(Model(TileAt(8, 0)));
+            int closed = 0, back = 0, previous = 0, next = 0, today = 0;
+            DateTime picked = DateTime.MinValue;
+            view.MonthClosed += delegate { closed++; };
+            view.Month.BackClicked += delegate { back++; };
+            view.Month.PreviousClicked += delegate { previous++; };
+            view.Month.NextClicked += delegate { next++; };
+            view.Month.TodayClicked += delegate { today++; };
+            view.Month.DaySelected += delegate(DateTime d) { picked = d; };
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            TestRunner.Check(view.ShowingMonth && HasText(view, "October 2026") && HasText(view, "Sun") && HasText(view, "Tue 6 Oct"), "the month page in the tiles' place: its month, the weekdays, the selected day");
+            TestRunner.Check(Named(view, "2026-09-27") != null && Named(view, "2026-11-07") != null && Named(view, "2026-11-08") == null, "six weeks of days");
+            TestRunner.Check(HasText(view, "Night deploy") && HasText(view, "11:00 PM – 1:00 AM") && HasText(view, "Send the invoice") && HasText(view, "Water the plants"), "the day's events and tasks");
+            Click(Named(view, "2026-10-09"));
+            Click(Named(view, "Previous month"));
+            Click(Named(view, "Next month"));
+            Click(Holder(view, "Today"));
+            TestRunner.Check(picked == new DateTime(2026, 10, 9) && previous == 1 && next == 1 && today == 1, "a day, ‹, › and Today are handed over");
+            Click(Named(view, "Back"));
+            TestRunner.Check(back == 1 && closed == 1 && !view.ShowingMonth && HasText(view, "Standup"), "← goes back to the tiles");
+            view.ShowMonth(MonthSample(false));
+            Lay(view);
+            TestRunner.Check(!HasText(view, "+ Add event") && HasText(view, CalendarModule.AddNeedsSignIn), "without a sign-in that can add: no Add, and why");
+        }
+
+        static void TheMonthPageAddsAndTicks()
+        {
+            var view = new PanelView();
+            view.Update(Model(TileAt(8, 0)));
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            string[] sent = null;
+            string[] task = null;
+            string ticked = null;
+            view.Month.AddEventRequested += delegate(string title, bool allDay, string start, string end, string calendarId) { sent = new[] { title, allDay.ToString(), start, end, calendarId }; };
+            view.Month.AddTaskRequested += delegate(string title, string listId) { task = new[] { title, listId }; };
+            view.Month.TaskToggled += delegate(string list, string id, bool done) { ticked = list + "/" + id + "=" + done; };
+            var boxes = new List<CheckBox>();
+            CheckBoxes(view, boxes);
+            CheckBox invoice = boxes.FirstOrDefault(b => System.Windows.Automation.AutomationProperties.GetName(b) == "Send the invoice");
+            if (invoice != null)
+            {
+                invoice.IsChecked = true;
+                invoice.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            }
+            TestRunner.Eq("l1/t1=True", ticked, "ticking a task hands over its list, id and state");
+            Click(Holder(view, "+ Add event"));
+            Lay(view);
+            TestRunner.Check(view.Month.FormOpen && view.Month.AllDayBox.IsChecked == false && view.Month.StartBox.Text == "9:00 AM" && view.Month.EndBox.Text == "10:00 AM" && !HasText(view, "+ Add event"), "today's event form: not all-day, from the next whole hour");
+            view.Month.TitleBox.Text = "Lunch with Sam";
+            view.Month.StartBox.Text = "12:30 PM";
+            view.Month.EndBox.Text = "1:30 PM";
+            Click(Holder(view, "Add"));
+            TestRunner.Check(sent != null && sent[0] == "Lunch with Sam" && sent[1] == "False" && sent[2] == "12:30 PM" && sent[3] == "1:30 PM" && sent[4] == "primary@example.com", "Add hands over what was typed, into the first calendar");
+            view.Month.FormBusy();
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            TestRunner.Check(view.Month.FormOpen && view.Month.TitleBox.Text == "Lunch with Sam" && HasText(view, "Adding…"), "a redraw keeps the form and what was typed");
+            view.Month.FormError("Couldn't reach Google");
+            Lay(view);
+            TextBlock error = FindText(view, "Couldn't reach Google");
+            TestRunner.Check(error != null && ((SolidColorBrush)error.Foreground).Color == NotchView.Brush(Palette.Amber).Color && view.Month.TitleBox.Text == "Lunch with Sam" && HasText(view, "Add"), "a failure says why in amber, and keeps the form");
+            view.Month.FormDone();
+            Lay(view);
+            TestRunner.Check(!view.Month.FormOpen && HasText(view, "+ Add event"), "added: the form closes");
+            Click(Holder(view, "+ Add task"));
+            view.Month.TitleBox.Text = "Call the dentist";
+            Click(Holder(view, "Add"));
+            TestRunner.Check(task != null && task[0] == "Call the dentist" && task[1] == "l1" && view.Month.AllDayBox.Visibility != Visibility.Visible, "a task: its title and list");
+            view.Month.TitleBox.Text = "x";
+            MonthModel other = MonthSample(true);
+            other.Selected = new DateTime(2026, 10, 9);
+            view.ShowMonth(other);
+            TestRunner.Check(!view.Month.FormOpen, "picking another day closes the form");
+        }
+
+        static void OlderSignInsAreAskedToSignInAgain()
+        {
+            var view = new PanelView();
+            view.Update(Model(null));
+            view.ShowSettings(false, "", "Ctrl+Alt+N");
+            string id = null, secret = null;
+            view.GoogleSignInClicked += delegate(string i, string s2) { id = i; secret = s2; };
+            view.ShowGoogle(new GoogleSettings { ClientId = "cid", SecretSaved = true, SignedIn = true, Account = "a@example.com", NeedsSignInAgain = true });
+            Lay(view);
+            TestRunner.Check(HasText(view, "Signed in as a@example.com. Sign in again to let Capsule add events and tasks.") && HasText(view, "Sign in again"), "a sign-in from before adding says to sign in again, with a button");
+            Click(Holder(view, "Sign in again"));
+            TestRunner.Check(id == "" && secret == "", "which signs in with the saved client");
         }
 
         // A paste, as WPF raises it on the box before it inserts the text. True when a handler cancelled it.

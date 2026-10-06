@@ -47,6 +47,8 @@ namespace Capsule
         bool disposed;    // on the way out: nothing is drawn any more
         int hoverCell = -1, cardCell = -1;
         int calendarCell = -1;   // the calendar's cell on the capsule, under the usage cells; -1 while signed out
+        int monthYear, monthMonth;   // the month page's month, while it shows
+        DateTime monthDay;           // and its selected day
 
         public Controller(Application app) { this.app = app; }
 
@@ -77,6 +79,7 @@ namespace Capsule
             {
                 Guard("render", Render);
                 ShowGoogleIfOpen();
+                Guard("month", ShowMonthIfOpen);
             };
             calendar.SignedOutByGoogle += delegate { tray.Balloon("Capsule", "Google ended Capsule's access to your calendar. Sign in again in Capsule's settings (⚙ in the panel)."); };
             calendar.SignedInWith += OnGoogleSignedIn;
@@ -141,6 +144,16 @@ namespace Capsule
             };
             panel.View.GoogleSignOutClicked += delegate { Guard("calendar sign-out", calendar.SignOut); };
             panel.View.CalendarToggled += OnCalendarToggled;
+            panel.View.MonthClicked += delegate { Guard("month", OpenMonth); };
+            panel.View.MonthClosed += delegate { calendar.CloseMonth(); };
+            MonthView page = panel.View.Month;
+            page.PreviousClicked += delegate { Guard("month", delegate { MoveMonth(-1); }); };
+            page.NextClicked += delegate { Guard("month", delegate { MoveMonth(1); }); };
+            page.TodayClicked += delegate { Guard("month", OpenMonth); };
+            page.DaySelected += delegate(DateTime d) { Guard("month", delegate { SelectDay(d); }); };
+            page.AddEventRequested += delegate(string title, bool allDay, string start, string end, string calendarId) { Guard("month", delegate { AddEvent(title, allDay, start, end, calendarId); }); };
+            page.AddTaskRequested += delegate(string title, string listId) { Guard("month", delegate { AddTask(title, listId); }); };
+            page.TaskToggled += delegate(string listId, string taskId, bool done) { Guard("month", delegate { calendar.SetTaskDone(listId, taskId, done, MonthResult); }); };
             panel.View.GoogleLinkSaved += delegate(string text) { Guard("calendar link", delegate { if (calendar.SaveLink(text)) panel.View.LinkKept(); }); };
             panel.View.GoogleLinkRemoved += delegate { Guard("calendar link", calendar.RemoveLink); };
             panel.View.GoogleClientDraft += delegate(string id, string secret) { Guard("calendar client", delegate { calendar.KeepClient(id, secret); }); };
@@ -473,6 +486,84 @@ namespace Capsule
             NotionDatabase db = client.Describe(databaseId);
             if (db != null) return Tuple.Create(true, "Connected to “" + db.Name + "”");
             return Tuple.Create(false, NotionClient.Problem(client.LastFailure, false));
+        }
+
+        // ---- The month page (month spec) ----
+
+        // Opens the month page on today, or goes back to today's month on it.
+        void OpenMonth()
+        {
+            DateTime today = DateTime.Today;
+            monthYear = today.Year;
+            monthMonth = today.Month;
+            monthDay = today;
+            calendar.OpenMonth(monthYear, monthMonth, CultureInfo.CurrentCulture);
+            ShowMonth();
+        }
+
+        void MoveMonth(int by)
+        {
+            var first = new DateTime(monthYear, monthMonth, 1).AddMonths(by);
+            monthYear = first.Year;
+            monthMonth = first.Month;
+            monthDay = first.Year == DateTime.Today.Year && first.Month == DateTime.Today.Month ? DateTime.Today : first;
+            calendar.OpenMonth(monthYear, monthMonth, CultureInfo.CurrentCulture);
+            ShowMonth();
+        }
+
+        // A day of another month (dimmed in the grid) goes to its month.
+        void SelectDay(DateTime d)
+        {
+            monthDay = d.Date;
+            if (d.Year != monthYear || d.Month != monthMonth)
+            {
+                monthYear = d.Year;
+                monthMonth = d.Month;
+                calendar.OpenMonth(monthYear, monthMonth, CultureInfo.CurrentCulture);
+            }
+            ShowMonth();
+        }
+
+        void ShowMonth()
+        {
+            if (monthYear == 0) return;
+            panel.View.ShowMonth(calendar.Month(monthYear, monthMonth, monthDay, Clock.NowMs(), CultureInfo.CurrentCulture));
+        }
+
+        void ShowMonthIfOpen()
+        {
+            if (!disposed && panel.IsOpen && panel.View.ShowingMonth) ShowMonth();
+        }
+
+        void AddEvent(string title, bool allDay, string start, string end, string calendarId)
+        {
+            TimeSpan from, to;
+            string why = CalendarMonth.CheckEvent(title, allDay, start, end, CultureInfo.CurrentCulture, out from, out to);
+            if (why != null)
+            {
+                panel.View.Month.FormError(why);
+                return;
+            }
+            string body = CalendarMonth.EventBody(title, monthDay, allDay, from, to, TimeZoneInfo.Local);
+            if (calendar.AddEvent(calendarId, body, MonthResult)) panel.View.Month.FormBusy();
+        }
+
+        void AddTask(string title, string listId)
+        {
+            if (calendar.AddTask(listId, title, monthDay, MonthResult)) panel.View.Month.FormBusy();
+        }
+
+        // How an add or a tick went: null closes the form; a line says why not.
+        void MonthResult(string why)
+        {
+            if (disposed) return;
+            if (why == null)
+            {
+                if (panel.View.Month.FormOpen) panel.View.Month.FormDone();
+            }
+            else if (panel.View.Month.FormOpen) panel.View.Month.FormError(why);
+            else tray.Balloon("Capsule", why);
+            ShowMonthIfOpen();
         }
 
         // The settings' Google Calendar section follows the module while the settings show.
