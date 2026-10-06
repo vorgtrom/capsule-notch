@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8;
 
         readonly Application app;
         Config config;
@@ -26,6 +26,7 @@ namespace Capsule
         SessionsModule sessions;
         IdeasModule ideas;
         CalendarModule calendar;
+        UpdateCheck updates;   // a release build's once-a-day look for a newer release
         CodexActivity codexActivity;
         List<IModule> modules;
         NotchWindow notch;
@@ -85,6 +86,8 @@ namespace Capsule
             calendar.SignedInWith += OnGoogleSignedIn;
             calendar.ClientIdChosen += OnGoogleClientIdChosen;
             modules = new List<IModule> { sessions, claude, codex, calendar, ideas };
+            updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
+            updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
             codexActivity = new CodexActivity(Paths.CodexHome);
             lastActivity = sessions.Activity;
             blurWorks = GlassLayer.Supported;   // asked here, on the UI thread, which then runs the blur
@@ -225,6 +228,7 @@ namespace Capsule
         {
             long now = Clock.NowMs();
             foreach (IModule m in modules) m.Tick(now);
+            Guard("updates", delegate { updates.Tick(now); });
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
             Render();
@@ -789,7 +793,13 @@ namespace Capsule
             bool autostart = false;
             try { autostart = Autostart.IsEnabled(); }
             catch (Exception) { }
-            var items = new List<MenuItemSpec>
+            var items = new List<MenuItemSpec>();
+            if (updates.Available != null)
+            {
+                items.Add(new MenuItemSpec { Id = CmdUpdate, Text = "Capsule " + updates.Available + " is available…" });
+                items.Add(new MenuItemSpec { Separator = true });
+            }
+            items.AddRange(new List<MenuItemSpec>
             {
                 new MenuItemSpec { Id = CmdRefresh, Text = "Refresh now" },
                 new MenuItemSpec { Id = CmdShow, Text = "Show notch", Checked = config.ShowNotch },
@@ -797,9 +807,10 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdHooks, Text = HookSetup.MenuText(sessions.HooksConnected, reconnect) },
                 new MenuItemSpec { Id = CmdAutostart, Text = "Start with Windows", Checked = autostart },
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
-                new MenuItemSpec { Separator = true },
-                new MenuItemSpec { Id = CmdQuit, Text = "Quit Capsule" },
-            };
+            });
+            if (updates.CanCheck) items.Add(new MenuItemSpec { Id = CmdCheckUpdates, Text = "Check for updates", Checked = config.CheckUpdates });   // a release build only
+            items.Add(new MenuItemSpec { Separator = true });
+            items.Add(new MenuItemSpec { Id = CmdQuit, Text = "Quit Capsule" });
             int choice;
             menuOpen = true;   // CheckScreen's KeepOnTop would otherwise lift the notch over its own menu
             try { choice = NativeMenu.Show(menuOwner.Handle, items); }
@@ -821,6 +832,15 @@ namespace Capsule
                     break;
                 case CmdFolder:
                     System.Diagnostics.Process.Start("explorer.exe", "\"" + Paths.DataDir + "\"");
+                    break;
+                case CmdUpdate:
+                    try { System.Diagnostics.Process.Start(updates.PageUrl); }   // github.com, built from the checked version
+                    catch (Exception e) { Log.Error("updates: opening the release page", e); }
+                    break;
+                case CmdCheckUpdates:
+                    config.CheckUpdates = !config.CheckUpdates;
+                    config.Save(Paths.ConfigFile);
+                    updates.Enabled = config.CheckUpdates;
                     break;
                 case CmdQuit:
                     app.Shutdown();

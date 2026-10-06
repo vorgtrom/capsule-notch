@@ -27,6 +27,14 @@ jobs:
         shell: pwsh
         run: |
           if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "The version must look like v1.0.0" }
+      - name: Stamp the version
+        # The release build knows its version, so it can tell when a newer release is out; a source build says "dev".
+        shell: pwsh
+        run: |
+          $file = Join-Path $PWD 'src\Version.cs'
+          $text = [IO.File]::ReadAllText($file)
+          if (-not $text.Contains('"dev"')) { throw 'src\Version.cs has no "dev" version to replace' }
+          [IO.File]::WriteAllText($file, $text.Replace('"dev"', '"' + $env:VERSION + '"'), (New-Object Text.UTF8Encoding $false))
       - name: Use a time zone other than UTC
         # GitHub's machines run on UTC, where a local date and a UTC date are always the same day, so the checks that
         # Capsule uses the local one (Codex's day folders) couldn't run. UTC+8, without daylight saving.
