@@ -8,12 +8,14 @@ namespace Capsule
     public static class TestRunner
     {
         static int passed, failed;
+        static bool groups;   // each group's count too: with --groups, and always on GitHub Actions (which sets CI=true)
 
         [STAThread]
         public static int Main(string[] args)
         {
             // A copy of this exe renamed Capsule.exe, started by the hook tests as a stand-in Capsule (see PromptHookTests).
             if (args.Length == 3 && args[0] == "--fake-capsule") return PromptHookTests.FakeCapsule(args[1], args[2]);
+            groups = (args.Length == 1 && args[0] == "--groups") || Environment.GetEnvironmentVariable("CI") == "true";
             // The hook's client only talks to a server that is Capsule.exe: for the tests, that is this process.
             PipePeer.ExpectedImageForTests = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
             // Keep everything the tests write out of the real data folder (child processes inherit this too).
@@ -65,8 +67,10 @@ namespace Capsule
 
         static void Run(string name, Action group)
         {
+            int before = passed;
             try { group(); }
             catch (Exception e) { failed++; Console.WriteLine("FAIL " + name + " threw " + e); }
+            if (groups) Console.WriteLine("  " + name + ": " + (passed - before) + " passed");
         }
 
         public static void Check(bool ok, string what)
