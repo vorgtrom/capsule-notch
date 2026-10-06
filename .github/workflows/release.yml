@@ -27,6 +27,11 @@ jobs:
         shell: pwsh
         run: |
           if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "The version must look like v1.0.0" }
+      - name: Use a time zone other than UTC
+        # GitHub's machines run on UTC, where a local date and a UTC date are always the same day, so the checks that
+        # Capsule uses the local one (Codex's day folders) couldn't run. UTC+8, without daylight saving.
+        shell: pwsh
+        run: Set-TimeZone -Id "Singapore Standard Time"
       - name: Build and run the tests
         shell: cmd
         run: build.cmd
