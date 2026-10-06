@@ -1,5 +1,7 @@
 # Capsule
 
+[![Build and test](https://github.com/vorgtrom/capsule-notch/actions/workflows/build.yml/badge.svg)](https://github.com/vorgtrom/capsule-notch/actions/workflows/build.yml)
+
 A little glass capsule that sits on the edge of your Windows screen.
 
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
@@ -80,7 +82,17 @@ downloaded and nothing unsigned from the internet runs.
 
 You need Windows 10 or 11 (64-bit) with .NET Framework 4.8 or later, which Windows 11 and an up-to-date Windows 10
 have already.
-In PowerShell:
+
+**Download it (no building):**
+1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
+2. Unzip it into a folder that stays, such as `Documents\Capsule`. Start with Windows and Connect to Claude Code point
+   at that folder, so don't run it from Downloads or from inside the zip.
+3. Start `Capsule.exe`.
+   - Capsule isn't code-signed, so Windows may say **Windows protected your PC**. Click **More info**, then **Run
+     anyway**. Each release is built and tested by GitHub from the code in this repo; the zip's SHA-256 is next to it.
+   - If your antivirus objects, see [Antivirus](#antivirus).
+
+**Or build it yourself.** In PowerShell:
 
 ```powershell
 git clone https://github.com/vorgtrom/capsule-notch.git
@@ -100,10 +112,18 @@ Run `build.cmd`.
 - It stops a running copy first.
 - Run it again after any change.
 
+GitHub builds and tests every pull request and every change to `main` the same way, on Windows, so a change that
+breaks the build or a test shows a red ✗ there before it's merged.
+
 To try a change while Capsule is running, run `build.cmd dev` instead. It builds into `bin-dev\`, runs the
 tests there, and leaves a running Capsule alone.
 
 ### Update to the latest version
+
+**If you downloaded a release:** quit Capsule (right-click it → **Quit Capsule**), download the new zip, unzip it over the same
+folder, and start `Capsule.exe` again. Your settings carry over, as below.
+
+**If you built it:**
 
 1. Get the latest code in this folder:
    - **The released version:** `git checkout main`, then `git pull`.

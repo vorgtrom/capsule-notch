@@ -1,0 +1,22 @@
+# Builds Capsule and runs every test on Windows, as build.cmd does on a PC: for each pull request, each push to main,
+# and on demand. Nothing is published.
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the tests
+        shell: cmd
+        run: build.cmd

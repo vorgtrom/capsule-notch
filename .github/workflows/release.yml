@@ -1,0 +1,46 @@
+# Publishes a release: builds Capsule, runs every test, and attaches Capsule-<version>.zip (Capsule.exe, its hook and
+# config, the README and the license) with its SHA-256. Start it from Actions > Release > Run workflow with a version
+# such as v1.0.0, or by pushing a tag like that.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to publish, such as v1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version
+        shell: pwsh
+        run: |
+          if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "The version must look like v1.0.0" }
+      - name: Build and run the tests
+        shell: cmd
+        run: build.cmd
+      - name: Zip the app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory Capsule | Out-Null
+          Copy-Item bin\Capsule.exe, bin\Capsule.exe.config, bin\capsule-hook.exe, README.md, LICENSE Capsule\
+          Compress-Archive -Path Capsule\* -DestinationPath "Capsule-$env:VERSION.zip"
+          $hash = (Get-FileHash "Capsule-$env:VERSION.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  Capsule-$env:VERSION.zip" | Out-File -Encoding ascii "Capsule-$env:VERSION.zip.sha256"
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:VERSION "Capsule-$env:VERSION.zip" "Capsule-$env:VERSION.zip.sha256" --target $env:GITHUB_SHA --title "Capsule $env:VERSION" --generate-notes
