@@ -60,6 +60,7 @@ namespace Capsule
             Run("Ics", IcsTests.Run);
             Run("CalendarModule", CalendarModuleTests.Run);
             Run("CalendarView", CalendarViewTests.Run);
+            Run("Updates", UpdatesTests.Run);
             Run("Log", LogTests.Run);
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;

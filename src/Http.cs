@@ -48,7 +48,7 @@ namespace Capsule
                 request.Method = method;
                 request.Timeout = timeoutMs;
                 request.ReadWriteTimeout = timeoutMs;
-                request.UserAgent = "Capsule/0.1 (Windows)";
+                request.UserAgent = "Capsule/" + AppVersion.Current + " (Windows)";
                 request.Accept = "application/json";
                 request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
                 request.AllowAutoRedirect = false;   // only ever the endpoints Capsule names, never wherever a redirect points

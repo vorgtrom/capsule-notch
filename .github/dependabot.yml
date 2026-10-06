@@ -1,0 +1,8 @@
+# Once a week, GitHub opens a pull request when an action the workflows use has a newer version; each one is built
+# and tested like any other pull request before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

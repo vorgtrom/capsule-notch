@@ -123,8 +123,10 @@ tests there, and leaves a running Capsule alone.
 
 ### Update to the latest version
 
-**If you downloaded a release:** quit Capsule (right-click it → **Quit Capsule**), download the new zip, unzip it over the same
-folder, and start `Capsule.exe` again. Your settings carry over, as below.
+**If you downloaded a release:** once a day it checks whether a newer one is out. When one is, a balloon says so and
+the menu's first item reads **Capsule v1.2.0 is available…**; choose it for the release's page. Then quit Capsule
+(right-click it → **Quit Capsule**), download the new zip, unzip it over the same folder, and start `Capsule.exe`
+again. Your settings carry over, as below. To stop the daily check, untick **Check for updates** in the menu.
 
 **If you built it:**
 
@@ -341,12 +343,15 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
+| Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
 
-Those are the only seven places it connects to. Your browser handles Google's sign-in page,
+Those are the only eight places it connects to. Your browser handles Google's sign-in page,
 `accounts.google.com`: Capsule only opens it there. Capsule doesn't follow redirects, so a request can't end up
 anywhere else.
 - Sign-in tokens stay in memory. They are never logged, shown or saved.
+- The update check asks GitHub only for the newest release's version number, without any sign-in, and sends nothing
+  about you. A Capsule you built yourself never checks; you update it with `git pull`.
 - The Notion secret is stored encrypted for your Windows account (DPAPI), and only ever sent to Notion. It
   is never logged or shown, not even in the settings once saved.
 - Notion is asked for only three things: the database's name and title column, adding an idea, and your
