@@ -174,9 +174,12 @@ namespace Capsule
         {
             var m = new CalendarCardModel();
             var today = new CalendarSection { Heading = "Today", Empty = s.Loaded ? "Nothing else today" : "Checking…" };
+            DateTime day = LocalDay(now, zone);
             today.Rows = RestOfToday(s.Events, now, zone, culture);
+            today.Rows.AddRange(TaskRows(s.Tasks, day));   // and the day's tasks not done, after its events, as on the tile
             var tomorrow = new CalendarSection { Heading = "Tomorrow", Empty = s.Loaded ? "Nothing tomorrow" : "" };
             tomorrow.Rows = TomorrowRows(s.Events, now, zone, culture, TomorrowOnCard);
+            tomorrow.Rows.AddRange(TaskRows(s.Tasks, day.AddDays(1)).Take(TomorrowOnCard));
             m.Sections.Add(today);
             m.Sections.Add(tomorrow);
             var parts = new List<string>();

@@ -49,6 +49,10 @@ namespace Capsule
             snap.Events = Fixture();
             t = CalendarDay.Tile(snap, At(10, 6, 22, 0), Zone, En);
             TestRunner.Check(t.Today.Count > 1 && t.Today.Last().Title == "Send the invoice", "after the day's events");
+            CalendarCardModel card = CalendarDay.Card(snap, At(10, 6, 22, 0), Zone, En);
+            TestRunner.Check(card.Sections[0].Rows.Last().Title == "Send the invoice" && card.Sections[0].Rows.Last().Time == CalendarDay.TaskTime
+                && card.Sections[1].Rows.Last().Title == "Book flights" && !card.Sections.SelectMany(x => x.Rows).Any(r => r.Title == "Water the plants"),
+                "the hover card lists them too, after each day's events");
         }
 
         public static List<CalendarEvent> Fixture()

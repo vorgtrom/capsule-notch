@@ -28,7 +28,8 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
   - It shows when your next event today starts ("2:30", or "14:30" with a 24-hour clock).
   - During an event it shows **now**, and its ring fills as the event runs.
   - It shows **—** when nothing is left today.
-  - Hover it for the rest of today and tomorrow's first three events.
+  - Hover it for the rest of today and tomorrow's first three events, and, signed in, the Google Tasks due on those
+    days that aren't done.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
