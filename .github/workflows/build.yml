@@ -16,7 +16,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Use a time zone other than UTC
         # GitHub's machines run on UTC, where a local date and a UTC date are always the same day, so the checks that
         # Capsule uses the local one (Codex's day folders) couldn't run. UTC+8, without daylight saving.
