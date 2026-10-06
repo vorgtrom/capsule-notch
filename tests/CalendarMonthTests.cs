@@ -19,6 +19,15 @@ namespace Capsule
             TheEventFormIsChecked();
             BodiesAreWhatGoogleExpects();
             RowsSayWhatCanChange();
+            AnEditIsShownAsTyped();
+        }
+
+        static void AnEditIsShownAsTyped()
+        {
+            CalendarEvent timed = CalendarMonth.EditedEvent(" Lunch\r\nwith Sam ", new DateTime(2026, 10, 9), false, new TimeSpan(12, 30, 0), new TimeSpan(13, 30, 0), CalendarDayTests.Zone);
+            TestRunner.Check(timed.Title == "Lunch with Sam" && !timed.AllDay && timed.StartMs == CalendarDayTests.At(10, 9, 12, 30) && timed.EndMs == CalendarDayTests.At(10, 9, 13, 30), "an edited event's title and times, in the PC's zone");
+            CalendarEvent allDay = CalendarMonth.EditedEvent("", new DateTime(2026, 10, 9), true, TimeSpan.Zero, TimeSpan.Zero, CalendarDayTests.Zone);
+            TestRunner.Check(allDay.AllDay && allDay.StartDay == new DateTime(2026, 10, 9) && allDay.EndDay == new DateTime(2026, 10, 10) && allDay.Title == GoogleCalendarClient.NoTitle, "an all-day one's day; no title shows as Google shows it");
         }
 
         static void RowsSayWhatCanChange()

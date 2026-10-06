@@ -15,6 +15,16 @@ namespace Capsule
             AddsAndTicksTasks();
             FailuresAreKept();
             RenamesAndDeletes();
+            TellsAnApiTurnedOffFromARefusal();
+        }
+
+        public const string ApiOffReply = "{\"error\": {\"code\": 403, \"errors\": [{\"reason\": \"accessNotConfigured\"}], \"status\": \"PERMISSION_DENIED\", \"details\": [{\"reason\": \"SERVICE_DISABLED\"}]}}";
+
+        static void TellsAnApiTurnedOffFromARefusal()
+        {
+            TestRunner.Check(GoogleTasksClient.ApiOff(new HttpResult { Status = 403, Body = ApiOffReply }), "a 403 saying the Tasks API is off in the project is told apart");
+            TestRunner.Check(!GoogleTasksClient.ApiOff(new HttpResult { Status = 403, Body = "{\"error\": {\"code\": 403, \"errors\": [{\"reason\": \"insufficientPermissions\"}]}}" })
+                && !GoogleTasksClient.ApiOff(new HttpResult { Status = 404, Body = "accessNotConfigured" }) && !GoogleTasksClient.ApiOff(null), "from one about the sign-in's permissions, or anything else");
         }
 
         static void RenamesAndDeletes()

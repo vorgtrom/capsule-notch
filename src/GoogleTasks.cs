@@ -125,6 +125,14 @@ namespace Capsule
             return Json.Write(body);
         }
 
+        // Google's 403 when the Cloud project the client belongs to hasn't turned the Tasks API on: a new sign-in won't fix
+        // it, turning the API on will. The reply is only looked at, never logged.
+        public static bool ApiOff(HttpResult reply)
+        {
+            return reply != null && reply.Status == 403 && reply.Body != null
+                && (reply.Body.Contains("accessNotConfigured") || reply.Body.Contains("SERVICE_DISABLED"));
+        }
+
         // Google Tasks stores a due date as that date's midnight in UTC.
         public static string DueText(DateTime day)
         {

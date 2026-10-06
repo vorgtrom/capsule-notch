@@ -30,6 +30,9 @@ namespace Capsule
             TheMonthPageAddsAndTicks();
             TheGlassFollowsTheMonthPage();
             RowsCanBeEditedAndDeleted();
+            TheButtonsShowOnHover();
+            ThePageTakesItsKeys();
+            ATickLeavesASavingFormOpen();
             OlderSignInsAreAskedToSignInAgain();
         }
 
@@ -230,6 +233,66 @@ namespace Capsule
             view.ShowMonth(MonthSample(false));
             Lay(view);
             TestRunner.Check(Named(view, "Edit: Offsite") == null && Named(view, "Ask to delete: Send the invoice") == null, "without a sign-in that can change them, no buttons");
+        }
+
+        static void TheButtonsShowOnHover()
+        {
+            var view = new PanelView();
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            FrameworkElement pencil = Named(view, "Edit: Offsite"), bin = Named(view, "Ask to delete: Offsite");
+            var row = pencil != null ? VisualTreeHelper.GetParent(pencil) as UIElement : null;
+            TestRunner.Check(pencil != null && bin != null && row != null && pencil.Opacity == 0 && bin.Opacity == 0, "a row's pencil and bin are hidden until it is hovered");
+            if (row == null) return;
+            row.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+            bool shown = pencil.Opacity == 1 && bin.Opacity == 1;
+            row.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseLeaveEvent });
+            TestRunner.Check(shown && pencil.Opacity == 0, "they show while it is hovered, and hide again");
+        }
+
+        static void ThePageTakesItsKeys()
+        {
+            var view = new PanelView();
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            MonthView page = view.Month;
+            var picked = new List<DateTime>();
+            int previous = 0, next = 0;
+            string[] sent = null;
+            page.DaySelected += delegate(DateTime d) { picked.Add(d); };
+            page.PreviousClicked += delegate { previous++; };
+            page.NextClicked += delegate { next++; };
+            page.AddEventRequested += delegate(string title, bool allDay, string start, string end, string calendarId) { sent = new[] { title, start, end }; };
+            bool taken = page.HandleKey(Key.Right, null) && page.HandleKey(Key.Left, null) && page.HandleKey(Key.Up, null) && page.HandleKey(Key.Down, null);
+            TestRunner.Check(taken && string.Join(",", picked.Select(d => d.ToString("MM-dd", CultureInfo.InvariantCulture))) == "10-07,10-05,09-29,10-13", "the arrows move the day, up and down a week");
+            TestRunner.Check(page.HandleKey(Key.PageUp, null) && page.HandleKey(Key.PageDown, null) && previous == 1 && next == 1, "Page Up and Page Down change the month");
+            TestRunner.Check(!page.HandleKey(Key.Escape, null) && !page.HandleKey(Key.A, null), "with nothing to cancel, Esc is left to close the panel");
+            Click(Named(view, "Ask to delete: Offsite"));
+            Lay(view);
+            TestRunner.Check(page.HandleKey(Key.Escape, null) && !HasText(view, "Delete this?"), "Esc lets go of a Delete this?");
+            Click(Holder(view, "+ Add event"));
+            Lay(view);
+            page.TitleBox.Text = "Lunch with Sam";
+            picked.Clear();
+            TestRunner.Check(!page.HandleKey(Key.Left, page.TitleBox) && picked.Count == 0, "typing in the form, the arrows stay the box's");
+            TestRunner.Check(page.HandleKey(Key.Enter, page.TitleBox) && sent != null && sent[0] == "Lunch with Sam" && page.FormWaiting, "Enter in the form adds");
+            page.FormError("Couldn't reach Google");
+            TestRunner.Check(page.HandleKey(Key.Escape, page.TitleBox) && !page.FormOpen && HasText(view, "+ Add event"), "Esc cancels the form, not the panel");
+        }
+
+        // A tick or a delete that finishes while the form's own add is with Google leaves the form waiting on it.
+        static void ATickLeavesASavingFormOpen()
+        {
+            var view = new PanelView();
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            Click(Holder(view, "+ Add event"));
+            view.Month.TitleBox.Text = "Lunch with Sam";
+            Click(Holder(view, "Add"));
+            view.Month.ChangeDone(false);
+            TestRunner.Check(view.Month.FormOpen && view.Month.FormWaiting && view.Month.TitleBox.Text == "Lunch with Sam", "a tick done meanwhile leaves the saving form open");
+            view.Month.ChangeDone(true);
+            TestRunner.Check(!view.Month.FormOpen, "its own add closes it");
         }
 
         static void OlderSignInsAreAskedToSignInAgain()
