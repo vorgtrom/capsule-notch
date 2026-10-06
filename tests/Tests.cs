@@ -54,6 +54,7 @@ namespace Capsule
             Run("GoogleCalendar", GoogleCalendarTests.Run);
             Run("GoogleTasks", GoogleTasksTests.Run);
             Run("CalendarDay", CalendarDayTests.Run);
+            Run("CalendarMonth", CalendarMonthTests.Run);
             Run("Ics", IcsTests.Run);
             Run("CalendarModule", CalendarModuleTests.Run);
             Run("CalendarView", CalendarViewTests.Run);
