@@ -16,6 +16,7 @@ namespace Capsule
     {
         const string BackGlyph = "\uE72B", PrevGlyph = "\uE76B", NextGlyph = "\uE76C";   // U+E72B Back, U+E76B and U+E76C the chevrons: icon-font glyphs, kept as escapes
         const string EditGlyph = "\uE70F", DeleteGlyph = "\uE74D";                         // U+E70F Edit (a pencil), U+E74D Delete (a bin)
+        const string CheckGlyph = "\uE73E";                                                    // U+E73E CheckMark
         public const double CellHeight = 40;
 
         readonly DockPanel header = new DockPanel { LastChildFill = false };
@@ -310,23 +311,70 @@ namespace Capsule
             Redraw();
         }
 
-        // A task: a check box with its title, struck through once done.
+        // A task, laid out like an event's row so the two line up: a small box where an event's dot is (ticked once done),
+        // "Task" where its time is, then the title, struck through once done. The whole row is the check box.
         UIElement TaskLine(MonthTask task)
         {
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var tick = new TextBlock
+            {
+                Text = task.Done ? CheckGlyph : "",
+                FontFamily = new FontFamily(PanelView.IconFont),
+                FontSize = 8,
+                Foreground = NotchView.Brush(Palette.Secondary),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var mark = new Border
+            {
+                Width = 10,
+                Height = 10,
+                CornerRadius = new CornerRadius(3),
+                BorderThickness = new Thickness(1.3),
+                BorderBrush = NotchView.Brush(Palette.Secondary),
+                Margin = new Thickness(-1, 0, 7, 0),   // as wide as an event's dot and its gap, centred on it
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = tick,
+            };
+            line.Children.Add(mark);
+            TextBlock time = CardView.MakeText(CalendarDay.TaskTime, 12, Palette.Secondary, FontWeights.Normal);
+            time.Margin = new Thickness(0, 0, 8, 0);
+            time.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(time, 1);
+            line.Children.Add(time);
             TextBlock title = CardView.MakeText(task.Title, 12.5, task.Done ? Palette.Secondary : Palette.Text, FontWeights.Normal);
             if (task.Done) title.TextDecorations = TextDecorations.Strikethrough;
+            title.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(title, 2);
+            line.Children.Add(title);
             var box = new CheckBox
             {
-                Content = title,
+                Content = line,
                 IsChecked = task.Done,
-                Margin = new Thickness(0, 2, 0, 2),
-                VerticalContentAlignment = VerticalAlignment.Center,
+                Template = plainCheckBox,
+                Margin = new Thickness(0, 2, 0, 2),   // an event row's padding
                 FocusVisualStyle = null,
+                Cursor = System.Windows.Input.Cursors.Hand,
             };
             System.Windows.Automation.AutomationProperties.SetName(box, task.Title);
             string list = task.ListId, id = task.Id;
             box.Click += delegate { if (TaskToggled != null) TaskToggled(list, id, box.IsChecked == true); };
             return box;
+        }
+
+        // A check box without Windows' box: only its content, on a background that takes clicks. One per page, made on
+        // the page's own thread.
+        readonly ControlTemplate plainCheckBox = MakePlainCheckBox();
+
+        static ControlTemplate MakePlainCheckBox()
+        {
+            var back = new FrameworkElementFactory(typeof(Border));
+            back.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            back.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
+            return new ControlTemplate(typeof(CheckBox)) { VisualTree = back };
         }
 
         // ---- The add forms ----

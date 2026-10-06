@@ -96,6 +96,9 @@ namespace Capsule
             TestRunner.Check(view.ShowingMonth && HasText(view, "October 2026") && HasText(view, "Sun") && HasText(view, "Tue 6 Oct"), "the month page in the tiles' place: its month, the weekdays, the selected day");
             TestRunner.Check(Named(view, "2026-09-27") != null && Named(view, "2026-11-07") != null && Named(view, "2026-11-08") == null, "six weeks of days");
             TestRunner.Check(HasText(view, "Night deploy") && HasText(view, "11:00 PM – 1:00 AM") && HasText(view, "Send the invoice") && HasText(view, "Water the plants"), "the day's events and tasks");
+            TextBlock allDay = FindText(view, "All day"), task = FindText(view, CalendarDay.TaskTime);
+            TestRunner.Check(allDay != null && task != null && Math.Abs(allDay.TranslatePoint(new Point(0, 0), view).X - task.TranslatePoint(new Point(0, 0), view).X) < 0.5,
+                "a task's row lines up with an event's: its box where the dot is, \"Task\" where the time is");
             Click(Named(view, "2026-10-09"));
             Click(Named(view, "Previous month"));
             Click(Named(view, "Next month"));
