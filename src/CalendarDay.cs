@@ -24,6 +24,11 @@ namespace Capsule
         public string Title = "";
         public string Color = GoogleCalendarClient.DefaultColor;
         public bool Current;            // the event happening now: highlighted
+        // The month page only: the event's ids, whether it may be edited (the user's own, on one day) or deleted (the
+        // user's own), and its times for the edit form.
+        public string Id = "", CalendarId = "";
+        public bool CanEdit, CanDelete, AllDay;
+        public string StartText = "", EndText = "";
     }
 
     // A day on the hover card: its heading, its all-day events, then its timed ones.

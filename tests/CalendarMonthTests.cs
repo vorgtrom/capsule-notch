@@ -18,6 +18,21 @@ namespace Capsule
             TimesAreReadAsTyped();
             TheEventFormIsChecked();
             BodiesAreWhatGoogleExpects();
+            RowsSayWhatCanChange();
+        }
+
+        static void RowsSayWhatCanChange()
+        {
+            MonthModel m = October(En, new DateTime(2026, 10, 6));
+            CalendarRow offsite = m.Events[0], night = m.Events[1], standup = m.Events[2], weekly = m.Events[3];
+            TestRunner.Check(offsite.CanEdit && offsite.CanDelete && offsite.AllDay && offsite.Id == "offsite" && offsite.CalendarId == GoogleCalendarTests.Primary, "the user's own all-day event: edit and delete, with its ids");
+            TestRunner.Check(weekly.CanEdit && weekly.CanDelete && !weekly.AllDay && weekly.StartText == "1:00 PM" && weekly.EndText == "2:00 PM", "a timed one on the day, with its times for the form");
+            TestRunner.Check(!night.CanEdit && night.CanDelete, "one over two days: delete only, as the form keeps to a day");
+            TestRunner.Check(!standup.CanEdit && !standup.CanDelete, "one someone else organised: neither");
+            string timed = CalendarMonth.EventBody("Offsite", new DateTime(2026, 10, 9), false, TimeSpan.FromHours(9), TimeSpan.FromHours(10), CalendarDayTests.Zone, true);
+            string allDay = CalendarMonth.EventBody("Offsite", new DateTime(2026, 10, 9), true, TimeSpan.Zero, TimeSpan.Zero, CalendarDayTests.Zone, true);
+            TestRunner.Check(timed.Contains("\"date\": null") && !timed.Contains("\"dateTime\": null") && allDay.Contains("\"dateTime\": null") && !allDay.Contains("\"date\": null"),
+                "an edit's body clears the kind of time the event no longer has");
         }
 
         static List<GoogleTask> Tasks()

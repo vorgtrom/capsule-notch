@@ -124,9 +124,20 @@ namespace Capsule
             long dayStart = CalendarDay.DayStartMs(day, zone), dayEnd = CalendarDay.DayStartMs(day.AddDays(1), zone);
             CalendarEvent current = CalendarDay.Current(events, now);
             foreach (CalendarEvent e in events.Where(x => x.AllDay && x.StartDay <= day && day < x.EndDay).OrderBy(x => x.Title, StringComparer.CurrentCulture))
-                m.Events.Add(new CalendarRow { Time = "All day", Title = e.Title, Color = e.Color });
+            {
+                // The form edits one day: an event over several can only be deleted from here.
+                bool oneDay = e.EndDay == e.StartDay.AddDays(1);
+                m.Events.Add(new CalendarRow { Time = "All day", Title = e.Title, Color = e.Color, Id = e.Id, CalendarId = e.CalendarId, AllDay = true,
+                    CanEdit = e.Editable && oneDay, CanDelete = e.Editable, StartText = m.StartText, EndText = m.EndText });
+            }
             foreach (CalendarEvent e in events.Where(x => !x.AllDay && x.StartMs < dayEnd && x.EndMs > dayStart || (!x.AllDay && x.StartMs == x.EndMs && x.StartMs >= dayStart && x.StartMs < dayEnd)).OrderBy(x => x.StartMs))
-                m.Events.Add(new CalendarRow { Time = CalendarDay.Range(e, zone, culture), Title = e.Title, Color = e.Color, Current = e == current });
+            {
+                DateTime from = CalendarDay.Local(e.StartMs, zone), to = CalendarDay.Local(e.EndMs, zone);
+                bool oneDay = from.Date == day && to.Date == day;   // within the selected day, as the form's times are
+                m.Events.Add(new CalendarRow { Time = CalendarDay.Range(e, zone, culture), Title = e.Title, Color = e.Color, Current = e == current,
+                    Id = e.Id, CalendarId = e.CalendarId, CanEdit = e.Editable && oneDay && e.EndMs > e.StartMs, CanDelete = e.Editable,
+                    StartText = TimeText(from.TimeOfDay, culture), EndText = TimeText(to.TimeOfDay, culture) });
+            }
             foreach (GoogleTask t in tasks.Where(x => x.Due.Date == day).OrderBy(x => x.Done))
                 m.Tasks.Add(new MonthTask { Id = t.Id, ListId = t.ListId, Title = t.Title, Done = t.Done });
         }
@@ -216,18 +227,32 @@ namespace Capsule
         // this PC's zone, written with its UTC offset (Windows' zone names aren't the IANA ones Google uses).
         public static string EventBody(string title, DateTime day, bool allDay, TimeSpan start, TimeSpan end, TimeZoneInfo zone)
         {
+            return EventBody(title, day, allDay, start, end, zone, false);
+        }
+
+        // replacing: an edit's body, which clears the kind of time the event no longer has (an all-day event's date once
+        // it has times, and the other way round), since Google keeps a field a change leaves out.
+        public static string EventBody(string title, DateTime day, bool allDay, TimeSpan start, TimeSpan end, TimeZoneInfo zone, bool replacing)
+        {
             var body = new Dictionary<string, object> { { "summary", CleanTitle(title) } };
             if (allDay)
             {
-                body["start"] = new Dictionary<string, object> { { "date", day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) } };
-                body["end"] = new Dictionary<string, object> { { "date", day.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) } };
+                body["start"] = Time("date", day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "dateTime", replacing);
+                body["end"] = Time("date", day.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "dateTime", replacing);
             }
             else
             {
-                body["start"] = new Dictionary<string, object> { { "dateTime", Rfc3339(day.Date + start, zone) } };
-                body["end"] = new Dictionary<string, object> { { "dateTime", Rfc3339(day.Date + end, zone) } };
+                body["start"] = Time("dateTime", Rfc3339(day.Date + start, zone), "date", replacing);
+                body["end"] = Time("dateTime", Rfc3339(day.Date + end, zone), "date", replacing);
             }
             return Json.Write(body);
+        }
+
+        static Dictionary<string, object> Time(string field, string value, string other, bool replacing)
+        {
+            var time = new Dictionary<string, object> { { field, value } };
+            if (replacing) time[other] = null;
+            return time;
         }
 
         // "2026-10-09T14:30:00-07:00": a local time with its offset in the zone (a time the clocks skip moves past the gap).

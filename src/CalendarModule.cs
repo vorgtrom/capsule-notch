@@ -27,6 +27,7 @@ namespace Capsule
         public CalendarEvent AddedEvent;    // an add: what Google made
         public GoogleTask AddedTask;
         public bool Done;                   // an add or a tick worked
+        public bool Existing;               // an edit or a delete: a 403 is about that event or task, not the sign-in
     }
 
     // One pass (calendar spec §3), on a worker thread; touches nothing but its arguments. An access token that is missing
@@ -270,6 +271,69 @@ namespace Capsule
         }
 
         // A usable access token: the one held, unless it is missing or about to expire.
+        // Edits and deletes: one call (null when it worked, else Google's reply), made again once after a 401 refreshes the
+        // access token.
+        public static CalendarPassResult EditEvent(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleCalendarClient> newClient, string calendarId, string eventId, string body, long now)
+        {
+            return Change(auth, refreshToken, accessToken, accessExpiresAtMs, now, "change an event", "changed an event", token =>
+            {
+                GoogleCalendarClient c = newClient(token);
+                return c.EditEvent(calendarId, eventId, body) ? null : c.LastFailure;
+            });
+        }
+
+        public static CalendarPassResult DeleteEvent(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleCalendarClient> newClient, string calendarId, string eventId, long now)
+        {
+            return Change(auth, refreshToken, accessToken, accessExpiresAtMs, now, "delete an event", "deleted an event", token =>
+            {
+                GoogleCalendarClient c = newClient(token);
+                return c.DeleteEvent(calendarId, eventId) ? null : c.LastFailure;
+            });
+        }
+
+        public static CalendarPassResult RenameTask(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleTasksClient> newTasks, GoogleTask task, string title, long now)
+        {
+            return Change(auth, refreshToken, accessToken, accessExpiresAtMs, now, "change a task", "changed a task", token =>
+            {
+                GoogleTasksClient c = newTasks(token);
+                return c.Rename(task, title) ? null : c.LastFailure;
+            });
+        }
+
+        public static CalendarPassResult DeleteTask(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleTasksClient> newTasks, GoogleTask task, long now)
+        {
+            return Change(auth, refreshToken, accessToken, accessExpiresAtMs, now, "delete a task", "deleted a task", token =>
+            {
+                GoogleTasksClient c = newTasks(token);
+                return c.Delete(task) ? null : c.LastFailure;
+            });
+        }
+
+        static CalendarPassResult Change(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs, long now, string what, string did, Func<string, HttpResult> call)
+        {
+            var r = new CalendarPassResult { AccessToken = accessToken, AccessExpiresAtMs = accessExpiresAtMs, Existing = true };
+            if (!Ready(auth, refreshToken, r, now)) return r;
+            HttpResult failure = call(r.AccessToken);
+            if (failure != null && failure.Status == 401 && r.Refreshes == 0)
+            {
+                if (!Refresh(auth, refreshToken, r, now)) return r;
+                failure = call(r.AccessToken);
+            }
+            if (failure != null)
+            {
+                r.Failure = failure;
+                r.LogText = "couldn't " + what + ": " + GoogleCalendarClient.Describe(failure);
+                return r;
+            }
+            r.Done = true;
+            r.LogText = did;
+            return r;
+        }
+
         static bool Ready(GoogleAuth auth, string refreshToken, CalendarPassResult r, long now)
         {
             if (!string.IsNullOrEmpty(r.AccessToken) && r.AccessExpiresAtMs - RefreshAheadMs > now) return true;
@@ -804,6 +868,10 @@ namespace Capsule
         }
 
         public const string AddNeedsSignIn = "Sign in with your own Google client in ⚙ to add events and tasks";
+        public const string NotAllowed = "Google didn't allow that change";
+        public const string EventGone = "That event is gone. Reopen the month";
+        public const string NotYours = "Capsule changes only your own events";
+        public const string TaskGone = "That task is gone. Reopen the month";
         public const string SignInAgainToAdd = "Sign in again in ⚙ to let Capsule add events and tasks";
 
         string grantedScope;     // the scopes the sign-in was granted, once known (sign-in or a refresh); null until then
@@ -813,6 +881,7 @@ namespace Capsule
         int openYear, openMonth;   // the month the page shows; 0 while it is closed
         CultureInfo monthCulture = CultureInfo.CurrentCulture;
         bool monthBusy;
+        bool rereadMonth;   // a change was made while a month was being read: read it again once that is in
         int monthPassId;
         string monthProblem = "";
 
@@ -933,9 +1002,14 @@ namespace Capsule
             catch (Exception e) { Log.Error("calendar: applying a month pass threw " + e.GetType().Name, null); }
             finally
             {
-                // A month picked while this one was read (‹ or › clicked meanwhile) is read now, not at the next tick.
+                // A month picked while this one was read (‹ or › clicked meanwhile), or changed meanwhile, is read now, not
+                // at the next tick.
                 string open = Key(openYear, openMonth);
-                if (run == generation && openYear != 0 && open != key && !months.ContainsKey(open)) ReadMonth(openYear, openMonth);
+                MonthData shown;
+                bool unread = !months.TryGetValue(open, out shown) || shown.ReadAtMs == 0;
+                bool changed = rereadMonth;
+                rereadMonth = false;
+                if (run == generation && openYear != 0 && (changed || open != key && unread)) ReadMonth(openYear, openMonth);
                 Raise();
             }
         }
@@ -1018,7 +1092,7 @@ namespace Capsule
                 foreach (GoogleTask t in d.Tasks)
                     if (t.Id == taskId && t.ListId == listId) { t.Done = on; task = t; }
             string why = CanChange();
-            if (why == null && task == null) why = "That task is gone. Reopen the month";
+            if (why == null && task == null) why = TaskGone;
             GoogleAuth auth = null;
             string refresh = null;
             if (why == null && !Credentials(out auth, out refresh)) why = "Can't read the saved sign-in. Sign in again in ⚙";
@@ -1040,6 +1114,120 @@ namespace Capsule
                 AfterChange(t, run, done);
             }, ui);
             return true;
+        }
+
+        // Changes one of the user's events: its body from CalendarMonth.EventBody(…, replacing: true). The page shows the
+        // change once the month is read again.
+        public bool EditEvent(string calendarId, string eventId, string body, Action<string> done)
+        {
+            CalendarEvent e = CachedEvent(calendarId, eventId);
+            string why = CanChange() ?? (e == null ? EventGone : !e.Editable ? NotYours : null);
+            Func<string, GoogleCalendarClient> make = NewClient;
+            return StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.EditEvent(auth, refresh, token, expires, make, calendarId, eventId, body, Clock.NowMs()), null);
+        }
+
+        // Deletes one of the user's events. It leaves the page at once, and comes back if Google refuses.
+        public bool DeleteEvent(string calendarId, string eventId, Action<string> done)
+        {
+            CalendarEvent e = CachedEvent(calendarId, eventId);
+            string why = CanChange() ?? (e == null ? EventGone : !e.Editable ? NotYours : null);
+            var held = new List<MonthData>();
+            if (why == null)
+                foreach (MonthData d in months.Values)
+                    if (d.Events.RemoveAll(x => x.CalendarId == calendarId && x.Id == eventId) > 0) held.Add(d);
+            Func<string, GoogleCalendarClient> make = NewClient;
+            bool started = StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.DeleteEvent(auth, refresh, token, expires, make, calendarId, eventId, Clock.NowMs()), ok =>
+            {
+                if (!ok) foreach (MonthData d in held) d.Events.Add(e);
+            });
+            if (started) Raise();
+            return started;
+        }
+
+        // Gives a task a new title, shown at once and put back if Google refuses.
+        public bool RenameTask(string listId, string taskId, string title, Action<string> done)
+        {
+            GoogleTask task = CachedTask(listId, taskId);
+            string clean = CalendarMonth.CleanTitle(title);
+            string why = CanChange() ?? (task == null ? TaskGone : clean == "" ? CalendarMonth.TitleNeeded : null);
+            string old = task != null ? task.Title : "";
+            GoogleTask copy = task != null ? new GoogleTask { Id = task.Id, ListId = task.ListId, Title = task.Title, Due = task.Due, Done = task.Done } : null;
+            if (why == null) Retitle(listId, taskId, clean);
+            Func<string, GoogleTasksClient> make = NewTasks;
+            bool started = StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.RenameTask(auth, refresh, token, expires, make, copy, clean, Clock.NowMs()), ok =>
+            {
+                if (!ok) Retitle(listId, taskId, old);
+            });
+            if (started) Raise();
+            return started;
+        }
+
+        // Deletes a task. It leaves the page at once, and comes back if Google refuses.
+        public bool DeleteTask(string listId, string taskId, Action<string> done)
+        {
+            GoogleTask task = CachedTask(listId, taskId);
+            string why = CanChange() ?? (task == null ? TaskGone : null);
+            var held = new List<MonthData>();
+            if (why == null)
+                foreach (MonthData d in months.Values)
+                    if (d.Tasks.RemoveAll(x => x.ListId == listId && x.Id == taskId) > 0) held.Add(d);
+            GoogleTask copy = task != null ? new GoogleTask { Id = task.Id, ListId = task.ListId, Title = task.Title, Due = task.Due, Done = task.Done } : null;
+            Func<string, GoogleTasksClient> make = NewTasks;
+            bool started = StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.DeleteTask(auth, refresh, token, expires, make, copy, Clock.NowMs()), ok =>
+            {
+                if (!ok) foreach (MonthData d in held) d.Tasks.Add(task);
+            });
+            if (started) Raise();
+            return started;
+        }
+
+        // Starts a change on a worker thread once it may be made (why is null), then reads again; done hears how it went,
+        // and after (if any) whether it worked, first. False when it couldn't start.
+        bool StartChange(string why, Action<string> done, Func<GoogleAuth, string, string, long, CalendarPassResult> pass, Action<bool> after)
+        {
+            GoogleAuth auth = null;
+            string refresh = null;
+            if (why == null && !Credentials(out auth, out refresh)) why = "Can't read the saved sign-in. Sign in again in ⚙";
+            if (why != null)
+            {
+                if (after != null) after(false);
+                done(why);
+                return false;
+            }
+            string token = accessToken;
+            long expires = accessExpiresAtMs;
+            int run = generation;
+            GoogleAuth a = auth;
+            string rt = refresh;
+            LastChange = Task.Run(() => pass(a, rt, token, expires)).ContinueWith(t =>
+            {
+                if (after != null) after(!t.IsFaulted && t.Result.Done);
+                AfterChange(t, run, done);
+            }, ui);
+            return true;
+        }
+
+        CalendarEvent CachedEvent(string calendarId, string eventId)
+        {
+            foreach (MonthData d in months.Values)
+                foreach (CalendarEvent e in d.Events)
+                    if (e.CalendarId == calendarId && e.Id == eventId) return e;
+            return null;
+        }
+
+        GoogleTask CachedTask(string listId, string taskId)
+        {
+            foreach (MonthData d in months.Values)
+                foreach (GoogleTask t in d.Tasks)
+                    if (t.ListId == listId && t.Id == taskId) return t;
+            return null;
+        }
+
+        void Retitle(string listId, string taskId, string title)
+        {
+            foreach (MonthData d in months.Values)
+                foreach (GoogleTask t in d.Tasks)
+                    if (t.ListId == listId && t.Id == taskId) t.Title = title;
         }
 
         void Untick(string listId, string taskId, bool state)
@@ -1095,7 +1283,8 @@ namespace Capsule
                 }
                 if (!r.Done)
                 {
-                    if (r.Failure != null && r.Failure.Status == 403)
+                    if (r.Failure != null && r.Failure.Status == 403 && r.Existing) why = NotAllowed;
+                    else if (r.Failure != null && r.Failure.Status == 403)
                     {
                         tasksDenied = true;   // the sign-in may read but not add: a new sign-in grants it
                         why = SignInAgainToAdd;
@@ -1103,8 +1292,13 @@ namespace Capsule
                     else why = GoogleCalendarClient.Problem(r.Failure);
                     return;
                 }
-                months.Clear();   // read again, with what was just added
-                if (openYear != 0) ReadMonth(openYear, openMonth);
+                // Read again, with the change; the page keeps showing what it has meanwhile.
+                foreach (MonthData d in months.Values) d.ReadAtMs = 0;
+                if (openYear != 0)
+                {
+                    if (monthBusy) rereadMonth = true;   // the pass under way read it before the change
+                    else ReadMonth(openYear, openMonth);
+                }
                 Read();
             }
             catch (Exception e)

@@ -21,9 +21,9 @@ namespace Capsule
         public bool Done;
     }
 
-    // Google Tasks' API (month spec §3): the lists, the tasks due in a span of days, adding one, and ticking one done or
-    // undone. Never throws: a call that fails returns null (or false) and leaves the reply in LastFailure. The access token
-    // only ever goes into the Authorization header; nothing here logs.
+    // Google Tasks' API (month spec §3): the lists, the tasks due in a span of days, adding one, ticking one done or
+    // undone, renaming one, and deleting one. Never throws: a call that fails returns null (or false) and leaves the reply
+    // in LastFailure. The access token only ever goes into the Authorization header; nothing here logs.
     public sealed class GoogleTasksClient
     {
         public const string Base = "https://tasks.googleapis.com/tasks/v1/";
@@ -89,11 +89,33 @@ namespace Capsule
         public bool SetDone(GoogleTask task, bool done)
         {
             LastFailure = null;
-            HttpResult r = Send("PATCH", "lists/" + Uri.EscapeDataString(task.ListId) + "/tasks/" + Uri.EscapeDataString(task.Id), DoneBody(done));
+            HttpResult r = Send("PATCH", TaskPath(task), DoneBody(done));
             if (r.Status == 200) return true;
             LastFailure = r;
             return false;
         }
+
+        // Gives a task a new title. False when Google didn't take it.
+        public bool Rename(GoogleTask task, string title)
+        {
+            LastFailure = null;
+            HttpResult r = Send("PATCH", TaskPath(task), Json.Write(new Dictionary<string, object> { { "title", title } }));
+            if (r.Status == 200) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        // Deletes a task. One already gone counts as deleted.
+        public bool Delete(GoogleTask task)
+        {
+            LastFailure = null;
+            HttpResult r = Send("DELETE", TaskPath(task), null);
+            if (r.Status == 200 || r.Status == 204 || r.Status == 404) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        static string TaskPath(GoogleTask task) { return "lists/" + Uri.EscapeDataString(task.ListId) + "/tasks/" + Uri.EscapeDataString(task.Id); }
 
         // Undone, the completion time goes too, or Google keeps the task completed.
         public static string DoneBody(bool done)

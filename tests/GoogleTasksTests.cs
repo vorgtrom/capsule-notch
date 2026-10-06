@@ -14,6 +14,22 @@ namespace Capsule
             AsksForTheDocumentedRequests();
             AddsAndTicksTasks();
             FailuresAreKept();
+            RenamesAndDeletes();
+        }
+
+        static void RenamesAndDeletes()
+        {
+            var seen = new List<CalendarRequest>();
+            GoogleTasksClient c = Client(seen);
+            var task = new GoogleTask { Id = "bmV3", ListId = MyTasks };
+            object body = null;
+            TestRunner.Check(c.Rename(task, "Call the dentist at 9") && seen.Last().Method == "PATCH" && seen.Last().Path == "lists/" + MyTasks + "/tasks/bmV3"
+                && Json.Str(Json.Get(body = Json.TryParse(seen.Last().Body), "title")) == "Call the dentist at 9" && Json.Get(body, "status") == null, "renaming PATCHes the title only");
+            TestRunner.Check(c.Delete(task) && seen.Last().Method == "DELETE" && seen.Last().Path == "lists/" + MyTasks + "/tasks/bmV3" && seen.Last().Body == null, "deleting DELETEs it");
+            c.Transport = r => new HttpResult { Status = 404 };
+            TestRunner.Check(c.Delete(task), "one already gone counts as deleted");
+            c.Transport = r => new HttpResult { Status = 403 };
+            TestRunner.Check(!c.Rename(task, "x") && !c.Delete(task) && c.LastFailure.Status == 403, "a refused rename or delete is false");
         }
 
         // A stand-in for tasks.googleapis.com: the lists, and a list's tasks over two pages.
@@ -24,6 +40,7 @@ namespace Capsule
             if (r.Method == "GET" && r.Path.Contains("/tasks?")) return new HttpResult { Status = 200, Body = TestRunner.Fixture(r.Path.Contains("pageToken=page-2") ? "google-tasks-page2.json" : "google-tasks.json") };
             if (r.Method == "POST") return new HttpResult { Status = 200, Body = "{\"id\": \"bmV3\", \"title\": \"Call the dentist\", \"status\": \"needsAction\", \"due\": \"2026-10-09T00:00:00.000Z\"}" };
             if (r.Method == "PATCH") return new HttpResult { Status = 200, Body = "{}" };
+            if (r.Method == "DELETE") return new HttpResult { Status = 204 };
             return new HttpResult { Status = 404 };
         }
 

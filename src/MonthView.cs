@@ -9,11 +9,13 @@ using WEllipse = System.Windows.Shapes.Ellipse;
 namespace Capsule
 {
     // The month page (month spec §2), shown in the panel in place of the tiles: a header with the month and ‹ › Today, six
-    // weeks of days with dots, and the selected day's events and tasks with + Add event and + Add task. Update redraws all
-    // of it but the open form, so what is being typed in it survives the module's redraws.
+    // weeks of days with dots, and the selected day's events and tasks with + Add event and + Add task. The user's own events
+    // and tasks have an edit and a delete button at the right; a delete asks first, on the row. Update redraws all of it
+    // but the open form, so what is being typed in it survives the module's redraws.
     public sealed class MonthView : StackPanel
     {
         const string BackGlyph = "\uE72B", PrevGlyph = "\uE76B", NextGlyph = "\uE76C";   // U+E72B Back, U+E76B and U+E76C the chevrons: icon-font glyphs, kept as escapes
+        const string EditGlyph = "\uE70F", DeleteGlyph = "\uE74D";                         // U+E70F Edit (a pencil), U+E74D Delete (a bin)
         public const double CellHeight = 40;
 
         readonly DockPanel header = new DockPanel { LastChildFill = false };
@@ -29,15 +31,23 @@ namespace Capsule
         readonly TextBlock formError = new TextBlock();
         readonly Border formButtons = new Border();
         MonthModel model = new MonthModel();
-        string formKind;   // null: no form; "event" or "task"
+        string formKind;   // null: no form; "event" or "task" to add one; "edit-event" or "edit-task" to change one
+        string editWhere = "", editId = "";   // what an edit form changes: its calendar (or list) and id
         DateTime formDay;
         bool formBusy;
+        string confirming, deleting;          // the row asking "Delete?", and the one being deleted ("e" or "t", where, id)
+        string problem = "";                  // why the last change didn't work, under the day
+        DateTime problemDay;
 
         public event Action BackClicked, PreviousClicked, NextClicked, TodayClicked;
         public event Action<DateTime> DaySelected;
         public event Action<string, bool, string, string, string> AddEventRequested;   // title, all day, start, end, calendar id
         public event Action<string, string> AddTaskRequested;                         // title, list id
         public event Action<string, string, bool> TaskToggled;                        // list id, task id, done
+        public event Action<string, string, string, bool, string, string> EditEventRequested;   // calendar id, event id, title, all day, start, end
+        public event Action<string, string, string> EditTaskRequested;               // list id, task id, title
+        public event Action<string, string> DeleteEventRequested;                     // calendar id, event id
+        public event Action<string, string> DeleteTaskRequested;                      // list id, task id
         public event Action Resized;
 
         public MonthView()
@@ -61,6 +71,7 @@ namespace Capsule
         }
 
         public bool FormOpen { get { return formKind != null; } }
+        public bool FormWaiting { get { return formBusy; } }   // the form's Add or Save is with Google
         public TextBox TitleBox { get { return titleBox; } }
         public TextBox StartBox { get { return startBox; } }
         public TextBox EndBox { get { return endBox; } }
@@ -70,6 +81,7 @@ namespace Capsule
         {
             model = m;
             if (formKind != null && (formDay != m.Selected || !m.CanAdd)) CloseForm();   // another day, or no adding any more
+            if (problemDay != m.Selected) problem = "";
             BuildHeader();
             BuildGrid();
             BuildDay();
@@ -171,11 +183,29 @@ namespace Capsule
             day.Children.Add(heading);
             if (model.Loading) day.Children.Add(CardView.MakeText("Checking…", 12, Palette.Secondary, FontWeights.Normal));
             else if (model.Events.Count == 0 && model.Tasks.Count == 0) day.Children.Add(CardView.MakeText(model.Empty, 12, Palette.Secondary, FontWeights.Normal));
-            foreach (CalendarRow row in model.Events) day.Children.Add(CardView.EventLine(row));
-            foreach (MonthTask task in model.Tasks) day.Children.Add(TaskLine(task));
-            if (model.Note != "")
+            foreach (CalendarRow row in model.Events)
             {
-                TextBlock note = CardView.Wrap(CardView.MakeText(model.Note, 11.5, Palette.Amber, FontWeights.Normal));
+                CalendarRow r = row;
+                UIElement line = CardView.EventLine(row);
+                if (model.CanAdd && (row.CanEdit || row.CanDelete))
+                    line = Changeable(line, "e\n" + row.CalendarId + "\n" + row.Id, row.Title,
+                        row.CanEdit ? (Action)delegate { OpenEdit(r); } : null,
+                        row.CanDelete ? (Action)delegate { if (DeleteEventRequested != null) DeleteEventRequested(r.CalendarId, r.Id); } : null);
+                day.Children.Add(line);
+            }
+            foreach (MonthTask task in model.Tasks)
+            {
+                MonthTask t = task;
+                UIElement line = TaskLine(task);
+                if (model.CanAdd)
+                    line = Changeable(line, "t\n" + task.ListId + "\n" + task.Id, task.Title, delegate { OpenEdit(t); },
+                        delegate { if (DeleteTaskRequested != null) DeleteTaskRequested(t.ListId, t.Id); });
+                day.Children.Add(line);
+            }
+            foreach (string text in new[] { model.Note, problem })
+            {
+                if (text == "") continue;
+                TextBlock note = CardView.Wrap(CardView.MakeText(text, 11.5, Palette.Amber, FontWeights.Normal));
                 note.Margin = new Thickness(0, 6, 0, 0);
                 day.Children.Add(note);
             }
@@ -191,6 +221,93 @@ namespace Capsule
                 }
                 day.Children.Add(buttons);
             }
+        }
+
+        // A row with its edit and delete buttons at the right; asking first, it gets Delete and Cancel under it instead.
+        UIElement Changeable(UIElement line, string key, string title, Action edit, Action delete)
+        {
+            if (key == confirming || key == deleting)
+            {
+                var asking = new StackPanel();
+                asking.Children.Add(line);
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
+                TextBlock question = CardView.MakeText(key == deleting ? "Deleting…" : "Delete this?", 12, Palette.Amber, FontWeights.Normal);
+                question.VerticalAlignment = VerticalAlignment.Center;
+                question.Margin = new Thickness(0, 0, 8, 0);
+                buttons.Children.Add(question);
+                if (key != deleting)
+                {
+                    Border yes = PanelView.PillButton("Delete", delegate
+                    {
+                        deleting = key;
+                        confirming = null;
+                        problem = "";
+                        Redraw();
+                        delete();
+                    });
+                    System.Windows.Automation.AutomationProperties.SetName(yes, "Delete: " + title);
+                    buttons.Children.Add(yes);
+                    Border no = PanelView.PillButton("Cancel", delegate
+                    {
+                        confirming = null;
+                        Redraw();
+                    });
+                    no.Margin = new Thickness(8, 0, 0, 0);
+                    buttons.Children.Add(no);
+                }
+                asking.Children.Add(buttons);
+                return asking;
+            }
+            var row = new DockPanel { LastChildFill = true };
+            if (delete != null)
+            {
+                Border bin = Icon(DeleteGlyph, "Delete", delegate
+                {
+                    confirming = key;
+                    problem = "";
+                    Redraw();
+                });
+                System.Windows.Automation.AutomationProperties.SetName(bin, "Ask to delete: " + title);
+                bin.VerticalAlignment = VerticalAlignment.Center;
+                DockPanel.SetDock(bin, Dock.Right);
+                row.Children.Add(bin);
+            }
+            if (edit != null)
+            {
+                Border pencil = Icon(EditGlyph, "Edit", edit);
+                System.Windows.Automation.AutomationProperties.SetName(pencil, "Edit: " + title);
+                pencil.VerticalAlignment = VerticalAlignment.Center;
+                DockPanel.SetDock(pencil, Dock.Right);
+                row.Children.Add(pencil);
+            }
+            row.Children.Add(line);
+            return row;
+        }
+
+        void Redraw()
+        {
+            BuildDay();
+            Restyle();
+            RaiseResized();
+        }
+
+        // Why the last change didn't work (a refused delete, edit or tick), under the day's rows; its row is back to normal.
+        public void ShowProblem(string why)
+        {
+            problem = why ?? "";
+            problemDay = model.Selected;
+            confirming = null;
+            deleting = null;
+            Redraw();
+        }
+
+        // A change went through: a form waiting on it closes, and a row being deleted is let go.
+        public void ChangeDone()
+        {
+            deleting = null;
+            problem = "";
+            if (formBusy) CloseForm();
+            Redraw();
         }
 
         // A task: a check box with its title, struck through once done.
@@ -252,16 +369,44 @@ namespace Capsule
 
         void OpenForm(string kind)
         {
+            OpenForm(kind, "", model.AllDayDefault, model.StartText, model.EndText);
+        }
+
+        // The form, filled in with an event to change.
+        void OpenEdit(CalendarRow row)
+        {
+            editWhere = row.CalendarId;
+            editId = row.Id;
+            OpenForm("edit-event", row.Title == GoogleCalendarClient.NoTitle ? "" : row.Title, row.AllDay, row.StartText, row.EndText);
+        }
+
+        void OpenEdit(MonthTask task)
+        {
+            editWhere = task.ListId;
+            editId = task.Id;
+            OpenForm("edit-task", task.Title == GoogleCalendarClient.NoTitle ? "" : task.Title, false, "", "");
+        }
+
+        void OpenForm(string kind, string title, bool allDay, string start, string end)
+        {
+            if (!kind.StartsWith("edit-", StringComparison.Ordinal))
+            {
+                editWhere = "";
+                editId = "";
+            }
             formKind = kind;
             formDay = model.Selected;
             formBusy = false;
-            titleBox.Clear();
-            bool isEvent = kind == "event";
+            confirming = null;
+            problem = "";
+            titleBox.Text = title;
+            titleBox.CaretIndex = title.Length;
+            bool isEvent = kind == "event" || kind == "edit-event";
             allDayBox.Visibility = isEvent ? Visibility.Visible : Visibility.Collapsed;
-            allDayBox.IsChecked = model.AllDayDefault;
-            startBox.Text = model.StartText;
-            endBox.Text = model.EndText;
-            timeRow.Visibility = isEvent && !model.AllDayDefault ? Visibility.Visible : Visibility.Collapsed;
+            allDayBox.IsChecked = allDay;
+            startBox.Text = start;
+            endBox.Text = end;
+            timeRow.Visibility = isEvent && !allDay ? Visibility.Visible : Visibility.Collapsed;
             formError.Text = "";
             RefreshChoices();
             form.Visibility = Visibility.Visible;
@@ -276,7 +421,8 @@ namespace Capsule
         {
             string picked = WhereId();
             whereBox.Items.Clear();
-            if (formKind == "event")
+            if (formKind == "edit-event" || formKind == "edit-task") { }   // an edit stays where it is
+            else if (formKind == "event")
                 foreach (CalendarChoice c in model.Calendars) whereBox.Items.Add(new ComboBoxItem { Content = c.Name, Tag = c.Id });
             else
                 foreach (TaskList l in model.Lists) whereBox.Items.Add(new ComboBoxItem { Content = l.Title, Tag = l.Id });
@@ -290,7 +436,8 @@ namespace Capsule
         void RenderFormButtons()
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(PanelView.PillButton(formBusy ? "Adding…" : "Add", Submit));
+            bool editing = formKind == "edit-event" || formKind == "edit-task";
+            row.Children.Add(PanelView.PillButton(formBusy ? (editing ? "Saving…" : "Adding…") : (editing ? "Save" : "Add"), Submit));
             Border cancel = PanelView.PillButton("Cancel", CloseFormAndRedraw);
             cancel.Margin = new Thickness(8, 0, 0, 0);
             row.Children.Add(cancel);
@@ -306,9 +453,21 @@ namespace Capsule
         void Submit()
         {
             if (formBusy || formKind == null) return;
+            // Waiting from here: a refusal before the request even starts (no title, say) comes back to this form.
+            formBusy = true;
+            RenderFormButtons();
+            bool allDay = allDayBox.IsChecked == true;
             if (formKind == "event")
             {
-                if (AddEventRequested != null) AddEventRequested(titleBox.Text, allDayBox.IsChecked == true, startBox.Text, endBox.Text, WhereId());
+                if (AddEventRequested != null) AddEventRequested(titleBox.Text, allDay, startBox.Text, endBox.Text, WhereId());
+            }
+            else if (formKind == "edit-event")
+            {
+                if (EditEventRequested != null) EditEventRequested(editWhere, editId, titleBox.Text, allDay, startBox.Text, endBox.Text);
+            }
+            else if (formKind == "edit-task")
+            {
+                if (EditTaskRequested != null) EditTaskRequested(editWhere, editId, titleBox.Text);
             }
             else if (AddTaskRequested != null) AddTaskRequested(titleBox.Text, WhereId());
         }

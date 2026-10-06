@@ -154,6 +154,10 @@ namespace Capsule
             page.AddEventRequested += delegate(string title, bool allDay, string start, string end, string calendarId) { Guard("month", delegate { AddEvent(title, allDay, start, end, calendarId); }); };
             page.AddTaskRequested += delegate(string title, string listId) { Guard("month", delegate { AddTask(title, listId); }); };
             page.TaskToggled += delegate(string listId, string taskId, bool done) { Guard("month", delegate { calendar.SetTaskDone(listId, taskId, done, MonthResult); }); };
+            page.EditEventRequested += delegate(string calendarId, string eventId, string title, bool allDay, string start, string end) { Guard("month", delegate { EditEvent(calendarId, eventId, title, allDay, start, end); }); };
+            page.EditTaskRequested += delegate(string listId, string taskId, string title) { Guard("month", delegate { if (calendar.RenameTask(listId, taskId, title, MonthResult)) panel.View.Month.FormBusy(); }); };
+            page.DeleteEventRequested += delegate(string calendarId, string eventId) { Guard("month", delegate { calendar.DeleteEvent(calendarId, eventId, MonthResult); }); };
+            page.DeleteTaskRequested += delegate(string listId, string taskId) { Guard("month", delegate { calendar.DeleteTask(listId, taskId, MonthResult); }); };
             panel.View.GoogleLinkSaved += delegate(string text) { Guard("calendar link", delegate { if (calendar.SaveLink(text)) panel.View.LinkKept(); }); };
             panel.View.GoogleLinkRemoved += delegate { Guard("calendar link", calendar.RemoveLink); };
             panel.View.GoogleClientDraft += delegate(string id, string secret) { Guard("calendar client", delegate { calendar.KeepClient(id, secret); }); };
@@ -548,20 +552,33 @@ namespace Capsule
             if (calendar.AddEvent(calendarId, body, MonthResult)) panel.View.Month.FormBusy();
         }
 
+        void EditEvent(string calendarId, string eventId, string title, bool allDay, string start, string end)
+        {
+            TimeSpan from, to;
+            string why = CalendarMonth.CheckEvent(title, allDay, start, end, CultureInfo.CurrentCulture, out from, out to);
+            if (why != null)
+            {
+                panel.View.Month.FormError(why);
+                return;
+            }
+            string body = CalendarMonth.EventBody(title, monthDay, allDay, from, to, TimeZoneInfo.Local, true);
+            if (calendar.EditEvent(calendarId, eventId, body, MonthResult)) panel.View.Month.FormBusy();
+        }
+
         void AddTask(string title, string listId)
         {
             if (calendar.AddTask(listId, title, monthDay, MonthResult)) panel.View.Month.FormBusy();
         }
 
-        // How an add or a tick went: null closes the form; a line says why not.
+        // How an add, an edit, a delete or a tick went: done closes the form waiting on it; otherwise a line says why not,
+        // in that form, under the day, or in a balloon once the page is gone.
         void MonthResult(string why)
         {
             if (disposed) return;
-            if (why == null)
-            {
-                if (panel.View.Month.FormOpen) panel.View.Month.FormDone();
-            }
-            else if (panel.View.Month.FormOpen) panel.View.Month.FormError(why);
+            MonthView page = panel.View.Month;
+            if (why == null) page.ChangeDone();
+            else if (page.FormOpen && (page.FormWaiting || !panel.View.ShowingMonth)) page.FormError(why);
+            else if (panel.IsOpen && panel.View.ShowingMonth) page.ShowProblem(why);
             else tray.Balloon("Capsule", why);
             ShowMonthIfOpen();
         }

@@ -30,6 +30,7 @@ namespace Capsule
             TheClientIsKeptWhenThePanelCloses();
             AMonthIsReadWithItsTasks();
             AMonthPickedMeanwhileIsReadNext();
+            EventsAndTasksAreChangedAndDeleted();
             AnOlderSignInAsksForANewOne();
             AddingAnEventReadsTheMonthAgain();
             AddingATaskAndTickingIt();
@@ -112,6 +113,50 @@ namespace Capsule
             SettleMonth(rig);
             TestRunner.Check(!rig.Module.Month(2026, 11, new DateTime(2026, 11, 1), Clock.NowMs(), En).Loading && !rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), Clock.NowMs(), En).Loading,
                 "the month picked meanwhile is read right after");
+            rig.Module.SignOut();
+        }
+
+        // The month page's edit and delete buttons: a delete leaves the page at once and comes back if Google refuses; a
+        // refused edit says so without asking to sign in again.
+        static void EventsAndTasksAreChangedAndDeleted()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            int status = 200;
+            Func<CalendarRequest, HttpResult> before = rig.Transport;
+            rig.Transport = r => r.Method == "PATCH" || r.Method == "DELETE" ? Seen(rig.Api, r, new HttpResult { Status = r.Method == "DELETE" && status == 200 ? 204 : status, Body = "{}" }) : before(r);
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            Func<MonthModel> month = () => rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            string why = "unset";
+            Action<string> heard = w => why = w;
+            TestRunner.Check(rig.Module.DeleteEvent(GoogleCalendarTests.Primary, "offsite", heard) && !month().Events.Any(r => r.Title == "Offsite"), "a deleted event leaves the page at once");
+            SettleMonth(rig);
+            TestRunner.Check(why == null && rig.Api.Requests.Any(r => r.Method == "DELETE" && r.Path.StartsWith(FakeCalendarApi.EventsPathOf(GoogleCalendarTests.Primary) + "/offsite?", StringComparison.Ordinal)), "and Google is asked to delete it");
+            status = 500;
+            rig.Module.DeleteEvent(GoogleCalendarTests.Primary, "offsite", heard);
+            SettleMonth(rig);
+            TestRunner.Check(why != null && month().Events.Any(r => r.Title == "Offsite"), "refused, it comes back, and says why");
+            status = 403;
+            string body = CalendarMonth.EventBody("Offsite", new DateTime(2026, 10, 6), true, TimeSpan.Zero, TimeSpan.Zero, CalendarDayTests.Zone, true);
+            rig.Module.EditEvent(GoogleCalendarTests.Primary, "offsite", body, heard);
+            SettleMonth(rig);
+            TestRunner.Check(why == CalendarModule.NotAllowed && !rig.Module.NeedsSignInAgain && rig.Module.CanAdd, "an edit Google refuses says so, without asking to sign in again");
+            status = 200;
+            rig.Module.EditEvent(GoogleCalendarTests.Primary, "offsite", body, heard);
+            SettleMonth(rig);
+            TestRunner.Check(why == null && rig.Api.Requests.Last(r => r.Method == "PATCH").Body == body, "an edit is sent as typed");
+            TestRunner.Check(!rig.Module.EditEvent(GoogleCalendarTests.Primary, "standup", body, heard) && why == CalendarModule.NotYours
+                && !rig.Module.DeleteEvent(GoogleCalendarTests.Primary, "standup", heard) && month().Events.Any(r => r.Title == "Standup"), "one someone else organised is left alone");
+            TestRunner.Check(rig.Module.RenameTask(GoogleTasksTests.MyTasks, "dGFzazE", "Send the invoice today", heard) && month().Tasks.Any(t => t.Title == "Send the invoice today"), "a renamed task shows its new title at once");
+            SettleMonth(rig);
+            TestRunner.Check(why == null && tasksSeen.Any(r => r.Method == "PATCH" && r.Path == "lists/" + GoogleTasksTests.MyTasks + "/tasks/dGFzazE" && r.Body.Contains("Send the invoice today")), "and Google gets it");
+            int before2 = month().Tasks.Count;
+            TestRunner.Check(rig.Module.DeleteTask(GoogleTasksTests.MyTasks, "dGFzazE", heard) && month().Tasks.Count == before2 - 1, "a deleted task leaves the page at once");
+            SettleMonth(rig);
+            TestRunner.Check(why == null && tasksSeen.Any(r => r.Method == "DELETE" && r.Path == "lists/" + GoogleTasksTests.MyTasks + "/tasks/dGFzazE"), "and Google is asked to delete it");
+            string log = Files.ReadText(Paths.LogFile) ?? "";
+            TestRunner.Check(log.Contains("calendar: deleted an event") && log.Contains("calendar: changed a task") && !log.Contains("Send the invoice today"), "the log says what was done, never a title");
             rig.Module.SignOut();
         }
 

@@ -34,7 +34,7 @@ namespace Capsule
 
         public static List<CalendarEvent> Fixture()
         {
-            var mine = new GoogleCalendar { Id = GoogleCalendarTests.Primary, Color = "#9fe1e7" };
+            var mine = new GoogleCalendar { Id = GoogleCalendarTests.Primary, Color = "#9fe1e7", CanWrite = true };
             return GoogleCalendarClient.ParseEvents(TestRunner.Fixture("google-events.json"), mine);
         }
 

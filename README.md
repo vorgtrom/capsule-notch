@@ -251,7 +251,15 @@ Click the calendar button at the top right of the panel's Calendar tile.
 - **+ Add event:** a title, then **All day** or a start and end time on that day ("2:30 PM", "14:30" and "2pm" all
   work), and the calendar when you have more than one you can add to. It goes into Google Calendar.
 - **+ Add task:** a title, and the list when you have more than one. It goes into Google Tasks, due that day.
-- Adding and ticking need your own client and a sign-in. With the calendar link, the page shows your events only.
+- **Edit or delete:** your own events and your tasks have a pencil and a bin at the right of their row.
+  - The pencil opens the form filled in: change the title, and an event's times, then click **Save**. An event that
+    spans several days can only be deleted from here.
+  - The bin asks **Delete this?** on the row first. Nothing is deleted until you click **Delete**.
+  - For a repeating event, both change only that day's one.
+  - If the event has guests, Google emails them about the change, as Google Calendar does.
+  - Events you were invited to, and ones in calendars you can only read (such as holidays), have no buttons.
+- Adding, ticking, editing and deleting need your own client and a sign-in. With the calendar link, the page shows
+  your events only.
 - If adding keeps saying to sign in again, check that the Google Tasks API is enabled in your Cloud project.
 
 ### Ideas → Notion
@@ -303,7 +311,8 @@ anywhere else.
   five newest ideas.
 - **Google Calendar.** With the secret link, Capsule only reads your calendar. Signed in, it reads your events, your
   list of calendars and your tasks due in the days shown. It changes something only when you ask on the month page:
-  it adds the event or task you typed, or ticks the task you clicked. It never edits or deletes an event.
+  it adds the event or task you typed, ticks the task you clicked, or changes or deletes the event or task whose pencil
+  or bin you clicked. It never touches events you were invited to.
   - **The secret link** is encrypted for your Windows account (DPAPI). It's only ever sent to `calendar.google.com`,
     and is never logged or shown, not even in the settings once saved.
   - **Kept encrypted:** the sign-in (a refresh token) and the client secret are encrypted for your Windows account

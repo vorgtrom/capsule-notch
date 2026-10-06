@@ -26,6 +26,7 @@ namespace Capsule
         public bool AllDay;
         public long StartMs, EndMs;      // timed events: UTC milliseconds, whatever time zone they were written in
         public DateTime StartDay, EndDay; // all-day events: their dates, the end exclusive, as Google gives them
+        public bool Editable;             // the user's own, in a calendar they can change: Capsule offers to edit or delete it
     }
 
     // One request to the Calendar API, as tests see it.
@@ -38,8 +39,9 @@ namespace Capsule
     }
 
     // Google Calendar's API (calendar spec §3, month spec §3): the calendar list, each calendar's events for a span of time
-    // with repeating events expanded, and adding an event. Never throws: a call that fails returns null and leaves the reply in
-    // LastFailure. The access token only ever goes into the Authorization header; nothing here logs.
+    // with repeating events expanded, and adding, changing or deleting an event. Never throws: a call that fails returns null
+    // (or false) and leaves the reply in LastFailure. The access token only ever goes into the Authorization header; nothing
+    // here logs.
     public sealed class GoogleCalendarClient
     {
         public const string Base = "https://www.googleapis.com/calendar/v3/";
@@ -101,6 +103,32 @@ namespace Capsule
             if (r.Status != 200) return Fail<CalendarEvent>(r);
             CalendarEvent e = ParseEvent(Json.TryParse(r.Body), calendar);
             return e ?? Fail<CalendarEvent>(Unexpected());
+        }
+
+        // Changes an event (its body from CalendarMonth.EventBody, replacing): only the fields in the body. A repeating
+        // event's instance id changes that day's one only. Guests, if any, are told, as Google Calendar does.
+        public bool EditEvent(string calendarId, string eventId, string body)
+        {
+            LastFailure = null;
+            HttpResult r = Send("PATCH", EventPath(calendarId, eventId), body);
+            if (r.Status == 200) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        // Deletes an event (an instance id: that day's one only). One already gone counts as deleted.
+        public bool DeleteEvent(string calendarId, string eventId)
+        {
+            LastFailure = null;
+            HttpResult r = Send("DELETE", EventPath(calendarId, eventId), null);
+            if (r.Status == 200 || r.Status == 204 || r.Status == 404 || r.Status == 410) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        public static string EventPath(string calendarId, string eventId)
+        {
+            return "calendars/" + Uri.EscapeDataString(calendarId) + "/events/" + Uri.EscapeDataString(eventId) + "?sendUpdates=all";
         }
 
         public static string EventsPath(string calendarId, long fromMs, long toMs)
@@ -187,11 +215,15 @@ namespace Capsule
             if (Json.Str(Json.Get(item, "status")) == "cancelled") return null;
             if (Json.Str(Json.Get(item, "eventType")) == "workingLocation") return null;
             if (Declined(item)) return null;
+            string type = Json.Str(Json.Get(item, "eventType"));
+            bool organizer = Json.Get(item, "organizer") == null || (Json.Get(item, "organizer", "self") as bool? ?? false);
             var e = new CalendarEvent
             {
                 Id = Json.Str(Json.Get(item, "id")) ?? "",
                 CalendarId = calendar.Id,
                 Color = calendar.Color,
+                // Not one the user was invited to, a birthday or an out-of-office, nor in a calendar they may only read.
+                Editable = calendar.CanWrite && organizer && (type == null || type == "default") && !(Json.Get(item, "locked") as bool? ?? false),
             };
             string title = (Json.Str(Json.Get(item, "summary")) ?? "").Trim();
             e.Title = title != "" ? title : NoTitle;

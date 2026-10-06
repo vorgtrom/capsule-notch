@@ -29,6 +29,7 @@ namespace Capsule
             TheMonthPageShowsAMonth();
             TheMonthPageAddsAndTicks();
             TheGlassFollowsTheMonthPage();
+            RowsCanBeEditedAndDeleted();
             OlderSignInsAreAskedToSignInAgain();
         }
 
@@ -171,6 +172,61 @@ namespace Capsule
             double low = view.Outline.Bounds.Height;
             view.ShowMonth(MonthSample(true));
             TestRunner.Check(view.Outline.Bounds.Height > low + 20 && resized == 2, "the Add buttons appearing grow the glass, and the window is told both times");
+        }
+
+        // The user's own events and tasks have a pencil and a bin at the right; a delete asks first, on the row.
+        static void RowsCanBeEditedAndDeleted()
+        {
+            var view = new PanelView();
+            view.Update(Model(TileAt(8, 0)));
+            view.ShowMonth(MonthSample(true));
+            Lay(view);
+            string deleted = null, renamed = null;
+            string[] edited = null;
+            view.Month.DeleteEventRequested += delegate(string calendarId, string eventId) { deleted = calendarId + "/" + eventId; };
+            view.Month.DeleteTaskRequested += delegate(string listId, string taskId) { deleted = listId + "/" + taskId; };
+            view.Month.EditEventRequested += delegate(string calendarId, string eventId, string title, bool allDay, string start, string end) { edited = new[] { calendarId, eventId, title, allDay.ToString(), start, end }; };
+            view.Month.EditTaskRequested += delegate(string listId, string taskId, string title) { renamed = listId + "/" + taskId + "=" + title; };
+            TestRunner.Check(Named(view, "Edit: Offsite") != null && Named(view, "Ask to delete: Offsite") != null && Named(view, "Edit: Send the invoice") != null && Named(view, "Ask to delete: Send the invoice") != null,
+                "the user's own events and tasks have edit and delete");
+            TestRunner.Check(Named(view, "Edit: Standup") == null && Named(view, "Ask to delete: Standup") == null && Named(view, "Edit: Night deploy") == null && Named(view, "Ask to delete: Night deploy") != null,
+                "one someone else organised has neither; one over two days, delete only");
+            Click(Named(view, "Ask to delete: Offsite"));
+            Lay(view);
+            TestRunner.Check(HasText(view, "Delete this?") && Named(view, "Delete: Offsite") != null && deleted == null, "the bin asks first, on the row");
+            Click(Holder(view, "Cancel"));
+            Lay(view);
+            TestRunner.Check(!HasText(view, "Delete this?") && Named(view, "Ask to delete: Offsite") != null, "Cancel leaves it be");
+            Click(Named(view, "Ask to delete: Offsite"));
+            Lay(view);
+            Click(Named(view, "Delete: Offsite"));
+            Lay(view);
+            TestRunner.Check(deleted == GoogleCalendarTests.Primary + "/offsite" && HasText(view, "Deleting…"), "Delete hands over the event's calendar and id, and says it is deleting");
+            view.Month.ShowProblem("Couldn't reach Google");
+            Lay(view);
+            TextBlock problem = FindText(view, "Couldn't reach Google");
+            TestRunner.Check(problem != null && ((SolidColorBrush)problem.Foreground).Color == NotchView.Brush(Palette.Amber).Color && !HasText(view, "Deleting…"), "refused, the row is back and the day says why, in amber");
+            Click(Named(view, "Edit: Weekly review"));
+            Lay(view);
+            TestRunner.Check(view.Month.FormOpen && view.Month.TitleBox.Text == "Weekly review" && view.Month.AllDayBox.IsChecked == false && view.Month.StartBox.Text == "1:00 PM" && view.Month.EndBox.Text == "2:00 PM"
+                && HasText(view, "Save") && !HasText(view, "Couldn't reach Google"), "the pencil opens the form filled in with the event, to Save");
+            view.Month.TitleBox.Text = "Weekly review (moved)";
+            view.Month.StartBox.Text = "3pm";
+            view.Month.EndBox.Text = "4pm";
+            Click(Holder(view, "Save"));
+            Lay(view);
+            TestRunner.Check(edited != null && edited[0] == GoogleCalendarTests.Primary && edited[1] == "weekly_20261006T200000Z" && edited[2] == "Weekly review (moved)" && edited[3] == "False" && edited[4] == "3pm" && edited[5] == "4pm"
+                && HasText(view, "Saving…") && view.Month.FormWaiting, "Save hands over the event's ids and what was typed, and waits");
+            view.Month.ChangeDone();
+            Lay(view);
+            TestRunner.Check(!view.Month.FormOpen, "done, the form closes");
+            Click(Named(view, "Edit: Send the invoice"));
+            view.Month.TitleBox.Text = "Send the invoice today";
+            Click(Holder(view, "Save"));
+            TestRunner.Check(renamed == "l1/t1=Send the invoice today" && view.Month.AllDayBox.Visibility != Visibility.Visible, "a task's pencil renames it");
+            view.ShowMonth(MonthSample(false));
+            Lay(view);
+            TestRunner.Check(Named(view, "Edit: Offsite") == null && Named(view, "Ask to delete: Send the invoice") == null, "without a sign-in that can change them, no buttons");
         }
 
         static void OlderSignInsAreAskedToSignInAgain()
