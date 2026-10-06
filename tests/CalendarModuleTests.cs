@@ -32,6 +32,8 @@ namespace Capsule
             AMonthPickedMeanwhileIsReadNext();
             EventsAndTasksAreChangedAndDeleted();
             TheTileReadsTodaysAndTomorrowsTasks();
+            AnEditShowsAtOnce();
+            TasksTurnedOffInTheProjectSaySo();
             AnOlderSignInAsksForANewOne();
             AddingAnEventReadsTheMonthAgain();
             AddingATaskAndTickingIt();
@@ -158,6 +160,64 @@ namespace Capsule
             TestRunner.Check(why == null && tasksSeen.Any(r => r.Method == "DELETE" && r.Path == "lists/" + GoogleTasksTests.MyTasks + "/tasks/dGFzazE"), "and Google is asked to delete it");
             string log = Files.ReadText(Paths.LogFile) ?? "";
             TestRunner.Check(log.Contains("calendar: deleted an event") && log.Contains("calendar: changed a task") && !log.Contains("Send the invoice today"), "the log says what was done, never a title");
+            rig.Module.SignOut();
+        }
+
+        static void AnEditShowsAtOnce()
+        {
+            var rig = MonthRig(FullTokens, new List<CalendarRequest>());
+            Func<CalendarRequest, HttpResult> before = rig.Transport;
+            var answer = new ManualResetEvent(false);   // Google answers once the test has looked, as the app's UI thread would
+            rig.Transport = r =>
+            {
+                if (r.Method != "PATCH") return before(r);
+                answer.WaitOne(5000);
+                return Seen(rig.Api, r, new HttpResult { Status = 500, Body = "{}" });
+            };
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            Func<MonthModel> month = () => rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            var day = new DateTime(2026, 10, 6);
+            string body = CalendarMonth.EventBody("Offsite, moved", day, false, TimeSpan.FromHours(15), TimeSpan.FromHours(16), CalendarDayTests.Zone, true);
+            CalendarEvent changed = CalendarMonth.EditedEvent("Offsite, moved", day, false, TimeSpan.FromHours(15), TimeSpan.FromHours(16), CalendarDayTests.Zone);
+            string why = "unset";
+            rig.Module.EditEvent(GoogleCalendarTests.Primary, "offsite", body, changed, w => why = w);
+            CalendarRow shown = month().Events.FirstOrDefault(r => r.Id == "offsite");
+            TestRunner.Check(shown != null && shown.Title == "Offsite, moved" && shown.Time == "3:00 PM – 4:00 PM", "an edit shows at once, with its new times");
+            answer.Set();
+            SettleMonth(rig);
+            shown = month().Events.FirstOrDefault(r => r.Id == "offsite");
+            TestRunner.Check(why != null && shown != null && shown.Title == "Offsite" && shown.Time == "All day", "refused, the event is back as it was");
+            rig.Module.SignOut();
+        }
+
+        // The client's Cloud project hasn't turned the Tasks API on: the page says to turn it on, not to sign in again, and
+        // tasks come back once it is.
+        static void TasksTurnedOffInTheProjectSaySo()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            rig.Module.NewTasks = token =>
+            {
+                var c = new GoogleTasksClient(token);
+                c.Transport = r => new HttpResult { Status = 403, Body = GoogleTasksTests.ApiOffReply };
+                return c;
+            };
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            MonthModel m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(m.Note == CalendarModule.TasksApiOff && !rig.Module.NeedsSignInAgain && m.CanAdd && !m.ShowTasks && m.Events.Count > 0,
+                "the month says to turn the Tasks API on, events can still be added, and no sign-in is asked for");
+            rig.Module.NewTasks = token =>
+            {
+                var c = new GoogleTasksClient(token);
+                c.Transport = r => GoogleTasksTests.Answer(r, tasksSeen);
+                return c;
+            };
+            rig.Module.Refresh();
+            rig.Settle();
+            m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(m.Note == "" && m.ShowTasks, "turned on, the next read brings tasks back");
             rig.Module.SignOut();
         }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using WEllipse = System.Windows.Shapes.Ellipse;
 
@@ -10,8 +11,9 @@ namespace Capsule
 {
     // The month page (month spec §2), shown in the panel in place of the tiles: a header with the month and ‹ › Today, six
     // weeks of days with dots, and the selected day's events and tasks with + Add event and + Add task. The user's own events
-    // and tasks have an edit and a delete button at the right; a delete asks first, on the row. Update redraws all of it
-    // but the open form, so what is being typed in it survives the module's redraws.
+    // and tasks have an edit and a delete button at the right, shown while the row is hovered; a delete asks first, on the
+    // row. HandleKey takes the page's keys. Update redraws all of it but the open form, so what is being typed in it
+    // survives the module's redraws.
     public sealed class MonthView : StackPanel
     {
         const string BackGlyph = "\uE72B", PrevGlyph = "\uE76B", NextGlyph = "\uE76C";   // U+E72B Back, U+E76B and U+E76C the chevrons: icon-font glyphs, kept as escapes
@@ -262,7 +264,8 @@ namespace Capsule
                 asking.Children.Add(buttons);
                 return asking;
             }
-            var row = new DockPanel { LastChildFill = true };
+            var row = new DockPanel { LastChildFill = true, Background = Brushes.Transparent };   // a background, so the whole row is hovered
+            var icons = new List<UIElement>();
             if (delete != null)
             {
                 Border bin = Icon(DeleteGlyph, "Delete", delegate
@@ -273,6 +276,7 @@ namespace Capsule
                 });
                 System.Windows.Automation.AutomationProperties.SetName(bin, "Ask to delete: " + title);
                 bin.VerticalAlignment = VerticalAlignment.Center;
+                icons.Add(bin);
                 DockPanel.SetDock(bin, Dock.Right);
                 row.Children.Add(bin);
             }
@@ -281,11 +285,67 @@ namespace Capsule
                 Border pencil = Icon(EditGlyph, "Edit", edit);
                 System.Windows.Automation.AutomationProperties.SetName(pencil, "Edit: " + title);
                 pencil.VerticalAlignment = VerticalAlignment.Center;
+                icons.Add(pencil);
                 DockPanel.SetDock(pencil, Dock.Right);
                 row.Children.Add(pencil);
             }
             row.Children.Add(line);
+            // The buttons show while the row is hovered; hidden, they still take their place and a click.
+            foreach (UIElement icon in icons) icon.Opacity = 0;
+            row.MouseEnter += delegate { foreach (UIElement icon in icons) icon.Opacity = 1; };
+            row.MouseLeave += delegate { foreach (UIElement icon in icons) icon.Opacity = 0; };
             return row;
+        }
+
+        // The page's keys, before the panel's (PanelWindow hands them over while the page shows); focused is what has the
+        // keyboard. In the form, Enter adds or saves and Esc cancels; elsewhere Esc lets go of a "Delete this?", the arrows
+        // move the day (up and down a week), and Page Up and Page Down change the month. True when the key was the page's;
+        // an Esc it doesn't take closes the panel.
+        public bool HandleKey(Key key, DependencyObject focused)
+        {
+            if (whereBox.IsDropDownOpen) return false;   // its list takes the keys, Esc included
+            if (key == Key.Escape)
+            {
+                if (formKind != null)
+                {
+                    CloseFormAndRedraw();
+                    return true;
+                }
+                if (confirming != null)
+                {
+                    confirming = null;
+                    Redraw();
+                    return true;
+                }
+                return false;
+            }
+            if (formKind != null && Within(focused, form))
+            {
+                if (key != Key.Enter) return false;   // the boxes keep their own keys
+                Submit();
+                return true;
+            }
+            if (focused is TextBox || focused is ComboBox || focused is ComboBoxItem) return false;
+            int days = key == Key.Left ? -1 : key == Key.Right ? 1 : key == Key.Up ? -7 : key == Key.Down ? 7 : 0;
+            if (days != 0)
+            {
+                if (DaySelected != null) DaySelected(model.Selected.AddDays(days));
+                return true;
+            }
+            if (key == Key.PageUp || key == Key.PageDown)
+            {
+                Action change = key == Key.PageUp ? PreviousClicked : NextClicked;
+                if (change != null) change();
+                return true;
+            }
+            return false;
+        }
+
+        static bool Within(DependencyObject element, DependencyObject ancestor)
+        {
+            for (DependencyObject d = element; d != null; d = d is Visual ? VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+                if (d == ancestor) return true;
+            return false;
         }
 
         void Redraw()
@@ -305,12 +365,16 @@ namespace Capsule
             Redraw();
         }
 
-        // A change went through: a form waiting on it closes, and a row being deleted is let go.
-        public void ChangeDone()
+        // The form's add or save went through: the form closes.
+        public void ChangeDone() { ChangeDone(true); }
+
+        // A change went through: a row being deleted is let go, and, for the form's own change (not a tick or a delete
+        // that finished while it saved), the form waiting on it closes.
+        public void ChangeDone(bool fromForm)
         {
             deleting = null;
             problem = "";
-            if (formBusy) CloseForm();
+            if (fromForm && formBusy) CloseForm();
             Redraw();
         }
 

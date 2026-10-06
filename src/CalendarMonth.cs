@@ -248,6 +248,24 @@ namespace Capsule
             return Json.Write(body);
         }
 
+        // An edited event's title and times, as the page shows them until the month is read again.
+        public static CalendarEvent EditedEvent(string title, DateTime day, bool allDay, TimeSpan start, TimeSpan end, TimeZoneInfo zone)
+        {
+            var e = new CalendarEvent { Title = CleanTitle(title), AllDay = allDay };
+            if (e.Title == "") e.Title = GoogleCalendarClient.NoTitle;
+            if (allDay)
+            {
+                e.StartDay = day.Date;
+                e.EndDay = day.Date.AddDays(1);
+            }
+            else
+            {
+                e.StartMs = Clock.ToMs(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(day.Date + start, DateTimeKind.Unspecified), zone));
+                e.EndMs = Clock.ToMs(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(day.Date + end, DateTimeKind.Unspecified), zone));
+            }
+            return e;
+        }
+
         static Dictionary<string, object> Time(string field, string value, string other, bool replacing)
         {
             var time = new Dictionary<string, object> { { field, value } };

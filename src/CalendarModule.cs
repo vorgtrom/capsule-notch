@@ -24,6 +24,7 @@ namespace Capsule
         public List<GoogleTask> Tasks;      // a month pass: the tasks due in it; null when not read
         public List<TaskList> Lists;        // a month pass: the task lists
         public bool TasksDenied;            // the sign-in may not read tasks (it was made before adding existed)
+        public bool TasksApiOff;            // the client's Cloud project hasn't turned the Google Tasks API on
         public CalendarEvent AddedEvent;    // an add: what Google made
         public GoogleTask AddedTask;
         public bool Done;                   // an add or a tick worked
@@ -182,7 +183,8 @@ namespace Capsule
             List<TaskList> lists = tasks.Lists();
             if (lists == null)
             {
-                r.TasksDenied = tasks.LastFailure != null && tasks.LastFailure.Status == 403;
+                r.TasksApiOff = GoogleTasksClient.ApiOff(tasks.LastFailure);
+                r.TasksDenied = !r.TasksApiOff && tasks.LastFailure != null && tasks.LastFailure.Status == 403;
                 return;
             }
             var all = new List<GoogleTask>();
@@ -595,8 +597,7 @@ namespace Capsule
                 unreachable = false;
                 retries = 0;
                 consecutive429 = 0;
-                if (r.TasksDenied) tasksDenied = true;
-                if (r.Lists != null) taskLists = r.Lists;
+                TakeTaskState(r);
                 // Tasks that couldn't be read this time stay as last read.
                 snap = new CalendarSnapshot { SignedIn = true, Loaded = true, Events = r.Events, Tasks = r.Tasks ?? (r.FromLink ? new List<GoogleTask>() : snap.Tasks), DataAtMs = Clock.NowMs() };
                 due = Clock.NowMs() + Every;
@@ -728,6 +729,7 @@ namespace Capsule
                 signedIn = true;
                 grantedScope = r.Scope;
                 tasksDenied = false;
+                tasksApiOff = false;
                 months.Clear();
                 accessToken = r.AccessToken;
                 accessExpiresAtMs = r.ExpiresAtMs;
@@ -789,6 +791,7 @@ namespace Capsule
             signedIn = false;
             grantedScope = null;
             tasksDenied = false;
+            tasksApiOff = false;
             months.Clear();
             taskLists = new List<TaskList>();
             monthProblem = "";
@@ -888,6 +891,7 @@ namespace Capsule
 
         public const string AddNeedsSignIn = "Sign in with your own Google client in ⚙ to add events and tasks";
         public const string NotAllowed = "Google didn't allow that change";
+        public const string TasksApiOff = "Turn on the Google Tasks API in your Google Cloud project (APIs & Services → Library) for tasks";
         public const string EventGone = "That event is gone. Reopen the month";
         public const string NotYours = "Capsule changes only your own events";
         public const string TaskGone = "That task is gone. Reopen the month";
@@ -895,6 +899,7 @@ namespace Capsule
 
         string grantedScope;     // the scopes the sign-in was granted, once known (sign-in or a refresh); null until then
         bool tasksDenied;        // Google refused tasks to this sign-in
+        bool tasksApiOff;        // the client's Cloud project hasn't turned the Tasks API on; read again each pass, so turning it on is seen
         readonly Dictionary<string, MonthData> months = new Dictionary<string, MonthData>();   // months read, in memory only
         List<TaskList> taskLists = new List<TaskList>();
         int openYear, openMonth;   // the month the page shows; 0 while it is closed
@@ -1013,8 +1018,7 @@ namespace Capsule
                     monthProblem = r.FromLink ? CalendarPass.LinkProblem(r.Failure) : GoogleCalendarClient.Problem(r.Failure);
                     return;
                 }
-                if (r.TasksDenied) tasksDenied = true;
-                if (r.Lists != null) taskLists = r.Lists;
+                TakeTaskState(r);
                 months[key] = new MonthData { Events = r.Events, Tasks = r.Tasks ?? new List<GoogleTask>(), ReadAtMs = Clock.NowMs() };
                 monthProblem = "";
             }
@@ -1041,8 +1045,8 @@ namespace Capsule
             MonthModel m = CalendarMonth.Build(year, month, selected, read ? d.Events : new List<CalendarEvent>(), read ? d.Tasks : new List<GoogleTask>(), now, Zone(), culture);
             m.Loading = !read;
             m.CanAdd = CanAdd;
-            m.ShowTasks = CanAdd;
-            m.Note = monthProblem != "" ? monthProblem : !signedIn ? AddNeedsSignIn : NeedsSignInAgain ? SignInAgainToAdd : "";
+            m.ShowTasks = CanAdd && !tasksApiOff;
+            m.Note = monthProblem != "" ? monthProblem : !signedIn ? AddNeedsSignIn : NeedsSignInAgain ? SignInAgainToAdd : tasksApiOff ? TasksApiOff : "";
             foreach (GoogleCalendar c in calendars.Where(c => c.CanWrite).OrderBy(c => c.Primary ? 0 : 1))
                 m.Calendars.Add(new CalendarChoice { Id = c.Id, Name = c.Name, Color = c.Color, Shown = true });
             m.Lists = taskLists.ToList();
@@ -1135,14 +1139,45 @@ namespace Capsule
             return true;
         }
 
-        // Changes one of the user's events: its body from CalendarMonth.EventBody(…, replacing: true). The page shows the
-        // change once the month is read again.
+        // Changes one of the user's events: its body from CalendarMonth.EventBody(…, replacing: true).
         public bool EditEvent(string calendarId, string eventId, string body, Action<string> done)
+        {
+            return EditEvent(calendarId, eventId, body, null, done);
+        }
+
+        // changed (from CalendarMonth.EditedEvent): its new title and times, shown at once and put back if Google refuses.
+        public bool EditEvent(string calendarId, string eventId, string body, CalendarEvent changed, Action<string> done)
         {
             CalendarEvent e = CachedEvent(calendarId, eventId);
             string why = CanChange() ?? (e == null ? EventGone : !e.Editable ? NotYours : null);
+            var was = new List<KeyValuePair<CalendarEvent, CalendarEvent>>();   // each held copy, and what it said before
+            if (why == null && changed != null)
+                foreach (MonthData d in months.Values)
+                    foreach (CalendarEvent x in d.Events)
+                        if (x.CalendarId == calendarId && x.Id == eventId)
+                        {
+                            was.Add(new KeyValuePair<CalendarEvent, CalendarEvent>(x, Times(x, new CalendarEvent())));
+                            Times(changed, x);
+                        }
             Func<string, GoogleCalendarClient> make = NewClient;
-            return StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.EditEvent(auth, refresh, token, expires, make, calendarId, eventId, body, Clock.NowMs()), null);
+            bool started = StartChange(why, done, (auth, refresh, token, expires) => CalendarPass.EditEvent(auth, refresh, token, expires, make, calendarId, eventId, body, Clock.NowMs()), ok =>
+            {
+                if (!ok) foreach (KeyValuePair<CalendarEvent, CalendarEvent> p in was) Times(p.Value, p.Key);
+            });
+            if (started && was.Count > 0) Raise();
+            return started;
+        }
+
+        // Copies an event's title and times onto another; returns that other.
+        static CalendarEvent Times(CalendarEvent from, CalendarEvent to)
+        {
+            to.Title = from.Title;
+            to.AllDay = from.AllDay;
+            to.StartMs = from.StartMs;
+            to.EndMs = from.EndMs;
+            to.StartDay = from.StartDay;
+            to.EndDay = from.EndDay;
+            return to;
         }
 
         // Deletes one of the user's events. It leaves the page at once, and comes back if Google refuses.
@@ -1249,6 +1284,15 @@ namespace Capsule
                     if (t.ListId == listId && t.Id == taskId) t.Title = title;
         }
 
+        // What a month or tile pass learnt about tasks: refused to this sign-in, the API off (or on again), the lists.
+        void TakeTaskState(CalendarPassResult r)
+        {
+            if (r.TasksDenied) tasksDenied = true;
+            if (r.TasksApiOff) tasksApiOff = true;
+            else if (r.Tasks != null) tasksApiOff = false;
+            if (r.Lists != null) taskLists = r.Lists;
+        }
+
         void Untick(string listId, string taskId, bool state)
         {
             foreach (MonthData d in months.Values)
@@ -1302,7 +1346,12 @@ namespace Capsule
                 }
                 if (!r.Done)
                 {
-                    if (r.Failure != null && r.Failure.Status == 403 && r.Existing) why = NotAllowed;
+                    if (GoogleTasksClient.ApiOff(r.Failure))
+                    {
+                        tasksApiOff = true;   // not the sign-in's fault: a new one wouldn't help
+                        why = TasksApiOff;
+                    }
+                    else if (r.Failure != null && r.Failure.Status == 403 && r.Existing) why = NotAllowed;
                     else if (r.Failure != null && r.Failure.Status == 403)
                     {
                         tasksDenied = true;   // the sign-in may read but not add: a new sign-in grants it

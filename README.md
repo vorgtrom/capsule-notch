@@ -282,7 +282,7 @@ Click the calendar button at the top right of the panel's Calendar tile.
 - **+ Add event:** a title, then **All day** or a start and end time on that day ("2:30 PM", "14:30" and "2pm" all
   work), and the calendar when you have more than one you can add to. It goes into Google Calendar.
 - **+ Add task:** a title, and the list when you have more than one. It goes into Google Tasks, due that day.
-- **Edit or delete:** your own events and your tasks have a pencil and a bin at the right of their row.
+- **Edit or delete:** hover one of your own events or tasks for a pencil and a bin at the right of its row.
   - The pencil opens the form filled in: change the title, and an event's times, then click **Save**. An event that
     spans several days can only be deleted from here.
   - The bin asks **Delete this?** on the row first. Nothing is deleted until you click **Delete**.
@@ -291,7 +291,15 @@ Click the calendar button at the top right of the panel's Calendar tile.
   - Events you were invited to, and ones in calendars you can only read (such as holidays), have no buttons.
 - Adding, ticking, editing and deleting need your own client and a sign-in. With the calendar link, the page shows
   your events only.
-- If adding keeps saying to sign in again, check that the Google Tasks API is enabled in your Cloud project.
+- **Keys:**
+  - **← →** move a day and **↑ ↓** a week.
+  - **Page Up** and **Page Down** change the month.
+  - In the form, **Enter** adds or saves and **Esc** cancels.
+  - **Esc** also cancels a **Delete this?**.
+  - With nothing to cancel, **Esc** closes the panel as usual.
+- If the page says to turn on the Google Tasks API, your Cloud project doesn't have it on yet: enable **Google Tasks
+  API** under **APIs & Services → Library** (step 2 of [your own client](#google-calendar)). Tasks show up at the next
+  read.
 
 ### Ideas → Notion
 

@@ -51,6 +51,12 @@ namespace Capsule
             };
             PreviewKeyDown += delegate(object sender, KeyEventArgs e)
             {
+                // The month page's keys first: Esc there cancels its form before it closes the panel.
+                if (view.ShowingMonth && view.Month.HandleKey(e.Key, Keyboard.FocusedElement as DependencyObject))
+                {
+                    e.Handled = true;
+                    return;
+                }
                 if (e.Key != Key.Escape) return;
                 e.Handled = true;
                 Dismiss();
