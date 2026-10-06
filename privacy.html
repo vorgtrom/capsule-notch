@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capsule privacy policy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<h1>Privacy policy</h1>
+<p class="muted">Effective 6 October 2026.</p>
+
+<p>Capsule is a Windows app that runs only on your own PC. It has no server: nothing it reads is sent to its developer
+or to anyone else.</p>
+
+<h2>Google Calendar</h2>
+<p>When you connect Google Calendar, Capsule asks Google for read-only access to your events and your list of
+calendars. It uses them only to show, on your own screen, when your next event starts and what is on today and
+tomorrow.</p>
+<ul>
+<li>Event titles and calendar names are shown on screen only. They are kept in memory while Capsule runs, and are
+never written to disk, logged or sent anywhere.</li>
+<li>To stay signed in, Capsule keeps the sign-in Google gives it (a refresh token) on your PC, encrypted for your
+Windows account. Short-lived access tokens are kept in memory only.</li>
+<li>Capsule talks only to Google's own servers (<code>oauth2.googleapis.com</code>, <code>www.googleapis.com</code>
+and <code>calendar.google.com</code>) for this.</li>
+<li>Capsule doesn't sell, share or transfer your Google data, use it for advertising, or let anyone read it.</li>
+</ul>
+<p>Capsule's use and transfer of information received from Google APIs adheres to the
+<a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+including the Limited Use requirements.</p>
+
+<h2>Other features</h2>
+<p>Capsule also reads your Claude Code and Codex usage from Anthropic and OpenAI, and sends ideas you type to your
+own Notion database, each with your own sign-in for that service. That data, too, goes only between your PC and that
+service.</p>
+
+<h2>Removing access</h2>
+<p>Choose <strong>Sign out</strong> in Capsule's settings: it deletes the saved sign-in and asks Google to revoke it.
+You can also remove Capsule at any time from your Google Account, under
+<a href="https://myaccount.google.com/connections">Security &rarr; Your connections to third-party apps &amp;
+services</a>. Deleting <code>%USERPROFILE%\.capsule</code> removes everything Capsule keeps on your PC.</p>
+
+<h2>Contact</h2>
+<p>Questions: <a href="https://github.com/vorgtrom">github.com/vorgtrom</a>.</p>
+
+<footer><a href="index.html">Capsule</a></footer>
+</main>
+</body>
+</html>
