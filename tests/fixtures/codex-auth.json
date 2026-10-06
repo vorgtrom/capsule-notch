@@ -1,0 +1,10 @@
+{
+  "OPENAI_API_KEY": null,
+  "tokens": {
+    "id_token": "id-TEST",
+    "access_token": "codex-access-TEST",
+    "refresh_token": "refresh-TEST",
+    "account_id": "acct-TEST"
+  },
+  "last_refresh": "2026-09-29T00:00:00Z"
+}

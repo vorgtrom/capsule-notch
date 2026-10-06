@@ -1,0 +1,11 @@
+{
+  "object": "database",
+  "id": "0123456789abcdef0123456789abcdef",
+  "title": [
+    { "type": "text", "text": { "content": "Ideas" }, "plain_text": "Ideas" }
+  ],
+  "data_sources": [
+    { "id": "bc1211ca-e3f1-4939-ae34-5260b16f627c", "name": "Ideas" }
+  ],
+  "url": "https://app.notion.com/p/0123456789abcdef0123456789abcdef"
+}

@@ -1,0 +1,51 @@
+{
+  "kind": "calendar#calendarList",
+  "etag": "\"p32g9nb5bt6fva0g\"",
+  "nextSyncToken": "CKCbrKvpn_UCEhNzYW1wbGVAZXhhbXBsZS5jb20=",
+  "items": [
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "sample.user@example.com",
+      "summary": "sample.user@example.com",
+      "timeZone": "America/Los_Angeles",
+      "colorId": "14",
+      "backgroundColor": "#9fe1e7",
+      "foregroundColor": "#000000",
+      "selected": true,
+      "accessRole": "owner",
+      "primary": true
+    },
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "family0123456789@group.calendar.google.com",
+      "summary": "Family",
+      "timeZone": "America/Los_Angeles",
+      "backgroundColor": "#f83a22",
+      "foregroundColor": "#000000",
+      "selected": true,
+      "accessRole": "writer"
+    },
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "en.usa#holiday@group.v.calendar.google.com",
+      "summary": "Holidays in United States",
+      "summaryOverride": "US holidays",
+      "timeZone": "America/Los_Angeles",
+      "backgroundColor": "#16a765",
+      "foregroundColor": "#000000",
+      "accessRole": "reader"
+    },
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "odd@group.calendar.google.com",
+      "summary": "Odd colour",
+      "backgroundColor": "red",
+      "selected": true,
+      "accessRole": "reader"
+    },
+    {
+      "kind": "calendar#calendarListEntry",
+      "summary": "No id, not a calendar"
+    }
+  ]
+}

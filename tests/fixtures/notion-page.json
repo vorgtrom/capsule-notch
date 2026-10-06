@@ -1,0 +1,16 @@
+{
+  "object": "page",
+  "id": "59833787-2cf9-4fdf-8782-e53db20768a5",
+  "created_time": "2026-10-01T10:15:00.000Z",
+  "url": "https://app.notion.com/p/Recipe-app-add-a-shopping-list-598337872cf94fdf8782e53db20768a5",
+  "parent": { "type": "data_source_id", "data_source_id": "bc1211ca-e3f1-4939-ae34-5260b16f627c" },
+  "properties": {
+    "Idea": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        { "type": "text", "text": { "content": "Recipe app: add a shopping list" }, "plain_text": "Recipe app: add a shopping list" }
+      ]
+    }
+  }
+}

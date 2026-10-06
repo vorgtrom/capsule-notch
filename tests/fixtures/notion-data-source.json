@@ -1,0 +1,12 @@
+{
+  "object": "data_source",
+  "id": "bc1211ca-e3f1-4939-ae34-5260b16f627c",
+  "title": [
+    { "type": "text", "text": { "content": "Ideas" }, "plain_text": "Ideas" }
+  ],
+  "properties": {
+    "Tags": { "id": "a%3Fb", "name": "Tags", "type": "multi_select", "multi_select": { "options": [] } },
+    "Idea": { "id": "title", "name": "Idea", "type": "title", "title": {} }
+  },
+  "parent": { "type": "database_id", "database_id": "0123456789abcdef0123456789abcdef" }
+}

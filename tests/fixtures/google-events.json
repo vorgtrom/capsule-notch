@@ -1,0 +1,143 @@
+{
+  "kind": "calendar#events",
+  "summary": "sample.user@example.com",
+  "timeZone": "America/Los_Angeles",
+  "accessRole": "owner",
+  "items": [
+    {
+      "kind": "calendar#event",
+      "id": "nightdeploy",
+      "status": "confirmed",
+      "summary": "Night deploy",
+      "start": { "dateTime": "2026-10-05T23:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "end": { "dateTime": "2026-10-06T01:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "offsite",
+      "status": "confirmed",
+      "summary": "Offsite",
+      "start": { "date": "2026-10-06" },
+      "end": { "date": "2026-10-07" },
+      "transparency": "transparent",
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "home",
+      "status": "confirmed",
+      "summary": "Home",
+      "start": { "date": "2026-10-06" },
+      "end": { "date": "2026-10-07" },
+      "eventType": "workingLocation",
+      "workingLocationProperties": { "type": "homeOffice", "homeOffice": {} }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "standup",
+      "status": "confirmed",
+      "summary": "Standup",
+      "start": { "dateTime": "2026-10-06T09:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "end": { "dateTime": "2026-10-06T09:30:00-07:00", "timeZone": "America/Los_Angeles" },
+      "attendees": [
+        { "email": "sample.user@example.com", "self": true, "responseStatus": "accepted" },
+        { "email": "teammate@example.com", "responseStatus": "declined" }
+      ],
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "oldsync",
+      "status": "cancelled",
+      "summary": "Old sync",
+      "start": { "dateTime": "2026-10-06T10:00:00-07:00" },
+      "end": { "dateTime": "2026-10-06T11:00:00-07:00" }
+    },
+    {
+      "kind": "calendar#event",
+      "id": "vendorcall",
+      "status": "confirmed",
+      "summary": "Vendor call",
+      "start": { "dateTime": "2026-10-06T11:00:00-07:00" },
+      "end": { "dateTime": "2026-10-06T12:00:00-07:00" },
+      "attendees": [
+        { "email": "vendor@example.com", "organizer": true, "responseStatus": "accepted" },
+        { "email": "sample.user@example.com", "self": true, "responseStatus": "declined" }
+      ],
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "weekly_20261006T200000Z",
+      "status": "confirmed",
+      "summary": "Weekly review",
+      "start": { "dateTime": "2026-10-06T13:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "end": { "dateTime": "2026-10-06T14:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "recurringEventId": "weekly",
+      "originalStartTime": { "dateTime": "2026-10-06T13:00:00-07:00", "timeZone": "America/Los_Angeles" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "london",
+      "status": "confirmed",
+      "summary": "Call with London",
+      "start": { "dateTime": "2026-10-06T23:00:00+01:00", "timeZone": "Europe/London" },
+      "end": { "dateTime": "2026-10-07T00:00:00+01:00", "timeZone": "Europe/London" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "designreview",
+      "status": "confirmed",
+      "summary": "Design review",
+      "start": { "dateTime": "2026-10-06T23:30:00Z", "timeZone": "UTC" },
+      "end": { "dateTime": "2026-10-07T00:15:00Z", "timeZone": "UTC" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "oneonone",
+      "status": "tentative",
+      "summary": "1:1",
+      "start": { "dateTime": "2026-10-07T09:00:00-07:00" },
+      "end": { "dateTime": "2026-10-07T09:30:00-07:00" },
+      "attendees": [ { "email": "sample.user@example.com", "self": true, "responseStatus": "tentative" } ],
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "untitled",
+      "status": "confirmed",
+      "start": { "dateTime": "2026-10-07T10:00:00-07:00" },
+      "end": { "dateTime": "2026-10-07T11:00:00-07:00" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "lunch",
+      "status": "confirmed",
+      "summary": "  Lunch  ",
+      "start": { "dateTime": "2026-10-07T12:00:00-07:00" },
+      "end": { "dateTime": "2026-10-07T13:00:00-07:00" },
+      "eventType": "default"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "planning",
+      "status": "confirmed",
+      "summary": "Planning",
+      "start": { "dateTime": "2026-10-07T15:00:00-07:00" },
+      "end": { "dateTime": "2026-10-07T16:00:00-07:00" },
+      "eventType": "focusTime"
+    },
+    {
+      "kind": "calendar#event",
+      "id": "broken",
+      "status": "confirmed",
+      "summary": "No start",
+      "end": { "dateTime": "2026-10-07T16:00:00-07:00" }
+    }
+  ]
+}
