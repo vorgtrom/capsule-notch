@@ -26,6 +26,9 @@ namespace Capsule
         readonly StackPanel form = new StackPanel();    // the add form, kept across redraws while open
         readonly TextBox titleBox = new TextBox();
         readonly CheckBox allDayBox = new CheckBox();
+        readonly TextBlock allDayTick = new TextBlock();
+        readonly TextBlock allDayText = CardView.MakeText("All day", 12.5, Palette.Text, FontWeights.Normal);
+        Border allDayMark;
         readonly TextBox startBox = new TextBox(), endBox = new TextBox();
         readonly StackPanel timeRow = new StackPanel { Orientation = Orientation.Horizontal };
         readonly ComboBox whereBox = new ComboBox();     // the calendar, or the task list
@@ -319,26 +322,8 @@ namespace Capsule
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var tick = new TextBlock
-            {
-                Text = task.Done ? CheckGlyph : "",
-                FontFamily = new FontFamily(PanelView.IconFont),
-                FontSize = 8,
-                Foreground = NotchView.Brush(Palette.Secondary),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            var mark = new Border
-            {
-                Width = 10,
-                Height = 10,
-                CornerRadius = new CornerRadius(3),
-                BorderThickness = new Thickness(1.3),
-                BorderBrush = NotchView.Brush(Palette.Secondary),
-                Margin = new Thickness(-1, 0, 7, 0),   // as wide as an event's dot and its gap, centred on it
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = tick,
-            };
+            Border mark = Mark(new TextBlock(), task.Done);
+            mark.Margin = new Thickness(-1, 0, 7, 0);   // as wide as an event's dot and its gap, centred on it
             line.Children.Add(mark);
             TextBlock time = CardView.MakeText(CalendarDay.TaskTime, 12, Palette.Secondary, FontWeights.Normal);
             time.Margin = new Thickness(0, 0, 8, 0);
@@ -365,6 +350,27 @@ namespace Capsule
             return box;
         }
 
+        // The small rounded box of a task, or of All day: ticked when on.
+        static Border Mark(TextBlock tick, bool on)
+        {
+            tick.Text = on ? CheckGlyph : "";
+            tick.FontFamily = new FontFamily(PanelView.IconFont);
+            tick.FontSize = 8;
+            tick.Foreground = NotchView.Brush(Palette.Secondary);
+            tick.HorizontalAlignment = HorizontalAlignment.Center;
+            tick.VerticalAlignment = VerticalAlignment.Center;
+            return new Border
+            {
+                Width = 10,
+                Height = 10,
+                CornerRadius = new CornerRadius(3),
+                BorderThickness = new Thickness(1.3),
+                BorderBrush = NotchView.Brush(Palette.Secondary),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = tick,
+            };
+        }
+
         // A check box without Windows' box: only its content, on a background that takes clicks. One per page, made on
         // the page's own thread.
         readonly ControlTemplate plainCheckBox = MakePlainCheckBox();
@@ -384,8 +390,19 @@ namespace Capsule
             foreach (TextBox b in new[] { titleBox, startBox, endBox }) PanelView.Plain(b);
             titleBox.MaxLength = CalendarMonth.MaxTitle;
             form.Children.Add(Field(titleBox));
-            allDayBox.Content = CardView.MakeText("All day", 12.5, Palette.Text, FontWeights.Normal);
-            allDayBox.Margin = new Thickness(0, 6, 0, 0);
+            // The same small box as a task's, not Windows' own.
+            allDayMark = Mark(allDayTick, false);
+            allDayMark.Margin = new Thickness(0, 0, 8, 0);
+            allDayText.VerticalAlignment = VerticalAlignment.Center;
+            var allDay = new StackPanel { Orientation = Orientation.Horizontal };
+            allDay.Children.Add(allDayMark);
+            allDay.Children.Add(allDayText);
+            allDayBox.Content = allDay;
+            allDayBox.Template = plainCheckBox;
+            allDayBox.Cursor = System.Windows.Input.Cursors.Hand;
+            allDayBox.Checked += delegate { allDayTick.Text = CheckGlyph; };
+            allDayBox.Unchecked += delegate { allDayTick.Text = ""; };
+            allDayBox.Margin = new Thickness(2, 8, 0, 2);
             allDayBox.FocusVisualStyle = null;
             allDayBox.Click += delegate { timeRow.Visibility = allDayBox.IsChecked == true ? Visibility.Collapsed : Visibility.Visible; RaiseResized(); };
             form.Children.Add(allDayBox);
@@ -567,7 +584,9 @@ namespace Capsule
                 var field = b.Parent as Border;
                 if (field != null) field.Background = NotchView.Brush(Palette.Track);
             }
-            allDayBox.Foreground = NotchView.Brush(Palette.Text);
+            allDayText.Foreground = NotchView.Brush(Palette.Text);
+            allDayTick.Foreground = NotchView.Brush(Palette.Secondary);
+            if (allDayMark != null) allDayMark.BorderBrush = NotchView.Brush(Palette.Secondary);
         }
 
         void RaiseResized() { if (Resized != null) Resized(); }

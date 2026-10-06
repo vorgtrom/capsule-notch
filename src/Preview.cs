@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -19,7 +20,9 @@ namespace Capsule
         public static void Render(string dir)
         {
             Directory.CreateDirectory(dir);
-            long now = Clock.NowMs();
+            // A fixed mid-morning today, so the made-up day (a meeting under way, more to come) looks the same whenever
+            // it is rendered.
+            long now = Clock.ToMs(DateTime.Today.AddHours(10).AddMinutes(40).ToUniversalTime());
             CultureInfo en = CultureInfo.GetCultureInfo("en-US");
             Reading claude = SampleClaude(now), codex = SampleCodex(now);
             Reading dimmed = claude.Clone();
@@ -27,9 +30,9 @@ namespace Capsule
             dimmed.DataAtMs = now - 30 * 60 * 1000;
             var signin = new Reading { Provider = "claude", Status = "signin" };
             Theme.Use(Theme.For(false, false));
-            SaveNotch(dir, "notch-normal.png", Cells(now, null, claude, codex), false);
-            SaveNotch(dir, "notch-working.png", Cells(now, States.Working, claude, codex), false);
-            SaveNotch(dir, "notch-waiting.png", Cells(now, States.Waiting, claude, codex), false);
+            SaveNotch(dir, "notch-normal.png", WithCalendar(Cells(now, null, claude, codex), now, en), false);
+            SaveNotch(dir, "notch-working.png", WithCalendar(Cells(now, States.Working, claude, codex), now, en), false);
+            SaveNotch(dir, "notch-waiting.png", WithCalendar(Cells(now, States.Waiting, claude, codex), now, en), false);
             SaveNotch(dir, "notch-dimmed.png", Cells(now, null, dimmed, codex), false);
             SaveNotch(dir, "notch-signin.png", Cells(now, null, signin), false);
             SaveNotch(dir, "notch-left.png", Cells(now, null, claude, codex), true);
@@ -40,13 +43,98 @@ namespace Capsule
             SavePanel(dir, "panel.png", SamplePanel(claude, codex, now, en), false);
             SavePanel(dir, "panel-settings.png", SamplePanel(claude, codex, now, en), true);
             SaveCalendar(dir, "", claude, codex, now, en);
+            SaveMonth(dir, "", now, en);
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
             SavePrompt(dir, "card-question-light.png", SamplePrompts()["question"]);
             SavePanel(dir, "panel-light.png", SamplePanel(claude, codex, now, en), false);
             SaveCalendar(dir, "-light", claude, codex, now, en);
+            SaveMonth(dir, "-light", now, en);
             Theme.Use(Theme.For(false, false));
+        }
+
+        // The capsule's cells with the calendar's under them, during the made-up meeting.
+        static List<CellModel> WithCalendar(List<CellModel> cells, long now, CultureInfo en)
+        {
+            cells.Add(CalendarDay.Cell(SampleCalendar(now), now, TimeZoneInfo.Local, en));
+            return cells;
+        }
+
+        // The month page (month spec §2): the month with today picked, then with + Add event's form open, then with a
+        // row asking "Delete this?".
+        static void SaveMonth(string dir, string suffix, long now, CultureInfo en)
+        {
+            DateTime today = DateTime.Today;
+            TimeZoneInfo zone = TimeZoneInfo.Local;
+            CalendarSnapshot day = SampleCalendar(now);
+            var events = new List<CalendarEvent>(day.Events);
+            events.Add(Timed(today.AddDays(-6), 9, 30, 60, "Kickoff", "#9fe1e7", zone));
+            events.Add(Timed(today.AddDays(-3), 12, 0, 60, "Team lunch", "#9fe1e7", zone));
+            events.Add(Timed(today.AddDays(-3), 16, 0, 30, "Pick up the bike", "#f83a22", zone));
+            events.Add(Timed(today.AddDays(2), 14, 0, 60, "Interview", "#9fe1e7", zone));
+            events.Add(Timed(today.AddDays(4), 19, 0, 120, "Dinner with Alex", "#f83a22", zone));
+            events.Add(Timed(today.AddDays(8), 10, 0, 45, "Sprint review", "#9fe1e7", zone));
+            events.Add(new CalendarEvent { Title = "Long weekend", AllDay = true, StartDay = today.AddDays(11), EndDay = today.AddDays(14), Color = "#16a765" });
+            for (int i = 0; i < events.Count; i++)
+            {
+                events[i].Id = "sample" + i;
+                events[i].CalendarId = "you@example.com";
+                events[i].Editable = true;
+            }
+            var tasks = new List<GoogleTask>(day.Tasks);
+            tasks.Add(new GoogleTask { Id = "t9", ListId = "tasks", Title = "Water the plants", Due = today, Done = true });
+            tasks.Add(new GoogleTask { Id = "t10", ListId = "tasks", Title = "Renew the passport", Due = today.AddDays(5) });
+            MonthModel m = CalendarMonth.Build(today.Year, today.Month, today, events, tasks, now, zone, en);
+            m.CanAdd = true;
+            m.ShowTasks = true;
+            m.Calendars.Add(new CalendarChoice { Id = "you@example.com", Name = "you@example.com", Color = "#9fe1e7" });
+            m.Lists.Add(new TaskList { Id = "tasks", Title = "My Tasks" });
+            SaveMonthPage(dir, "month" + suffix + ".png", m, null, null);
+            SaveMonthPage(dir, "month-add" + suffix + ".png", m, "+ Add event", "Lunch with Sam");
+            SaveMonthPage(dir, "month-delete" + suffix + ".png", m, "Ask to delete: 1:1 with Sam", null);
+        }
+
+        static CalendarEvent Timed(DateTime day, int hour, int minute, int minutes, string title, string color, TimeZoneInfo zone)
+        {
+            long start = Clock.ToMs(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(day.Date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified), zone));
+            return new CalendarEvent { Title = title, StartMs = start, EndMs = start + minutes * 60 * 1000L, Color = color };
+        }
+
+        // click: the automation name or the text of what to click first; title: typed into the form it opens.
+        static void SaveMonthPage(string dir, string name, MonthModel m, string click, string title)
+        {
+            var view = new PanelView();
+            view.ShowMonth(m);
+            if (click != null) Click(Find(view, click));
+            if (title != null) view.Month.TitleBox.Text = title;
+            view.Relayout();
+            var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+            host.Children.Add(view);
+            SavePng(host, Path.Combine(dir, name));
+        }
+
+        // What carries this automation name, or the button showing this text.
+        static FrameworkElement Find(DependencyObject root, string name)
+        {
+            var e = root as FrameworkElement;
+            if (e != null && e.Visibility != Visibility.Visible) return null;
+            if (e != null && System.Windows.Automation.AutomationProperties.GetName(e) == name) return e;
+            var t = root as TextBlock;
+            if (t != null && t.Text == name) return VisualTreeHelper.GetParent(t) as FrameworkElement;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                FrameworkElement found = Find(VisualTreeHelper.GetChild(root, i), name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        // A click as the mouse would deliver it, with no window.
+        static void Click(UIElement button)
+        {
+            if (button == null) return;
+            button.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent, Source = button });
         }
 
         static PanelModel SamplePanel(Reading claude, Reading codex, long now, CultureInfo en)
@@ -61,6 +149,7 @@ namespace Capsule
                 Codex = UsageTile.From(codex, now, en),
                 Sessions = SessionsTile.From(SampleSessions(now), true, now),
                 Ideas = ideas,
+                Calendar = CalendarDay.Tile(SampleCalendar(now), now, TimeZoneInfo.Local, en),
             };
         }
 
@@ -135,7 +224,12 @@ namespace Capsule
                 new CalendarEvent { Title = "Standup", StartMs = now + 24 * 60 * Minute, EndMs = now + 24 * 60 * Minute + 15 * Minute, Color = "#9fe1e7" },
                 new CalendarEvent { Title = "Dentist", StartMs = now + 26 * 60 * Minute, EndMs = now + 27 * 60 * Minute, Color = "#f83a22" },
             };
-            return new CalendarSnapshot { SignedIn = true, Loaded = true, Events = events, DataAtMs = now - 2 * Minute };
+            var tasks = new List<GoogleTask>
+            {
+                new GoogleTask { Id = "t1", ListId = "tasks", Title = "Send the invoice", Due = today },
+                new GoogleTask { Id = "t2", ListId = "tasks", Title = "Book flights", Due = today.AddDays(1) },
+            };
+            return new CalendarSnapshot { SignedIn = true, Loaded = true, Events = events, Tasks = tasks, DataAtMs = now - 2 * Minute };
         }
 
         static List<CellModel> Cells(long now, string activity, params Reading[] readings)
