@@ -133,7 +133,7 @@ namespace Capsule
     public static class GoogleAuthTests
     {
         const long Now = 1790690940000;
-        const string Tokens = "{\"access_token\": \"ya29.sample\", \"expires_in\": 3599, \"refresh_token\": \"1//sample\", \"scope\": \"x\", \"token_type\": \"Bearer\"}";
+        const string Tokens = "{\"access_token\": \"ya29.sample\", \"expires_in\": 3599, \"refresh_token\": \"1//sample\", \"scope\": \"x y\", \"token_type\": \"Bearer\"}";
 
         public static void Run()
         {
@@ -196,7 +196,9 @@ namespace Capsule
             TestRunner.Eq("offline", Get(q, "access_type"), "a refresh token is asked for");
             TestRunner.Eq("consent", Get(q, "prompt"), "every time");
             TestRunner.Check(url.Contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A5555%2F"), "the redirect is escaped");
-            TestRunner.Check(url.Contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.calendarlist.readonly&"), "the two scopes, read-only, space-separated and escaped");
+            TestRunner.Check(url.Contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.calendarlist.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ftasks&"), "the events, the calendar list read-only, and tasks: space-separated and escaped");
+            TestRunner.Check(GoogleOAuth.CanAdd(GoogleOAuth.Scopes) && GoogleOAuth.CanAdd("https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar"), "a sign-in with these scopes (or the whole calendar's) can add");
+            TestRunner.Check(!GoogleOAuth.CanAdd("https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly") && !GoogleOAuth.CanAdd("") && !GoogleOAuth.CanAdd(null), "an older, read-only sign-in can't");
         }
 
         static string Get(Dictionary<string, string> q, string name)
@@ -316,6 +318,7 @@ namespace Capsule
                 TokenResult t = AuthAt(fake).Exchange("4/code-sample", "verifier-sample", "http://127.0.0.1:5555/", Now);
                 TestRunner.Check(t.Ok && t.AccessToken == "ya29.sample" && t.RefreshToken == "1//sample", "the exchange gives an access token and a refresh token");
                 TestRunner.Eq(Now + 3599000L, t.ExpiresAtMs, "and when the access token expires");
+                TestRunner.Eq("x y", t.Scope, "and the scopes Google granted");
                 FakeHttpRequest r = fake.Last;
                 TestRunner.Check(r != null && r.Method == "POST" && r.Path == "/token", "a POST to the token endpoint");
                 TestRunner.Eq("application/x-www-form-urlencoded", r != null && r.Headers.ContainsKey("Content-Type") ? r.Headers["Content-Type"] : null, "as a form");

@@ -30,7 +30,9 @@ namespace Capsule
     // One request to the Calendar API, as tests see it.
     public sealed class CalendarRequest
     {
-        public string Path = "";   // after https://www.googleapis.com/calendar/v3/
+        public string Method = "GET";
+        public string Path = "";   // after the API's base (www.googleapis.com/calendar/v3/, tasks.googleapis.com/tasks/v1/)
+        public string Body;        // JSON, or null
         public Dictionary<string, string> Headers = new Dictionary<string, string>();
     }
 

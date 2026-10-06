@@ -1,0 +1,9 @@
+{
+  "kind": "tasks#taskLists",
+  "etag": "\"LTk3MzA5NTc4Mw\"",
+  "items": [
+    { "kind": "tasks#taskList", "id": "MDk4NTk5NzQ3ODM1", "etag": "\"MTQ4\"", "title": "My Tasks", "updated": "2026-10-05T08:00:00.000Z", "selfLink": "https://www.googleapis.com/tasks/v1/users/@me/lists/MDk4NTk5NzQ3ODM1" },
+    { "kind": "tasks#taskList", "id": "Y2hvcmVz", "etag": "\"MTQ5\"", "title": " Chores ", "updated": "2026-10-04T08:00:00.000Z" },
+    { "kind": "tasks#taskList", "title": "No id" }
+  ]
+}
