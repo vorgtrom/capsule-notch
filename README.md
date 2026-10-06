@@ -31,6 +31,8 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
   - Hover it for the rest of today and tomorrow's first three events.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
+- **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
+  its events and tasks, and add one to it.
 
 | Working | Waiting on you |
 |:---:|:---:|
@@ -179,11 +181,12 @@ The capsule then gets a third cell, and the panel a Calendar tile.
 **Your own Google client (sign in; several calendars)**
 
 This takes about ten minutes, once. In return you sign in instead of pasting a link, choose which of your calendars
-show, and get changes within 5 minutes. Adding events, which is coming, will need it. Once you're signed in, it is
-used instead of the link.
+show, get changes within 5 minutes, and can add events and tasks from the [month page](#the-month-page). Once you're
+signed in, it is used instead of the link.
 
 1. **A project.** In the [Google Cloud console](https://console.cloud.google.com/), create a project (call it Capsule).
-2. **The Calendar API.** Go to **APIs & Services → Library**, find **Google Calendar API** and click **Enable**.
+2. **The APIs.** Go to **APIs & Services → Library**, find **Google Calendar API** and click **Enable**. Then find
+   **Google Tasks API** and enable it too.
 3. **The consent screen.** Open **Google Auth Platform** (it was called **OAuth consent screen**) and click **Get started**.
    Name the app Capsule, give your email, and choose the audience:
    - **Internal** if your account is a Google Workspace one (work or school). No review, and the sign-in doesn't
@@ -198,10 +201,13 @@ used instead of the link.
      is Internal but you signed in with an account outside that organization, such as a Gmail one. Under **Audience**,
      click **Make external**, then **Publish app**, and sign in again. If **Make external** isn't offered, the project
      belongs to a Workspace organization: create the project again while signed in with your Gmail account.
-4. **The permissions.** Under **Data Access**, click **Add or remove scopes**. Add these two, both read-only:
-   - `.../auth/calendar.events.readonly`
-   - `.../auth/calendar.calendarlist.readonly`
+4. **The permissions.** Under **Data Access**, click **Add or remove scopes**. Add these three:
+   - `.../auth/calendar.events` (see and add events)
+   - `.../auth/calendar.calendarlist.readonly` (your list of calendars, read-only)
+   - `.../auth/tasks` (see, add and tick your tasks)
 
+   If the list doesn't show one, paste its full name, such as `https://www.googleapis.com/auth/tasks`, into
+   **Manually add scopes**.
    Then **Save**.
 5. **The client.** Under **Clients**, click **Create client**, choose **Desktop app**, name it Capsule, and click
    **Create**. Google shows the **Client secret** only now, in the dialog that opens: click **Download JSON** there,
@@ -213,7 +219,7 @@ used instead of the link.
    2. Paste the whole JSON into **Client ID**: it fills in both. Or paste the ID and the secret into their boxes.
       Clicking away to copy the other one closes the panel, but what you pasted is kept: open ⚙ again and carry on.
    3. Click **Sign in with Google**. Your browser opens at Google's sign-in.
-   4. Pick your account and allow the two read-only permissions.
+   4. Pick your account and allow the permissions: your events, your list of calendars, and your tasks.
       - With an External app, Google first warns that it hasn't verified the app. That's expected: it's your own
         app. Click **Advanced**, then **Go to Capsule**.
    5. The page then says Capsule is signed in, and you can close the tab.
@@ -224,6 +230,8 @@ calendars.
 - Untick one to leave it off the capsule; tick one to add it.
 - **Change client** lets you sign in with another client.
 - **Sign out** forgets the sign-in and asks Google to revoke it. A saved link takes over again.
+- **Signed in before adding existed?** Your sign-in still reads, but may not add. Add the new permissions in step 4
+  (and enable the Google Tasks API, step 2), then click **Sign in again** under **Google Calendar** in ⚙.
 
 **Either way:**
 - Capsule reads your calendar every 5 minutes signed in, or every 15 with the link. It also reads it when the panel
@@ -231,6 +239,20 @@ calendars.
 - If Google can't be reached, the cell and the tile keep the last list, dimmed once it is over 15 minutes old.
 - If Google ends the sign-in (you revoked it, or a Testing app's 7 days ran out), Capsule says so in a balloon and
   shows **Sign in with Google** again.
+
+#### The month page
+
+Click the calendar button at the top right of the panel's Calendar tile.
+- **The month:** six weeks of days, with a dot for each event in its calendar's colour, and a grey one for a task.
+  A small **+** means there are more than three. ‹ and › change the month, **Today** comes back, and ← returns to
+  the tiles.
+- **A day:** click it for its events, all-day ones first, then its tasks. Tick a task to mark it done in Google
+  Tasks; untick it to undo.
+- **+ Add event:** a title, then **All day** or a start and end time on that day ("2:30 PM", "14:30" and "2pm" all
+  work), and the calendar when you have more than one you can add to. It goes into Google Calendar.
+- **+ Add task:** a title, and the list when you have more than one. It goes into Google Tasks, due that day.
+- Adding and ticking need your own client and a sign-in. With the calendar link, the page shows your events only.
+- If adding keeps saying to sign in again, check that the Google Tasks API is enabled in your Cloud project.
 
 ### Ideas → Notion
 
@@ -269,9 +291,9 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
-| Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out) and `www.googleapis.com` (your calendar list and events) |
+| Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding one) and `tasks.googleapis.com` (your tasks, adding one, and ticking one) |
 
-Those are the only six places it connects to. Your browser handles Google's sign-in page,
+Those are the only seven places it connects to. Your browser handles Google's sign-in page,
 `accounts.google.com`: Capsule only opens it there. Capsule doesn't follow redirects, so a request can't end up
 anywhere else.
 - Sign-in tokens stay in memory. They are never logged, shown or saved.
@@ -279,15 +301,16 @@ anywhere else.
   is never logged or shown, not even in the settings once saved.
 - Notion is asked for only three things: the database's name and title column, adding an idea, and your
   five newest ideas.
-- **Google Calendar.** Capsule only reads your calendar: through its secret link, or with read-only access to your
-  events and your list of calendars once you sign in.
+- **Google Calendar.** With the secret link, Capsule only reads your calendar. Signed in, it reads your events, your
+  list of calendars and your tasks due in the days shown. It changes something only when you ask on the month page:
+  it adds the event or task you typed, or ticks the task you clicked. It never edits or deletes an event.
   - **The secret link** is encrypted for your Windows account (DPAPI). It's only ever sent to `calendar.google.com`,
     and is never logged or shown, not even in the settings once saved.
   - **Kept encrypted:** the sign-in (a refresh token) and the client secret are encrypted for your Windows account
     (DPAPI). They're only ever sent to `oauth2.googleapis.com`, and are never logged or shown.
   - **Memory only:** the short-lived access tokens.
-  - **Shown only, never logged or saved:** your events' titles and your calendars' names. The events stay in
-    memory.
+  - **Shown only, never logged or saved:** your events' and tasks' titles, and your calendars' and task lists' names.
+    The events and tasks stay in memory. What you type into the month page's forms goes only to Google.
   - **The log:** counts and statuses only, such as "calendar: 7 events from 2 calendars".
   - **`config.json`:** your client's ID, and the ids of the calendars whose box you changed.
   - **The sign-in's return:** to come back from the browser, Capsule listens on `127.0.0.1` (this PC only) at a

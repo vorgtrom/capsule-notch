@@ -14,17 +14,19 @@
 <p>Capsule is a Windows app that runs only on your own PC. It has no server: nothing it reads is sent to its developer
 or to anyone else.</p>
 
-<h2>Google Calendar</h2>
-<p>When you connect Google Calendar, Capsule asks Google for read-only access to your events and your list of
-calendars. It uses them only to show, on your own screen, when your next event starts and what is on today and
-tomorrow.</p>
+<h2>Google Calendar and Google Tasks</h2>
+<p>When you connect Google Calendar, Capsule asks Google for access to your events, read-only access to your list of
+calendars, and access to your Google Tasks. It uses them only to show, on your own screen, when your next event
+starts, what is on today and tomorrow, and a month of your events and tasks.</p>
+<p>Capsule changes your Google data only when you ask it to, on its month page: it adds the event or task you typed,
+or marks the task you clicked as done or not done. It never edits or deletes your events.</p>
 <ul>
-<li>Event titles and calendar names are shown on screen only. They are kept in memory while Capsule runs, and are
+<li>Event and task titles, and calendar and task list names, are shown on screen only. They are kept in memory while Capsule runs, and are
 never written to disk, logged or sent anywhere.</li>
 <li>To stay signed in, Capsule keeps the sign-in Google gives it (a refresh token) on your PC, encrypted for your
 Windows account. Short-lived access tokens are kept in memory only.</li>
-<li>Capsule talks only to Google's own servers (<code>oauth2.googleapis.com</code>, <code>www.googleapis.com</code>
-and <code>calendar.google.com</code>) for this.</li>
+<li>Capsule talks only to Google's own servers (<code>oauth2.googleapis.com</code>, <code>www.googleapis.com</code>,
+<code>tasks.googleapis.com</code> and <code>calendar.google.com</code>) for this.</li>
 <li>Capsule doesn't sell, share or transfer your Google data, use it for advertising, or let anyone read it.</li>
 </ul>
 <p>Capsule's use and transfer of information received from Google APIs adheres to the
