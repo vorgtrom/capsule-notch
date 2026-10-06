@@ -198,8 +198,11 @@ namespace Capsule
         }
 
         // The settings' database box (the TextBox that isn't the Ideas box) and secret box.
+        // Collapsed parts (the month page's form, say) are skipped: they hold boxes of their own.
         static void Find(DependencyObject root, ref TextBox link, ref PasswordBox secret)
         {
+            var e = root as UIElement;
+            if (e != null && e.Visibility != Visibility.Visible) return;
             if (root is PasswordBox) secret = (PasswordBox)root;
             var box = root as TextBox;
             if (box != null && box.MaxLength != IdeasModule.MaxChars) link = box;

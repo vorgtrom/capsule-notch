@@ -13,6 +13,7 @@ namespace Capsule
         public string Color = GoogleCalendarClient.DefaultColor;   // "#rrggbb"
         public bool Selected;   // shown in Google Calendar: the default for whether Capsule shows it
         public bool Primary;    // the account's own calendar; its id is the account's email
+        public bool CanWrite;   // the user may add events to it (owner or writer)
     }
 
     // One event, in memory only: its title is shown on screen, never logged or written.
@@ -25,23 +26,27 @@ namespace Capsule
         public bool AllDay;
         public long StartMs, EndMs;      // timed events: UTC milliseconds, whatever time zone they were written in
         public DateTime StartDay, EndDay; // all-day events: their dates, the end exclusive, as Google gives them
+        public bool Editable;             // the user's own, in a calendar they can change: Capsule offers to edit or delete it
     }
 
     // One request to the Calendar API, as tests see it.
     public sealed class CalendarRequest
     {
-        public string Path = "";   // after https://www.googleapis.com/calendar/v3/
+        public string Method = "GET";
+        public string Path = "";   // after the API's base (www.googleapis.com/calendar/v3/, tasks.googleapis.com/tasks/v1/)
+        public string Body;        // JSON, or null
         public Dictionary<string, string> Headers = new Dictionary<string, string>();
     }
 
-    // Google Calendar's API, read-only (calendar spec §3): the calendar list, and each calendar's events for a span of
-    // time with repeating events expanded. Never throws: a call that fails returns null and leaves the reply in
-    // LastFailure. The access token only ever goes into the Authorization header; nothing here logs.
+    // Google Calendar's API (calendar spec §3, month spec §3): the calendar list, each calendar's events for a span of time
+    // with repeating events expanded, and adding, changing or deleting an event. Never throws: a call that fails returns null
+    // (or false) and leaves the reply in LastFailure. The access token only ever goes into the Authorization header; nothing
+    // here logs.
     public sealed class GoogleCalendarClient
     {
         public const string Base = "https://www.googleapis.com/calendar/v3/";
         public const string DefaultColor = "#4285F4";
-        public const int TimeoutMs = 15000, MaxResults = 50;
+        public const int TimeoutMs = 15000, MaxResults = 50, MonthResults = 250, MaxPages = 4;
         public const string NoTitle = "(No title)";
         static readonly Regex HexColor = new Regex("^#[0-9A-Fa-f]{6}$");
 
@@ -71,10 +76,71 @@ namespace Capsule
             return ParseEvents(r.Body, calendar) ?? Fail<List<CalendarEvent>>(Unexpected());
         }
 
+        // A longer span (the month page's six weeks): up to MonthResults events a page, following up to MaxPages pages.
+        public List<CalendarEvent> MonthEvents(GoogleCalendar calendar, long fromMs, long toMs)
+        {
+            LastFailure = null;
+            var all = new List<CalendarEvent>();
+            string page = null;
+            for (int i = 0; i < MaxPages; i++)
+            {
+                HttpResult r = Send(EventsPath(calendar.Id, fromMs, toMs, MonthResults, page));
+                if (r.Status != 200) return Fail<List<CalendarEvent>>(r);
+                List<CalendarEvent> some = ParseEvents(r.Body, calendar);
+                if (some == null) return Fail<List<CalendarEvent>>(Unexpected());
+                all.AddRange(some);
+                page = Json.Str(Json.Get(Json.TryParse(r.Body), "nextPageToken"));
+                if (string.IsNullOrEmpty(page)) break;
+            }
+            return all;
+        }
+
+        // Adds an event (its body from CalendarMonth.EventBody) to a calendar: the event as Google made it, or null.
+        public CalendarEvent AddEvent(GoogleCalendar calendar, string body)
+        {
+            LastFailure = null;
+            HttpResult r = Send("POST", "calendars/" + Uri.EscapeDataString(calendar.Id) + "/events", body);
+            if (r.Status != 200) return Fail<CalendarEvent>(r);
+            CalendarEvent e = ParseEvent(Json.TryParse(r.Body), calendar);
+            return e ?? Fail<CalendarEvent>(Unexpected());
+        }
+
+        // Changes an event (its body from CalendarMonth.EventBody, replacing): only the fields in the body. A repeating
+        // event's instance id changes that day's one only. Guests, if any, are told, as Google Calendar does.
+        public bool EditEvent(string calendarId, string eventId, string body)
+        {
+            LastFailure = null;
+            HttpResult r = Send("PATCH", EventPath(calendarId, eventId), body);
+            if (r.Status == 200) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        // Deletes an event (an instance id: that day's one only). One already gone counts as deleted.
+        public bool DeleteEvent(string calendarId, string eventId)
+        {
+            LastFailure = null;
+            HttpResult r = Send("DELETE", EventPath(calendarId, eventId), null);
+            if (r.Status == 200 || r.Status == 204 || r.Status == 404 || r.Status == 410) return true;
+            LastFailure = r;
+            return false;
+        }
+
+        public static string EventPath(string calendarId, string eventId)
+        {
+            return "calendars/" + Uri.EscapeDataString(calendarId) + "/events/" + Uri.EscapeDataString(eventId) + "?sendUpdates=all";
+        }
+
         public static string EventsPath(string calendarId, long fromMs, long toMs)
         {
+            return EventsPath(calendarId, fromMs, toMs, MaxResults, null);
+        }
+
+        public static string EventsPath(string calendarId, long fromMs, long toMs, int results, string page)
+        {
             return "calendars/" + Uri.EscapeDataString(calendarId) + "/events?timeMin=" + Uri.EscapeDataString(Iso(fromMs))
-                + "&timeMax=" + Uri.EscapeDataString(Iso(toMs)) + "&singleEvents=true&orderBy=startTime&maxResults=" + MaxResults;
+                + "&timeMax=" + Uri.EscapeDataString(Iso(toMs)) + "&singleEvents=true&orderBy=startTime&maxResults=" + results
+                + (page != null ? "&pageToken=" + Uri.EscapeDataString(page) : "");
         }
 
         static string Iso(long ms) { return Clock.FromMs(ms).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture); }
@@ -88,12 +154,15 @@ namespace Capsule
         // A 200 whose body isn't what Google documents.
         static HttpResult Unexpected() { return new HttpResult { Status = 200, Error = "unexpected reply" }; }
 
-        HttpResult Send(string path)
+        HttpResult Send(string path) { return Send("GET", path, null); }
+
+        HttpResult Send(string method, string path, string body)
         {
-            var request = new CalendarRequest { Path = path };
+            var request = new CalendarRequest { Method = method, Path = path, Body = body };
             request.Headers["Authorization"] = "Bearer " + accessToken;
+            if (body != null) request.Headers["Content-Type"] = "application/json; charset=utf-8";
             if (Transport != null) return Transport(request);
-            return Http.Get(Base + path, request.Headers, TimeoutMs);
+            return Http.Send(method, Base + path, request.Headers, body, TimeoutMs);
         }
 
         // A calendarList reply's calendars; null when it isn't one. Entries without an id are skipped. The name is the
@@ -116,6 +185,7 @@ namespace Capsule
                     Color = Color(Json.Str(Json.Get(item, "backgroundColor"))),
                     Selected = Json.Get(item, "selected") as bool? ?? false,
                     Primary = Json.Get(item, "primary") as bool? ?? false,
+                    CanWrite = Json.Str(Json.Get(item, "accessRole")) == "owner" || Json.Str(Json.Get(item, "accessRole")) == "writer",
                 });
             }
             return list;
@@ -131,39 +201,52 @@ namespace Capsule
             var list = new List<CalendarEvent>();
             foreach (object item in items)
             {
-                if (Json.Str(Json.Get(item, "status")) == "cancelled") continue;
-                if (Json.Str(Json.Get(item, "eventType")) == "workingLocation") continue;
-                if (Declined(item)) continue;
-                var e = new CalendarEvent
-                {
-                    Id = Json.Str(Json.Get(item, "id")) ?? "",
-                    CalendarId = calendar.Id,
-                    Color = calendar.Color,
-                };
-                string title = (Json.Str(Json.Get(item, "summary")) ?? "").Trim();
-                e.Title = title != "" ? title : NoTitle;
-                string startTime = Json.Str(Json.Get(item, "start", "dateTime"));
-                string startDate = Json.Str(Json.Get(item, "start", "date"));
-                if (startTime != null)
-                {
-                    long start = Time(startTime);
-                    if (start == 0) continue;
-                    long end = Time(Json.Str(Json.Get(item, "end", "dateTime")));
-                    e.StartMs = start;
-                    e.EndMs = Math.Max(start, end);
-                }
-                else
-                {
-                    DateTime day;
-                    if (!Date(startDate, out day)) continue;
-                    DateTime endDay;
-                    e.AllDay = true;
-                    e.StartDay = day;
-                    e.EndDay = Date(Json.Str(Json.Get(item, "end", "date")), out endDay) && endDay > day ? endDay : day.AddDays(1);
-                }
-                list.Add(e);
+                CalendarEvent e = ParseEvent(item, calendar);
+                if (e != null) list.Add(e);
             }
             return list;
+        }
+
+        // One event resource; null when it isn't one to show: cancelled, declined, a working-location marker, or without a
+        // readable start.
+        public static CalendarEvent ParseEvent(object item, GoogleCalendar calendar)
+        {
+            if (Json.Obj(item) == null) return null;
+            if (Json.Str(Json.Get(item, "status")) == "cancelled") return null;
+            if (Json.Str(Json.Get(item, "eventType")) == "workingLocation") return null;
+            if (Declined(item)) return null;
+            string type = Json.Str(Json.Get(item, "eventType"));
+            bool organizer = Json.Get(item, "organizer") == null || (Json.Get(item, "organizer", "self") as bool? ?? false);
+            var e = new CalendarEvent
+            {
+                Id = Json.Str(Json.Get(item, "id")) ?? "",
+                CalendarId = calendar.Id,
+                Color = calendar.Color,
+                // Not one the user was invited to, a birthday or an out-of-office, nor in a calendar they may only read.
+                Editable = calendar.CanWrite && organizer && (type == null || type == "default") && !(Json.Get(item, "locked") as bool? ?? false),
+            };
+            string title = (Json.Str(Json.Get(item, "summary")) ?? "").Trim();
+            e.Title = title != "" ? title : NoTitle;
+            string startTime = Json.Str(Json.Get(item, "start", "dateTime"));
+            string startDate = Json.Str(Json.Get(item, "start", "date"));
+            if (startTime != null)
+            {
+                long start = Time(startTime);
+                if (start == 0) return null;
+                long end = Time(Json.Str(Json.Get(item, "end", "dateTime")));
+                e.StartMs = start;
+                e.EndMs = Math.Max(start, end);
+            }
+            else
+            {
+                DateTime day;
+                if (!Date(startDate, out day)) return null;
+                DateTime endDay;
+                e.AllDay = true;
+                e.StartDay = day;
+                e.EndDay = Date(Json.Str(Json.Get(item, "end", "date")), out endDay) && endDay > day ? endDay : day.AddDays(1);
+            }
+            return e;
         }
 
         // The user is an attendee and said no.

@@ -58,6 +58,63 @@ namespace Capsule
             AsksForTheDocumentedRequests();
             FailuresAreKept();
             NeverThrowsOnOddReplies();
+            WritesAndLongerSpans();
+            EditsAndDeletes();
+        }
+
+        // The month page's edit and delete buttons: which events are the user's to change, and the requests.
+        static void EditsAndDeletes()
+        {
+            var mine = new GoogleCalendar { Id = Primary, CanWrite = true };
+            List<CalendarEvent> events = GoogleCalendarClient.ParseEvents(TestRunner.Fixture("google-events.json"), mine);
+            Func<string, CalendarEvent> e = id => events.First(x => x.Id == id);
+            TestRunner.Check(e("offsite").Editable && e("nightdeploy").Editable && e("weekly_20261006T200000Z").Editable, "the user's own events, a repeating one's day too, may be changed");
+            TestRunner.Check(!e("standup").Editable, "not one someone else organised");
+            TestRunner.Check(!GoogleCalendarClient.ParseEvents(TestRunner.Fixture("google-events.json"), Mine).Any(x => x.Editable), "nor any in a calendar the user may only read");
+            TestRunner.Check(!GoogleCalendarClient.ParseEvent(Json.TryParse("{\"id\": \"b\", \"eventType\": \"birthday\", \"start\": {\"date\": \"2026-10-09\"}, \"end\": {\"date\": \"2026-10-10\"}}"), mine).Editable, "nor a birthday");
+            var seen = new List<CalendarRequest>();
+            var client = new GoogleCalendarClient("ya29.sample");
+            int status = 200;
+            client.Transport = r =>
+            {
+                seen.Add(r);
+                return new HttpResult { Status = r.Method == "DELETE" && status == 200 ? 204 : status, Body = "{}" };
+            };
+            string body = CalendarMonth.EventBody("Weekly review", new DateTime(2026, 10, 6), false, TimeSpan.FromHours(15), TimeSpan.FromHours(16), CalendarDayTests.Zone, true);
+            TestRunner.Check(client.EditEvent(Primary, "weekly_20261006T200000Z", body) && seen[0].Method == "PATCH" && seen[0].Body == body
+                && seen[0].Path == "calendars/" + Uri.EscapeDataString(Primary) + "/events/weekly_20261006T200000Z?sendUpdates=all", "an edit PATCHes that event (a repeating one's day only), its guests told");
+            TestRunner.Check(client.DeleteEvent(Primary, "offsite") && seen[1].Method == "DELETE" && seen[1].Body == null
+                && seen[1].Path == "calendars/" + Uri.EscapeDataString(Primary) + "/events/offsite?sendUpdates=all", "a delete DELETEs it");
+            status = 410;
+            TestRunner.Check(client.DeleteEvent(Primary, "offsite"), "one already gone counts as deleted");
+            status = 403;
+            TestRunner.Check(!client.EditEvent(Primary, "offsite", body) && !client.DeleteEvent(Primary, "offsite") && client.LastFailure.Status == 403, "a refused edit or delete is false, and the reply is kept");
+        }
+
+        // The month page (month spec §3): which calendars take new events, a longer span over pages, and adding one.
+        static void WritesAndLongerSpans()
+        {
+            List<GoogleCalendar> list = GoogleCalendarClient.ParseCalendars(TestRunner.Fixture("google-calendar-list.json"));
+            TestRunner.Check(list[0].CanWrite && list[1].CanWrite && !list[2].CanWrite && !list[3].CanWrite, "owner and writer calendars take new events; reader ones don't");
+            var seen = new List<CalendarRequest>();
+            var client = new GoogleCalendarClient("ya29.sample");
+            client.Transport = r =>
+            {
+                seen.Add(r);
+                if (r.Method == "POST") return new HttpResult { Status = 200, Body = "{\"id\": \"new1\", \"status\": \"confirmed\", \"summary\": \"Lunch with Sam\", \"start\": {\"dateTime\": \"2026-10-09T12:30:00-07:00\"}, \"end\": {\"dateTime\": \"2026-10-09T13:30:00-07:00\"}}" };
+                bool second = r.Path.Contains("pageToken=next");
+                return new HttpResult { Status = 200, Body = second ? "{\"items\": [{\"id\": \"late\", \"summary\": \"Late\", \"start\": {\"date\": \"2026-11-01\"}, \"end\": {\"date\": \"2026-11-02\"}}]}" : "{\"items\": [{\"id\": \"early\", \"summary\": \"Early\", \"start\": {\"date\": \"2026-10-01\"}, \"end\": {\"date\": \"2026-10-02\"}}], \"nextPageToken\": \"next\"}" };
+            };
+            List<CalendarEvent> month = client.MonthEvents(Mine, Utc(2026, 9, 27, 7, 0), Utc(2026, 11, 8, 8, 0));
+            TestRunner.Eq("early,late", month == null ? null : string.Join(",", month.Select(e => e.Id)), "a longer span follows the next page");
+            TestRunner.Check(seen[0].Path.Contains("&maxResults=250") && !seen[0].Path.Contains("pageToken") && seen[1].Path.EndsWith("&pageToken=next"), "250 a page, then the next page by its token");
+            string body = CalendarMonth.EventBody("Lunch with Sam", new DateTime(2026, 10, 9), false, new TimeSpan(12, 30, 0), new TimeSpan(13, 30, 0), CalendarDayTests.Zone);
+            CalendarEvent added = client.AddEvent(Mine, body);
+            CalendarRequest post = seen.Last();
+            TestRunner.Check(post.Method == "POST" && post.Path == "calendars/" + Uri.EscapeDataString(Primary) + "/events" && post.Body == body && post.Headers["Content-Type"].StartsWith("application/json"), "an event is POSTed to its calendar as JSON");
+            TestRunner.Check(added != null && added.Id == "new1" && added.Title == "Lunch with Sam" && added.StartMs == Utc(2026, 10, 9, 19, 30) && added.CalendarId == Primary, "and comes back as Google made it");
+            client.Transport = r => new HttpResult { Status = 403, Body = "{\"error\": {\"code\": 403, \"errors\": [{\"reason\": \"insufficientPermissions\"}]}}" };
+            TestRunner.Check(client.AddEvent(Mine, body) == null && client.LastFailure.Status == 403, "a refused add is none, and the reply is kept");
         }
 
         static void ReadsTheCalendarList()

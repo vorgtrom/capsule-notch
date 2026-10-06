@@ -18,6 +18,7 @@
       "id": "offsite",
       "status": "confirmed",
       "summary": "Offsite",
+      "organizer": { "email": "sample.user@example.com", "self": true },
       "start": { "date": "2026-10-06" },
       "end": { "date": "2026-10-07" },
       "transparency": "transparent",
@@ -38,6 +39,7 @@
       "id": "standup",
       "status": "confirmed",
       "summary": "Standup",
+      "organizer": { "email": "lead@example.com" },
       "start": { "dateTime": "2026-10-06T09:00:00-07:00", "timeZone": "America/Los_Angeles" },
       "end": { "dateTime": "2026-10-06T09:30:00-07:00", "timeZone": "America/Los_Angeles" },
       "attendees": [

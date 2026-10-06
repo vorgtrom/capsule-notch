@@ -39,8 +39,22 @@ namespace Capsule
         public const string AuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
         public const string TokenEndpoint = "https://oauth2.googleapis.com/token";
         public const string RevokeEndpoint = "https://oauth2.googleapis.com/revoke";
-        // Read-only and as narrow as Google offers: the events, and the list of calendars.
-        public const string Scopes = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+        // As narrow as Google offers for what Capsule does (month spec §3): the events, read and added (not calendars or
+        // their sharing); the list of calendars, read-only; and Google Tasks, read, added and ticked off (Google has no
+        // narrower scope for that).
+        public const string EventsScope = "https://www.googleapis.com/auth/calendar.events";
+        public const string ListScope = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+        public const string TasksScope = "https://www.googleapis.com/auth/tasks";
+        public const string Scopes = EventsScope + " " + ListScope + " " + TasksScope;
+
+        // Whether a sign-in's granted scopes (the token reply's "scope", space-separated) let Capsule add events and tasks.
+        // A sign-in made before adding existed has only the read-only events scope: it still reads.
+        public static bool CanAdd(string granted)
+        {
+            var set = new HashSet<string>((granted ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+            bool events = set.Contains(EventsScope) || set.Contains("https://www.googleapis.com/auth/calendar");
+            return events && set.Contains(TasksScope);
+        }
 
         // The consent page the browser opens. access_type=offline and prompt=consent make Google hand out a refresh token
         // every time, also to an account that signed in before.
@@ -299,6 +313,7 @@ namespace Capsule
         public long ExpiresAtMs;
         public string Error = "";        // Google's OAuth error code ("invalid_grant"), or ""
         public string NoReply = "";      // why no reply arrived ("Timeout"), when none did
+        public string Scope = "";        // the scopes granted, space-separated, when Google said
 
         public bool Ok { get { return AccessToken != null; } }
         // The code, or the refresh token, is no longer any good: only signing in again helps.
@@ -311,6 +326,7 @@ namespace Capsule
         public string RefreshToken;     // null unless it worked
         public string AccessToken;
         public long ExpiresAtMs;
+        public string Scope = "";       // the scopes Google granted
         public string Problem = "";     // a line for the settings when it didn't; "" when it worked or was cancelled
         public string LogText = "";     // statuses and codes only, for the log
 
@@ -377,6 +393,7 @@ namespace Capsule
                 result.RefreshToken = token.RefreshToken;
                 result.AccessToken = token.AccessToken;
                 result.ExpiresAtMs = token.ExpiresAtMs;
+                result.Scope = token.Scope;
                 result.LogText = "signed in";
                 return result;
             }
@@ -452,6 +469,7 @@ namespace Capsule
                 return t;
             }
             t.AccessToken = access;
+            t.Scope = Json.Str(Json.Get(root, "scope")) ?? "";
             string refresh = Json.Str(Json.Get(root, "refresh_token"));
             if (!string.IsNullOrEmpty(refresh)) t.RefreshToken = refresh;
             double seconds = Json.Num(Json.Get(root, "expires_in")) ?? 3600;
