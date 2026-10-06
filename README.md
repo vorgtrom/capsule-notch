@@ -7,7 +7,8 @@ A little glass capsule that sits on the edge of your Windows screen.
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
 session is **working** or **waiting on you**. With **Google Calendar** connected, it also shows when your next
 event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: your usage, your sessions, today's
-and tomorrow's events, and a box to jot down an idea that lands in **Notion**. And when Claude asks for
+and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
+idea that lands in **Notion**. And when Claude asks for
 permission or asks you a question, you can **approve it or answer it right on the capsule**, without switching
 to the Claude app. It's built to grow: each of these is a module, and more will follow.
 
@@ -36,7 +37,7 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
-  its events and tasks, and add one to it.
+  its events and tasks, and add, edit or delete one.
 
 | Hover the calendar | The month page |
 |:---:|:---:|
@@ -75,8 +76,8 @@ On Windows 11 the capsule, its cards and the panel are clear glass, with the win
 live. They follow Windows' light or dark mode. With **Transparency effects** off in Windows' settings, or on
 Windows 10, they're solid glass instead.
 
-You build it yourself: `build.cmd` compiles it with the C# compiler that ships with Windows, so nothing is
-downloaded and nothing unsigned from the internet runs.
+[Download a release](#get-it), or build it yourself: `build.cmd` compiles it with the C# compiler that ships with
+Windows, so nothing is downloaded and nothing unsigned from the internet runs.
 
 ## Get it
 
@@ -114,6 +115,8 @@ Run `build.cmd`.
 
 GitHub builds and tests every pull request and every change to `main` the same way, on Windows, so a change that
 breaks the build or a test shows a red ✗ there before it's merged.
+
+To see how many checks each group of tests ran, run `bin\Tests.exe --groups` after a build.
 
 To try a change while Capsule is running, run `build.cmd dev` instead. It builds into `bin-dev\`, runs the
 tests there, and leaves a running Capsule alone.
@@ -153,15 +156,15 @@ token-stealing malware does. Norton did this on the first run.
 
 If it happens to you:
 1. Restore `Capsule.exe` from the antivirus's history.
-2. Exclude the `bin` folder. In Norton: **Settings → Antivirus → Scans and Risks → Items to Exclude from
+2. Exclude the folder Capsule runs from: the one you unzipped it into, or `bin` if you built it. In Norton: **Settings → Antivirus → Scans and Risks → Items to Exclude from
    Auto-Protect, Script Control, SONAR and Download Intelligence Detection**.
 
-Only exclusions survive rebuilds. All the source is in this folder, so you can check what it does first.
+Only exclusions survive updates and rebuilds. All the source is in this repo, so you can check what it does first.
 
 ## Use
 
-Start `bin\Capsule.exe`. The first time, it adds itself to Start with Windows. You can turn that off in the
-menu.
+Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. The first time, it
+adds itself to Start with Windows. You can turn that off in the menu.
 
 - **Hover** a ring to see the details.
 - **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile
@@ -180,7 +183,7 @@ Claude desktop app uses that for its own quick entry.
 To see when Claude is working or waiting on you, choose **Connect to Claude Code** in the menu.
 - This adds Capsule's hook to `~/.claude/settings.json`, after saving a backup next to it.
 - New sessions report in from then on. In the desktop app, running ones do too.
-- `bin\Capsule.exe --connect` and `--disconnect` do the same from a terminal. They print nothing; the
+- `Capsule.exe --connect` and `--disconnect` do the same from a terminal. They print nothing; the
   result goes to the log.
 - If you connected with an earlier Capsule, the menu says **Reconnect to Claude Code**. Choose it once to
   answer Claude from the capsule: it gives the permission hook the time it needs to wait for you.
@@ -207,8 +210,8 @@ The capsule then gets a third cell, and the panel a Calendar tile.
 **Your own Google client (sign in; several calendars)**
 
 This takes about ten minutes, once. In return you sign in instead of pasting a link, choose which of your calendars
-show, get changes within 5 minutes, and can add events and tasks from the [month page](#the-month-page). Once you're
-signed in, it is used instead of the link.
+show, get changes within 5 minutes, and can add, edit and delete events and tasks from the
+[month page](#the-month-page). Once you're signed in, it is used instead of the link.
 
 1. **A project.** In the [Google Cloud console](https://console.cloud.google.com/), create a project (call it Capsule).
 2. **The APIs.** Go to **APIs & Services → Library**, find **Google Calendar API** and click **Enable**. Then find
@@ -338,7 +341,7 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
-| Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding one) and `tasks.googleapis.com` (your tasks, adding one, and ticking one) |
+| Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
 
 Those are the only seven places it connects to. Your browser handles Google's sign-in page,
 `accounts.google.com`: Capsule only opens it there. Capsule doesn't follow redirects, so a request can't end up
@@ -404,7 +407,8 @@ anywhere else.
 
 1. Menu → **Disconnect from Claude Code**, if you connected it.
 2. Menu → untick **Start with Windows**, then **Quit Capsule**.
-3. Delete this folder and `%USERPROFILE%\.capsule\`.
+3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it) and
+   `%USERPROFILE%\.capsule\`.
 4. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings:
    `~/.claude/settings.json.capsule-bak-*`. Older ones may be named `usage-notch-bak-*`.
 5. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
