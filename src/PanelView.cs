@@ -151,12 +151,13 @@ namespace Capsule
         public void ShowMonth(MonthModel m)
         {
             month.Update(m);
-            bool appearing = !ShowingMonth;
             board.Visibility = Visibility.Collapsed;
             settings.Visibility = Visibility.Collapsed;
             month.Visibility = Visibility.Visible;
-            if (appearing) RaiseResized();
-            else Relayout();
+            // Redrawn in place, the page can grow or shrink too (the day's list, its Add buttons once read): the glass and
+            // the window follow it every time.
+            Relayout();
+            RaiseResized();
         }
 
         // The panel's glass, from the panel's top-left (inside the shadow margin).
@@ -235,6 +236,7 @@ namespace Capsule
         // Measures the shown page and fits the glass to it.
         public void Relayout()
         {
+            UpdateLayout();   // a change deep in the page (a rebuilt list) reaches this panel's size only once laid out
             Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double height = Math.Max(DesiredSize.Height - 2 * ShadowMargin, 2 * Radius);
             glass.Apply(new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius), null, ShadowMargin);

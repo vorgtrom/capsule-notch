@@ -29,6 +29,7 @@ namespace Capsule
             SigningInWinsOverTheLink();
             TheClientIsKeptWhenThePanelCloses();
             AMonthIsReadWithItsTasks();
+            AMonthPickedMeanwhileIsReadNext();
             AnOlderSignInAsksForANewOne();
             AddingAnEventReadsTheMonthAgain();
             AddingATaskAndTickingIt();
@@ -99,6 +100,19 @@ namespace Capsule
             TestRunner.Check(log.Contains("calendar: month: ") && log.Contains(" tasks") && !log.Contains("Send the invoice"), "the log gets counts, never a task's title");
             rig.Module.SignOut();
             TestRunner.Check(rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), Clock.NowMs(), En).Loading, "signing out forgets the month");
+        }
+
+        // › clicked while the month before is still being read: the month now shown is read as soon as that one is in,
+        // not at the next tick.
+        static void AMonthPickedMeanwhileIsReadNext()
+        {
+            var rig = MonthRig(FullTokens, new List<CalendarRequest>());
+            rig.Module.OpenMonth(2026, 10, En);
+            rig.Module.OpenMonth(2026, 11, En);
+            SettleMonth(rig);
+            TestRunner.Check(!rig.Module.Month(2026, 11, new DateTime(2026, 11, 1), Clock.NowMs(), En).Loading && !rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), Clock.NowMs(), En).Loading,
+                "the month picked meanwhile is read right after");
+            rig.Module.SignOut();
         }
 
         static void AnOlderSignInAsksForANewOne()

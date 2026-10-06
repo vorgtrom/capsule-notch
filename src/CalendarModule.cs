@@ -931,7 +931,13 @@ namespace Capsule
                 monthProblem = "";
             }
             catch (Exception e) { Log.Error("calendar: applying a month pass threw " + e.GetType().Name, null); }
-            finally { Raise(); }
+            finally
+            {
+                // A month picked while this one was read (‹ or › clicked meanwhile) is read now, not at the next tick.
+                string open = Key(openYear, openMonth);
+                if (run == generation && openYear != 0 && open != key && !months.ContainsKey(open)) ReadMonth(openYear, openMonth);
+                Raise();
+            }
         }
 
         // What the month page shows for a month, with a day selected.

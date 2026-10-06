@@ -28,6 +28,7 @@ namespace Capsule
             TheTileOpensTheMonth();
             TheMonthPageShowsAMonth();
             TheMonthPageAddsAndTicks();
+            TheGlassFollowsTheMonthPage();
             OlderSignInsAreAskedToSignInAgain();
         }
 
@@ -155,6 +156,21 @@ namespace Capsule
             other.Selected = new DateTime(2026, 10, 9);
             view.ShowMonth(other);
             TestRunner.Check(!view.Month.FormOpen, "picking another day closes the form");
+        }
+
+        // Redrawn in place (the month read, the sign-in known), the page's height changes: the glass and the window follow.
+        static void TheGlassFollowsTheMonthPage()
+        {
+            var view = new PanelView();
+            view.Update(Model(TileAt(8, 0)));
+            int resized = 0;
+            view.Resized += delegate { resized++; };
+            MonthModel before = MonthSample(true);
+            before.CanAdd = false;
+            view.ShowMonth(before);
+            double low = view.Outline.Bounds.Height;
+            view.ShowMonth(MonthSample(true));
+            TestRunner.Check(view.Outline.Bounds.Height > low + 20 && resized == 2, "the Add buttons appearing grow the glass, and the window is told both times");
         }
 
         static void OlderSignInsAreAskedToSignInAgain()
