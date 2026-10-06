@@ -20,6 +20,13 @@ namespace Capsule
         public string LogText = "";         // counts and statuses only
         public bool FromLink;               // read from the calendar's iCal address, not through a sign-in
         public string LinkName;             // the linked calendar's name (shown only), when it was read
+        public string Scope;                // the scopes a refresh this pass made says were granted
+        public List<GoogleTask> Tasks;      // a month pass: the tasks due in it; null when not read
+        public List<TaskList> Lists;        // a month pass: the task lists
+        public bool TasksDenied;            // the sign-in may not read tasks (it was made before adding existed)
+        public CalendarEvent AddedEvent;    // an add: what Google made
+        public GoogleTask AddedTask;
+        public bool Done;                   // an add or a tick worked
     }
 
     // One pass (calendar spec §3), on a worker thread; touches nothing but its arguments. An access token that is missing
@@ -122,6 +129,153 @@ namespace Capsule
             return GoogleCalendarClient.Problem(reply);
         }
 
+        // A month pass (month spec §3): the chosen calendars' events over the page's six weeks and, when asked, the tasks due
+        // in them. A tasks call Google refuses with 403 (a sign-in without the Tasks scope) leaves the events read and says so.
+        public static CalendarPassResult RunMonth(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleCalendarClient> newClient, Func<string, GoogleTasksClient> newTasks, Func<GoogleCalendar, bool> chosen,
+            long fromMs, long toMs, DateTime firstDay, DateTime lastDay, bool withTasks, long now)
+        {
+            var r = new CalendarPassResult { AccessToken = accessToken, AccessExpiresAtMs = accessExpiresAtMs };
+            if (!Ready(auth, refreshToken, r, now)) return r;
+            GoogleCalendarClient client = newClient(r.AccessToken);
+            List<GoogleCalendar> calendars = client.Calendars();
+            if (calendars == null && Unauthorized(client) && r.Refreshes == 0)
+            {
+                if (!Refresh(auth, refreshToken, r, now)) return r;
+                client = newClient(r.AccessToken);
+                calendars = client.Calendars();
+            }
+            if (calendars == null)
+            {
+                r.Failure = client.LastFailure;
+                r.LogText = "month: calendar list: " + GoogleCalendarClient.Describe(r.Failure);
+                return r;
+            }
+            r.Calendars = calendars;
+            var events = new List<CalendarEvent>();
+            foreach (GoogleCalendar calendar in calendars.Where(chosen))
+            {
+                List<CalendarEvent> some = client.MonthEvents(calendar, fromMs, toMs);
+                if (some == null && client.LastFailure != null && client.LastFailure.Status == 404) continue;
+                if (some == null)
+                {
+                    r.Failure = client.LastFailure;
+                    r.LogText = "month: events: " + GoogleCalendarClient.Describe(r.Failure);
+                    return r;
+                }
+                events.AddRange(some);
+            }
+            r.Events = events.OrderBy(e => e.AllDay ? 0 : 1).ThenBy(e => e.StartMs).ToList();
+            if (withTasks)
+            {
+                GoogleTasksClient tasks = newTasks(r.AccessToken);
+                List<TaskList> lists = tasks.Lists();
+                if (lists == null)
+                {
+                    r.TasksDenied = tasks.LastFailure != null && tasks.LastFailure.Status == 403;
+                }
+                else
+                {
+                    var all = new List<GoogleTask>();
+                    foreach (TaskList list in lists)
+                    {
+                        List<GoogleTask> some = tasks.Tasks(list, firstDay, lastDay);
+                        if (some != null) all.AddRange(some);
+                    }
+                    r.Lists = lists;
+                    r.Tasks = all;
+                }
+            }
+            r.LogText = "month: " + r.Events.Count + " event" + (r.Events.Count == 1 ? "" : "s")
+                + (r.Tasks != null ? ", " + r.Tasks.Count + " task" + (r.Tasks.Count == 1 ? "" : "s") : "")
+                + (r.TasksDenied ? ", tasks not allowed by this sign-in" : "");
+            return r;
+        }
+
+        // Adds an event, with a fresh access token if needed and once more after a 401.
+        public static CalendarPassResult AddEvent(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleCalendarClient> newClient, GoogleCalendar calendar, string body, long now)
+        {
+            var r = new CalendarPassResult { AccessToken = accessToken, AccessExpiresAtMs = accessExpiresAtMs };
+            if (!Ready(auth, refreshToken, r, now)) return r;
+            GoogleCalendarClient client = newClient(r.AccessToken);
+            CalendarEvent e = client.AddEvent(calendar, body);
+            if (e == null && Unauthorized(client) && r.Refreshes == 0)
+            {
+                if (!Refresh(auth, refreshToken, r, now)) return r;
+                client = newClient(r.AccessToken);
+                e = client.AddEvent(calendar, body);
+            }
+            if (e == null)
+            {
+                r.Failure = client.LastFailure;
+                r.LogText = "couldn't add an event: " + GoogleCalendarClient.Describe(r.Failure);
+                return r;
+            }
+            r.AddedEvent = e;
+            r.Done = true;
+            r.LogText = "added an event";
+            return r;
+        }
+
+        // Adds a task due on a day.
+        public static CalendarPassResult AddTask(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleTasksClient> newTasks, string listId, string title, DateTime due, long now)
+        {
+            var r = new CalendarPassResult { AccessToken = accessToken, AccessExpiresAtMs = accessExpiresAtMs };
+            if (!Ready(auth, refreshToken, r, now)) return r;
+            GoogleTasksClient client = newTasks(r.AccessToken);
+            GoogleTask t = client.Add(listId, title, due);
+            if (t == null && client.LastFailure != null && client.LastFailure.Status == 401 && r.Refreshes == 0)
+            {
+                if (!Refresh(auth, refreshToken, r, now)) return r;
+                client = newTasks(r.AccessToken);
+                t = client.Add(listId, title, due);
+            }
+            if (t == null)
+            {
+                r.Failure = client.LastFailure;
+                r.LogText = "couldn't add a task: " + GoogleCalendarClient.Describe(r.Failure);
+                return r;
+            }
+            r.AddedTask = t;
+            r.Done = true;
+            r.LogText = "added a task";
+            return r;
+        }
+
+        // Ticks a task done or undone.
+        public static CalendarPassResult SetDone(GoogleAuth auth, string refreshToken, string accessToken, long accessExpiresAtMs,
+            Func<string, GoogleTasksClient> newTasks, GoogleTask task, bool done, long now)
+        {
+            var r = new CalendarPassResult { AccessToken = accessToken, AccessExpiresAtMs = accessExpiresAtMs };
+            if (!Ready(auth, refreshToken, r, now)) return r;
+            GoogleTasksClient client = newTasks(r.AccessToken);
+            bool ok = client.SetDone(task, done);
+            if (!ok && client.LastFailure != null && client.LastFailure.Status == 401 && r.Refreshes == 0)
+            {
+                if (!Refresh(auth, refreshToken, r, now)) return r;
+                client = newTasks(r.AccessToken);
+                ok = client.SetDone(task, done);
+            }
+            if (!ok)
+            {
+                r.Failure = client.LastFailure;
+                r.LogText = "couldn't tick a task: " + GoogleCalendarClient.Describe(r.Failure);
+                return r;
+            }
+            r.Done = true;
+            r.LogText = done ? "ticked a task done" : "ticked a task undone";
+            return r;
+        }
+
+        // A usable access token: the one held, unless it is missing or about to expire.
+        static bool Ready(GoogleAuth auth, string refreshToken, CalendarPassResult r, long now)
+        {
+            if (!string.IsNullOrEmpty(r.AccessToken) && r.AccessExpiresAtMs - RefreshAheadMs > now) return true;
+            return Refresh(auth, refreshToken, r, now);
+        }
+
         static bool Unauthorized(GoogleCalendarClient client) { return client.LastFailure != null && client.LastFailure.Status == 401; }
 
         // False when the pass can't go on: the refresh token was rejected, or the refresh failed.
@@ -133,6 +287,7 @@ namespace Capsule
             {
                 r.AccessToken = t.AccessToken;
                 r.AccessExpiresAtMs = t.ExpiresAtMs;
+                if (t.Scope != "") r.Scope = t.Scope;
                 if (!string.IsNullOrEmpty(t.RefreshToken) && t.RefreshToken != refreshToken) r.NewRefreshToken = t.RefreshToken;
                 return true;
             }
@@ -164,6 +319,7 @@ namespace Capsule
         public List<CalendarChoice> Calendars = new List<CalendarChoice>();
         public string Status = "";      // the last sign-in's outcome, or what went wrong reading
         public bool SecretPending;      // a new client secret is held for the next sign-in (it is never shown)
+        public bool NeedsSignInAgain;   // signed in before adding existed: a new sign-in grants it
         public bool LinkSaved;          // a calendar's iCal address is saved (it is never shown)
         public string LinkName = "";    // that calendar's name, once read
     }
@@ -205,6 +361,7 @@ namespace Capsule
 
         public Func<string, string, GoogleAuth> NewAuth = (id, secret) => new GoogleAuth(id, secret);   // tests swap in fakes
         public Func<string, GoogleCalendarClient> NewClient = token => new GoogleCalendarClient(token);
+        public Func<string, GoogleTasksClient> NewTasks = token => new GoogleTasksClient(token);
         public Func<TimeZoneInfo> Zone = () => TimeZoneInfo.Local;
         public Func<string, HttpResult> FetchLink = url =>
         {
@@ -243,7 +400,12 @@ namespace Capsule
         public CalendarSnapshot Snapshot { get { return snap; } }
         public IList<GoogleCalendar> Calendars { get { return calendars; } }
 
-        public void Tick(long now) { if (Connected && !busy && now >= due) Pass(); }
+        public void Tick(long now)
+        {
+            if (Connected && !busy && now >= due) Pass();
+            MonthData shown;
+            if (openYear != 0 && !monthBusy && (!months.TryGetValue(Key(openYear, openMonth), out shown) || now - shown.ReadAtMs > EveryMs)) ReadMonth(openYear, openMonth);
+        }
         public void Refresh() { Read(); }
         public void NetworkBack() { if (unreachable) Read(); }
         public void Resumed() { due = 0; }
@@ -337,20 +499,12 @@ namespace Capsule
                 }
                 CalendarPassResult r = t.Result;
                 if (r.FromLink && r.LinkName != null) linkName = r.LinkName;
-                if (!r.FromLink)
-                {
-                    accessToken = r.AccessToken;
-                    accessExpiresAtMs = r.AccessExpiresAtMs;
-                }
-                if (r.NewRefreshToken != null) SecretStore.Save(tokenPath, r.NewRefreshToken, SecretStore.GoogleTokenPurpose, "calendar");
+                if (!r.FromLink) TakeTokens(r);
                 if (r.Calendars != null) TakeCalendars(r.Calendars);
                 Note(r.LogText);
                 if (r.RefreshRejected)
                 {
-                    Log.Info("calendar: Google no longer accepts the sign-in; signed out");
-                    Forget();
-                    status = "Google ended the sign-in. Sign in again.";
-                    if (SignedOutByGoogle != null) SignedOutByGoogle();
+                    GoogleEnded();
                     return;
                 }
                 if (r.Events == null)
@@ -489,6 +643,9 @@ namespace Capsule
                 pendingSecret = null;
                 if (SignedInWith != null) SignedInWith(id);   // config.json keeps the client ID before the first pass reads it
                 signedIn = true;
+                grantedScope = r.Scope;
+                tasksDenied = false;
+                months.Clear();
                 accessToken = r.AccessToken;
                 accessExpiresAtMs = r.ExpiresAtMs;
                 account = "";
@@ -547,6 +704,11 @@ namespace Capsule
             again = false;
             SecretStore.Delete(tokenPath);
             signedIn = false;
+            grantedScope = null;
+            tasksDenied = false;
+            months.Clear();
+            taskLists = new List<TaskList>();
+            monthProblem = "";
             accessToken = null;
             accessExpiresAtMs = 0;
             account = "";
@@ -626,8 +788,330 @@ namespace Capsule
             consecutive429 = 0;
             lastLogged = "";
             snap = new CalendarSnapshot { SignedIn = Connected };
+            months.Clear();
+            monthProblem = "";
             due = 0;
             if (read) Read();
+        }
+
+        // ---- The month page (month spec) ----
+
+        sealed class MonthData
+        {
+            public List<CalendarEvent> Events = new List<CalendarEvent>();
+            public List<GoogleTask> Tasks = new List<GoogleTask>();
+            public long ReadAtMs;
+        }
+
+        public const string AddNeedsSignIn = "Sign in with your own Google client in ⚙ to add events and tasks";
+        public const string SignInAgainToAdd = "Sign in again in ⚙ to let Capsule add events and tasks";
+
+        string grantedScope;     // the scopes the sign-in was granted, once known (sign-in or a refresh); null until then
+        bool tasksDenied;        // Google refused tasks to this sign-in
+        readonly Dictionary<string, MonthData> months = new Dictionary<string, MonthData>();   // months read, in memory only
+        List<TaskList> taskLists = new List<TaskList>();
+        int openYear, openMonth;   // the month the page shows; 0 while it is closed
+        CultureInfo monthCulture = CultureInfo.CurrentCulture;
+        bool monthBusy;
+        int monthPassId;
+        string monthProblem = "";
+
+        public Task LastMonthPass { get; private set; }
+        public Task LastChange { get; private set; }
+
+        // Signed in with the scopes to add events and tasks.
+        public bool CanAdd { get { return signedIn && GoogleOAuth.CanAdd(grantedScope) && !tasksDenied; } }
+        // Signed in before adding existed: Google said which scopes it has, and they aren't enough.
+        public bool NeedsSignInAgain { get { return signedIn && ((grantedScope != null && !GoogleOAuth.CanAdd(grantedScope)) || tasksDenied); } }
+
+        static string Key(int year, int month) { return year.ToString(CultureInfo.InvariantCulture) + "-" + month.ToString(CultureInfo.InvariantCulture); }
+
+        void TakeTokens(CalendarPassResult r)
+        {
+            accessToken = r.AccessToken;
+            accessExpiresAtMs = r.AccessExpiresAtMs;
+            if (!string.IsNullOrEmpty(r.Scope)) grantedScope = r.Scope;
+            if (r.NewRefreshToken != null) SecretStore.Save(tokenPath, r.NewRefreshToken, SecretStore.GoogleTokenPurpose, "calendar");
+        }
+
+        // Google no longer takes the refresh token: signed out, and told (Controller shows a balloon).
+        void GoogleEnded()
+        {
+            Log.Info("calendar: Google no longer accepts the sign-in; signed out");
+            Forget();
+            status = "Google ended the sign-in. Sign in again.";
+            if (SignedOutByGoogle != null) SignedOutByGoogle();
+        }
+
+        // The page shows this month: it is read unless it was read in the last 5 minutes.
+        public void OpenMonth(int year, int month, CultureInfo culture)
+        {
+            openYear = year;
+            openMonth = month;
+            monthCulture = culture;
+            MonthData d;
+            if (!months.TryGetValue(Key(year, month), out d) || Clock.NowMs() - d.ReadAtMs > EveryMs) ReadMonth(year, month);
+        }
+
+        // The page closed: its month isn't read any more.
+        public void CloseMonth() { openYear = 0; }
+
+        public bool MonthOpen { get { return openYear != 0; } }
+
+        void ReadMonth(int year, int month)
+        {
+            if (!Connected) return;
+            if (monthBusy) return;   // the pass under way ends with a Raise; a month asked for meanwhile is read at the next tick
+            TimeZoneInfo zone = Zone();
+            long from = CalendarMonth.SpanStartMs(year, month, monthCulture, zone), to = CalendarMonth.SpanEndMs(year, month, monthCulture, zone);
+            DateTime firstDay = CalendarMonth.FirstCell(year, month, monthCulture), lastDay = firstDay.AddDays(7 * CalendarMonth.Weeks - 1);
+            int run = generation, id = ++monthPassId;
+            string key = Key(year, month);
+            monthBusy = true;
+            if (!signedIn)
+            {
+                string link = SecretStore.Load(linkPath, SecretStore.GoogleLinkPurpose);
+                if (link == null)
+                {
+                    monthBusy = false;
+                    return;
+                }
+                Func<string, HttpResult> fetch = FetchLink;
+                LastMonthPass = Task.Run(() => CalendarPass.RunLink(fetch, link, from, to, zone)).ContinueWith(t => ApplyMonth(t, run, id, key), ui);
+                return;
+            }
+            string refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
+            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            if (refresh == null || secret == null)
+            {
+                monthBusy = false;
+                return;
+            }
+            GoogleAuth auth = NewAuth(clientId(), secret);
+            Func<string, GoogleCalendarClient> make = NewClient;
+            Func<string, GoogleTasksClient> makeTasks = NewTasks;
+            var picked = new Dictionary<string, bool>(choices());
+            string token = accessToken;
+            long expires = accessExpiresAtMs;
+            bool withTasks = !tasksDenied && (grantedScope == null || GoogleOAuth.CanAdd(grantedScope));
+            LastMonthPass = Task.Run(() => CalendarPass.RunMonth(auth, refresh, token, expires, make, makeTasks, c => Shown(c, picked), from, to, firstDay, lastDay, withTasks, Clock.NowMs()))
+                .ContinueWith(t => ApplyMonth(t, run, id, key), ui);
+        }
+
+        void ApplyMonth(Task<CalendarPassResult> t, int run, int id, string key)
+        {
+            if (id != monthPassId) return;
+            monthBusy = false;
+            try
+            {
+                if (run != generation) return;   // signed out or in, or the link changed, meanwhile
+                if (t.IsFaulted)
+                {
+                    monthProblem = "Couldn't read the month";
+                    Log.Error("calendar: a month pass failed (" + t.Exception.GetBaseException().GetType().Name + ")", null);
+                    return;
+                }
+                CalendarPassResult r = t.Result;
+                if (!r.FromLink) TakeTokens(r);
+                if (r.Calendars != null) TakeCalendars(r.Calendars);
+                Note(r.LogText);
+                if (r.RefreshRejected)
+                {
+                    GoogleEnded();
+                    return;
+                }
+                if (r.Events == null)
+                {
+                    monthProblem = r.FromLink ? CalendarPass.LinkProblem(r.Failure) : GoogleCalendarClient.Problem(r.Failure);
+                    return;
+                }
+                if (r.TasksDenied) tasksDenied = true;
+                if (r.Lists != null) taskLists = r.Lists;
+                months[key] = new MonthData { Events = r.Events, Tasks = r.Tasks ?? new List<GoogleTask>(), ReadAtMs = Clock.NowMs() };
+                monthProblem = "";
+            }
+            catch (Exception e) { Log.Error("calendar: applying a month pass threw " + e.GetType().Name, null); }
+            finally { Raise(); }
+        }
+
+        // What the month page shows for a month, with a day selected.
+        public MonthModel Month(int year, int month, DateTime selected, long now, CultureInfo culture)
+        {
+            MonthData d;
+            bool read = months.TryGetValue(Key(year, month), out d);
+            MonthModel m = CalendarMonth.Build(year, month, selected, read ? d.Events : new List<CalendarEvent>(), read ? d.Tasks : new List<GoogleTask>(), now, Zone(), culture);
+            m.Loading = !read;
+            m.CanAdd = CanAdd;
+            m.ShowTasks = CanAdd;
+            m.Note = monthProblem != "" ? monthProblem : !signedIn ? AddNeedsSignIn : NeedsSignInAgain ? SignInAgainToAdd : "";
+            foreach (GoogleCalendar c in calendars.Where(c => c.CanWrite).OrderBy(c => c.Primary ? 0 : 1))
+                m.Calendars.Add(new CalendarChoice { Id = c.Id, Name = c.Name, Color = c.Color, Shown = true });
+            m.Lists = taskLists.ToList();
+            return m;
+        }
+
+        // Adds an event (its body from CalendarMonth.EventBody) to a calendar. done gets null when it worked, or a line
+        // saying why not, on the UI thread. False when it couldn't start.
+        public bool AddEvent(string calendarId, string body, Action<string> done)
+        {
+            GoogleCalendar calendar = calendars.FirstOrDefault(c => c.Id == calendarId && c.CanWrite);   // only a calendar that takes new events
+            string why = CanChange();
+            if (why == null && calendar == null) why = "Pick a calendar";
+            if (why != null)
+            {
+                done(why);
+                return false;
+            }
+            GoogleAuth auth;
+            string refresh;
+            if (!Credentials(out auth, out refresh))
+            {
+                done("Can't read the saved sign-in. Sign in again in ⚙");
+                return false;
+            }
+            Func<string, GoogleCalendarClient> make = NewClient;
+            string token = accessToken;
+            long expires = accessExpiresAtMs;
+            int run = generation;
+            LastChange = Task.Run(() => CalendarPass.AddEvent(auth, refresh, token, expires, make, calendar, body, Clock.NowMs())).ContinueWith(t => AfterChange(t, run, done), ui);
+            return true;
+        }
+
+        // Adds a task due on a day to a list.
+        public bool AddTask(string listId, string title, DateTime due, Action<string> done)
+        {
+            string why = CanChange();
+            if (why == null && CalendarMonth.CleanTitle(title) == "") why = CalendarMonth.TitleNeeded;
+            if (why == null && !taskLists.Any(l => l.Id == listId)) why = "Pick a list";
+            if (why != null)
+            {
+                done(why);
+                return false;
+            }
+            GoogleAuth auth;
+            string refresh;
+            if (!Credentials(out auth, out refresh))
+            {
+                done("Can't read the saved sign-in. Sign in again in ⚙");
+                return false;
+            }
+            Func<string, GoogleTasksClient> make = NewTasks;
+            string token = accessToken;
+            long expires = accessExpiresAtMs;
+            string clean = CalendarMonth.CleanTitle(title);
+            int run = generation;
+            LastChange = Task.Run(() => CalendarPass.AddTask(auth, refresh, token, expires, make, listId, clean, due.Date, Clock.NowMs())).ContinueWith(t => AfterChange(t, run, done), ui);
+            return true;
+        }
+
+        // Ticks a task done or undone. The page shows the tick at once; if Google refuses it, it goes back.
+        public bool SetTaskDone(string listId, string taskId, bool on, Action<string> done)
+        {
+            GoogleTask task = null;
+            foreach (MonthData d in months.Values)
+                foreach (GoogleTask t in d.Tasks)
+                    if (t.Id == taskId && t.ListId == listId) { t.Done = on; task = t; }
+            string why = CanChange();
+            if (why == null && task == null) why = "That task is gone. Reopen the month";
+            GoogleAuth auth = null;
+            string refresh = null;
+            if (why == null && !Credentials(out auth, out refresh)) why = "Can't read the saved sign-in. Sign in again in ⚙";
+            if (why != null)
+            {
+                Untick(listId, taskId, !on);
+                done(why);
+                return false;
+            }
+            Raise();
+            Func<string, GoogleTasksClient> make = NewTasks;
+            string token = accessToken;
+            long expires = accessExpiresAtMs;
+            int run = generation;
+            var copy = new GoogleTask { Id = task.Id, ListId = task.ListId, Title = task.Title, Due = task.Due, Done = on };
+            LastChange = Task.Run(() => CalendarPass.SetDone(auth, refresh, token, expires, make, copy, on, Clock.NowMs())).ContinueWith(t =>
+            {
+                if (t.IsFaulted || !t.Result.Done) Untick(listId, taskId, !on);
+                AfterChange(t, run, done);
+            }, ui);
+            return true;
+        }
+
+        void Untick(string listId, string taskId, bool state)
+        {
+            foreach (MonthData d in months.Values)
+                foreach (GoogleTask t in d.Tasks)
+                    if (t.Id == taskId && t.ListId == listId) t.Done = state;
+        }
+
+        // Why nothing can be changed now, or null.
+        string CanChange()
+        {
+            if (!signedIn) return AddNeedsSignIn;
+            if (NeedsSignInAgain) return SignInAgainToAdd;
+            return null;
+        }
+
+        bool Credentials(out GoogleAuth auth, out string refresh)
+        {
+            auth = null;
+            refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
+            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            if (refresh == null || secret == null) return false;
+            auth = NewAuth(clientId(), secret);
+            return true;
+        }
+
+        // An add or a tick ended: the month and the tile are read again when it worked; done hears how it went.
+        void AfterChange(Task<CalendarPassResult> t, int run, Action<string> done)
+        {
+            string why = null;
+            try
+            {
+                if (run != generation)
+                {
+                    why = "Signed out meanwhile";
+                    return;
+                }
+                if (t.IsFaulted)
+                {
+                    why = "That didn't work";
+                    Log.Error("calendar: a change failed (" + t.Exception.GetBaseException().GetType().Name + ")", null);
+                    return;
+                }
+                CalendarPassResult r = t.Result;
+                TakeTokens(r);
+                Log.Info("calendar: " + r.LogText);
+                if (r.RefreshRejected)
+                {
+                    GoogleEnded();
+                    why = "Google ended the sign-in. Sign in again in ⚙";
+                    return;
+                }
+                if (!r.Done)
+                {
+                    if (r.Failure != null && r.Failure.Status == 403)
+                    {
+                        tasksDenied = true;   // the sign-in may read but not add: a new sign-in grants it
+                        why = SignInAgainToAdd;
+                    }
+                    else why = GoogleCalendarClient.Problem(r.Failure);
+                    return;
+                }
+                months.Clear();   // read again, with what was just added
+                if (openYear != 0) ReadMonth(openYear, openMonth);
+                Read();
+            }
+            catch (Exception e)
+            {
+                why = "That didn't work";
+                Log.Error("calendar: applying a change threw " + e.GetType().Name, null);
+            }
+            finally
+            {
+                try { done(why); }
+                catch (Exception e) { Log.Error("calendar: a change's handler threw " + e.GetType().Name, null); }
+                Raise();
+            }
         }
 
         void Raise()
@@ -655,6 +1139,7 @@ namespace Capsule
                 LinkName = linkName,
                 Account = account,
                 Status = status != "" ? status : snap.Problem,
+                NeedsSignInAgain = NeedsSignInAgain,
             };
             foreach (GoogleCalendar c in calendars)
                 s.Calendars.Add(new CalendarChoice { Id = c.Id, Name = c.Name, Color = c.Color, Shown = Shown(c, picked) });

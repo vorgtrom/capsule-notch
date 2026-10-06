@@ -28,6 +28,163 @@ namespace Capsule
             RemovingTheLinkDisconnects();
             SigningInWinsOverTheLink();
             TheClientIsKeptWhenThePanelCloses();
+            AMonthIsReadWithItsTasks();
+            AnOlderSignInAsksForANewOne();
+            AddingAnEventReadsTheMonthAgain();
+            AddingATaskAndTickingIt();
+            AMonthFromTheLinkIsReadOnly();
+        }
+
+        static readonly System.Globalization.CultureInfo En = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        const string FullTokens = "{\"access_token\": \"ya29.sample\", \"expires_in\": 3599, \"token_type\": \"Bearer\", \"scope\": \"https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/tasks\"}";
+        const string OldTokens = "{\"access_token\": \"ya29.sample\", \"expires_in\": 3599, \"token_type\": \"Bearer\", \"scope\": \"https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly\"}";
+        const string Added = "{\"id\": \"new1\", \"status\": \"confirmed\", \"summary\": \"Lunch with Sam\", \"start\": {\"dateTime\": \"2026-10-09T12:30:00-07:00\"}, \"end\": {\"dateTime\": \"2026-10-09T13:30:00-07:00\"}}";
+
+        // Signed in with the scopes to add, the calendars and two task lists behind it; calendar POSTs make an event.
+        static Rig MonthRig(string tokens, List<CalendarRequest> tasksSeen)
+        {
+            var rig = new Rig(true);
+            rig.Google.Reply("/token", 200, tokens);
+            rig.Api.Reply(FakeCalendarApi.ListPath, 200, TestRunner.Fixture("google-calendar-list.json"))
+                .Reply(FakeCalendarApi.EventsPathOf(GoogleCalendarTests.Primary), 200, TestRunner.Fixture("google-events.json"))
+                .Reply(FakeCalendarApi.EventsPathOf(GoogleCalendarTests.Family), 200, FamilyEvents)
+                .Reply(FakeCalendarApi.EventsPathOf("odd@group.calendar.google.com"), 404, "{}");
+            rig.Transport = r => r.Method == "POST" ? Seen(rig.Api, r, new HttpResult { Status = 200, Body = Added }) : rig.Api.Answer(r);
+            rig.Module.NewTasks = token =>
+            {
+                var c = new GoogleTasksClient(token);
+                c.Transport = r => GoogleTasksTests.Answer(r, tasksSeen);
+                return c;
+            };
+            return rig;
+        }
+
+        static HttpResult Seen(FakeCalendarApi api, CalendarRequest r, HttpResult reply)
+        {
+            lock (api.Requests) api.Requests.Add(r);
+            return reply;
+        }
+
+        static void SettleMonth(Rig rig)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                Task pass = rig.Module.LastMonthPass, change = rig.Module.LastChange;
+                if (pass != null) pass.Wait(5000);
+                if (change != null) change.Wait(5000);
+                rig.Settle();
+                Thread.Sleep(20);
+                if (rig.Module.LastMonthPass == pass && rig.Module.LastChange == change) return;
+            }
+        }
+
+        static void AMonthIsReadWithItsTasks()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            TestRunner.Check(rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), Clock.NowMs(), En).Loading, "before it is read, the month says so");
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            MonthModel m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(!m.Loading && m.Note == "" && m.CanAdd && m.ShowTasks, "read, signed in with the scopes to add");
+            TestRunner.Eq("Offsite,Night deploy,Standup,Weekly review,Call with London,Design review,Dinner", string.Join(",", m.Events.Select(r => r.Title)), "the selected day's events from the chosen calendars");
+            TestRunner.Eq(2, m.Tasks.Count(t => t.Title == "Send the invoice"), "and its tasks, from both lists");
+            TestRunner.Check(m.Calendars.Count == 2 && m.Calendars[0].Id == GoogleCalendarTests.Primary && m.Lists.Count == 2, "events can be added to the writable calendars, primary first; tasks to the lists");
+            TestRunner.Check(rig.Api.Requests.Any(r => r.Path.Contains("timeMin=2026-09-27T07%3A00%3A00Z") && r.Path.Contains("maxResults=250")), "the six weeks are read, 250 a page");
+            TestRunner.Check(tasksSeen.Any(r => r.Path.Contains("dueMin=2026-09-27T00%3A00%3A00.000Z") && r.Path.Contains("dueMax=2026-11-08T00%3A00%3A00.000Z")), "and the tasks due in them");
+            Task first = rig.Module.LastMonthPass;
+            rig.Module.OpenMonth(2026, 10, En);
+            TestRunner.Check(rig.Module.LastMonthPass == first, "opened again soon after, it isn't read again");
+            string log = Files.ReadText(Paths.LogFile) ?? "";
+            TestRunner.Check(log.Contains("calendar: month: ") && log.Contains(" tasks") && !log.Contains("Send the invoice"), "the log gets counts, never a task's title");
+            rig.Module.SignOut();
+            TestRunner.Check(rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), Clock.NowMs(), En).Loading, "signing out forgets the month");
+        }
+
+        static void AnOlderSignInAsksForANewOne()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(OldTokens, tasksSeen);
+            rig.Module.Refresh();
+            rig.Settle();
+            TestRunner.Check(rig.Module.NeedsSignInAgain && !rig.Module.CanAdd && rig.Module.Settings().NeedsSignInAgain, "a sign-in with only the read-only scopes asks for a new one");
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            MonthModel m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(!m.Loading && m.Events.Count > 0 && !m.ShowTasks && m.Note == CalendarModule.SignInAgainToAdd && tasksSeen.Count == 0, "it still reads the month, without asking for tasks, and says why it can't add");
+            string why = "not called";
+            TestRunner.Check(!rig.Module.AddEvent(GoogleCalendarTests.Primary, "{}", x => why = x) && why == CalendarModule.SignInAgainToAdd, "adding says to sign in again");
+        }
+
+        static void AddingAnEventReadsTheMonthAgain()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            string why = "not called";
+            TestRunner.Check(!rig.Module.AddEvent("en.usa#holiday@group.v.calendar.google.com", "{}", x => why = x) && why == "Pick a calendar", "a calendar that takes no events can't get one");
+            Task before = rig.Module.LastMonthPass;
+            string body = CalendarMonth.EventBody("Lunch with Sam", new DateTime(2026, 10, 9), false, new TimeSpan(12, 30, 0), new TimeSpan(13, 30, 0), CalendarDayTests.Zone);
+            why = "not called";
+            TestRunner.Check(rig.Module.AddEvent(GoogleCalendarTests.Primary, body, x => why = x), "an event is being added");
+            SettleMonth(rig);
+            TestRunner.Eq(null, why, "it was added");
+            TestRunner.Check(rig.Api.Requests.Any(r => r.Method == "POST" && r.Body == body && r.Path == FakeCalendarApi.EventsPathOf(GoogleCalendarTests.Primary)), "POSTed to the primary calendar");
+            TestRunner.Check(rig.Module.LastMonthPass != before, "and the month is read again");
+            string log = Files.ReadText(Paths.LogFile) ?? "";
+            TestRunner.Check(log.Contains("calendar: added an event") && !log.Contains("Lunch with Sam"), "the log says an event was added, not which");
+            rig.Transport = r => r.Method == "POST" ? Seen(rig.Api, r, new HttpResult { Status = 403, Body = "{}" }) : rig.Api.Answer(r);
+            why = "not called";
+            rig.Module.AddEvent(GoogleCalendarTests.Primary, body, x => why = x);
+            SettleMonth(rig);
+            TestRunner.Check(why == CalendarModule.SignInAgainToAdd && rig.Module.NeedsSignInAgain, "a 403 means the sign-in may not add: sign in again");
+        }
+
+        static void AddingATaskAndTickingIt()
+        {
+            var tasksSeen = new List<CalendarRequest>();
+            var rig = MonthRig(FullTokens, tasksSeen);
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            string why = "not called";
+            TestRunner.Check(!rig.Module.AddTask(GoogleTasksTests.MyTasks, "  ", new DateTime(2026, 10, 9), x => why = x) && why == CalendarMonth.TitleNeeded, "a task needs a title");
+            why = "not called";
+            TestRunner.Check(rig.Module.AddTask(GoogleTasksTests.MyTasks, "Call the dentist", new DateTime(2026, 10, 9), x => why = x), "a task is being added");
+            SettleMonth(rig);
+            TestRunner.Check(why == null && tasksSeen.Any(r => r.Method == "POST" && r.Body.Contains("2026-10-09T00:00:00.000Z")), "added, due on its day");
+            why = "not called";
+            rig.Module.SetTaskDone(GoogleTasksTests.MyTasks, "dGFzazE", true, x => why = x);
+            MonthModel m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(m.Tasks.First(t => t.Id == "dGFzazE" && t.ListId == GoogleTasksTests.MyTasks).Done, "a tick shows at once");
+            SettleMonth(rig);
+            TestRunner.Check(why == null && tasksSeen.Any(r => r.Method == "PATCH" && r.Path.EndsWith("/tasks/dGFzazE")), "and is sent to Google");
+            rig.Module.NewTasks = token =>
+            {
+                var c = new GoogleTasksClient(token);
+                c.Transport = r => r.Method == "PATCH" ? new HttpResult { Status = 503 } : GoogleTasksTests.Answer(r, tasksSeen);
+                return c;
+            };
+            SettleMonth(rig);
+            why = "not called";
+            rig.Module.SetTaskDone(GoogleTasksTests.MyTasks, "dGFzazU", true, x => why = x);
+            SettleMonth(rig);
+            MonthModel after = rig.Module.Month(2026, 10, new DateTime(2026, 10, 31), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(why == "Google is having trouble (HTTP 503)" && !after.Tasks.First(t => t.Id == "dGFzazU" && t.ListId == GoogleTasksTests.MyTasks).Done, "a tick Google refuses goes back, and says why");
+        }
+
+        static void AMonthFromTheLinkIsReadOnly()
+        {
+            var rig = LinkRig(Feed);
+            rig.Module.SaveLink(Link);
+            rig.Settle();
+            rig.Module.OpenMonth(2026, 10, En);
+            SettleMonth(rig);
+            MonthModel m = rig.Module.Month(2026, 10, new DateTime(2026, 10, 30), CalendarDayTests.At(10, 6, 8, 0), En);
+            TestRunner.Check(!m.Loading && m.Events.Any(r => r.Title == "Month-end report") && !m.CanAdd && !m.ShowTasks, "with the link, the whole month is read from the feed, read-only");
+            TestRunner.Eq(CalendarModule.AddNeedsSignIn, m.Note, "and says what adding needs");
+            string why = "not called";
+            TestRunner.Check(!rig.Module.AddTask("x", "y", DateTime.Today, x => why = x) && why == CalendarModule.AddNeedsSignIn, "nothing can be added");
         }
 
         // Pasting the client ID, then clicking away to copy the secret, closes the panel: neither is lost.
