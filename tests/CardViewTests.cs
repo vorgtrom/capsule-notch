@@ -20,6 +20,81 @@ namespace Capsule
             OutlineHoldsTheCardAndItsPointer();
             ShadowIsDrawnOutsideTheCard();
             BarsFollowTheirActualWidth();
+            AnOpenCardResizesWhenItsContentChanges();
+            AQueueBadgeResizesAnOpenCard();
+        }
+
+        static void AQueueBadgeResizesAnOpenCard()
+        {
+            foreach (bool pointRight in new[] { true, false })
+            {
+                var view = new CardView();
+                var request = new PromptRequest { SessionId = "a", ToolName = "Bash" };
+                request.ToolInput["command"] = "npm test";
+                var held = new HeldPrompt { Id = 1, Request = request };
+                view.ShowPrompt(PromptCardModel.From(held, 1, 60000), pointRight);
+                ArrangeCard(view);
+                double before = view.DesiredSize.Height;
+                UIElement title = view.Prompt.Children[0];
+
+                view.ShowPrompt(PromptCardModel.From(held, 2, 59000), pointRight);
+                TestRunner.Eq("1 of 2", view.Prompt.Model.Position, "approval #1 shows its new queue badge");
+                TestRunner.Check(ReferenceEquals(title, view.Prompt.Children[0]), "the queue badge changes without rebuilding the request");
+                CheckCardFits(view, "a queue badge wraps the title");
+                TestRunner.Check(view.DesiredSize.Height > before, "the wrapped title makes room for its extra line");
+
+                view.ShowPrompt(PromptCardModel.From(held, 1, 58000), pointRight);
+                CheckCardFits(view, "removing a queue badge unwraps the title");
+                TestRunner.Near(before, view.DesiredSize.Height, "the card shrinks when the queue badge leaves");
+            }
+        }
+
+        static void AnOpenCardResizesWhenItsContentChanges()
+        {
+            foreach (bool pointRight in new[] { true, false })
+            {
+                var view = new CardView();
+                var usage = new CardModel { Provider = "codex", Title = "Codex", Footer = "Checked just now" };
+                usage.Rows.Add(new CardRow { Label = "Current session", UsedText = "41% used" });
+                usage.Rows.Add(new CardRow { Label = "Weekly", UsedText = "15% used" });
+                view.Show(usage, pointRight);
+                ArrangeCard(view);
+
+                var approval = new PromptCardModel { Id = 1, Provider = "codex", AppName = "Codex / Work",
+                    Title = "Codex / Work wants to run a command", What = "Bash: Write-Output CapsuleNativeTestPassed",
+                    Detail = "Live Capsule test. This only prints a message.", Project = "command-allow",
+                    Countdown = "Goes to Codex / Work in 57 s" };
+                view.ShowPrompt(approval, pointRight);
+                CheckCardFits(view, "usage to Codex approval");
+
+                var question = new PromptCardModel { Id = 2, Provider = "codex", AppName = "Codex / Work",
+                    Kind = PromptCardModel.Question, Title = "Codex / Work asked you a question",
+                    QuestionText = "What should the release notes say?", OtherOpen = true, IsLast = true,
+                    OtherText = "Keep every button on the card.", Countdown = "Goes to Codex / Work in 52 s" };
+                view.ShowPrompt(question, pointRight);
+                CheckCardFits(view, "approval to question with Other open");
+
+                view.Show(usage, pointRight);
+                CheckCardFits(view, "question back to usage");
+            }
+        }
+
+        static void ArrangeCard(CardView view)
+        {
+            view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            view.Arrange(new Rect(view.DesiredSize));
+            view.UpdateLayout();
+        }
+
+        static void CheckCardFits(CardView view, string transition)
+        {
+            view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double measured = view.DesiredSize.Height;
+            ArrangeCard(view);
+            // HoverCard sizes its native window before the queued layout pass.
+            var panel = (Border)view.Children[1];
+            TestRunner.Near(panel.ActualHeight + 2 * CardView.ShadowMargin, measured, transition + ": measured height includes the new content");
+            TestRunner.Check(Math.Abs(panel.ActualHeight - view.Outline.Bounds.Height) < 0.01, transition + ": glass fits the new content");
         }
 
         static void BarsFollowTheirActualWidth()
