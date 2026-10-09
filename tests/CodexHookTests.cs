@@ -58,7 +58,11 @@ namespace Capsule
                 Question.Replace("\"id\":\"name\"", "\"isSecret\":true,\"id\":\"name\""),
                 Question.Replace("Which name?", new string('x', 301)),
                 Question.Replace("Ada", "Ada\\u200b"),
-                Question.Replace("\"id\":\"name\"", "\"id\":\"\"")
+                Question.Replace("\"id\":\"name\"", "\"id\":\"\""),
+                Question.Replace("\"id\":\"name\"", "\"multiSelect\":true,\"id\":\"name\""),
+                Question.Replace("\"id\":\"name\"", "\"isOther\":false,\"id\":\"name\""),
+                Question.Replace("First name", "First\\u200bname"),
+                Question.Replace("\"label\":\"Ada\"", "\"hidden\":true,\"label\":\"Ada\"")
             }) TestRunner.Check(CodexHook.Request(Sample("PreToolUse", "request_user_input", bad), 0) == null, "secret, hidden or incomplete questions stay in the host");
             var async = Sample("PreToolUse", "request_user_input_async", "{\"questions\":[{\"title\":\"Which name?\",\"options\":[\"Ada\",\"Grace\"]}]}");
             TestRunner.Check(QuestionFlow.Parse(CodexHook.Request(async, 0).ToolInput) != null, "Work's async choices use the same flow");
@@ -102,17 +106,20 @@ namespace Capsule
             object handler = Json.Arr(Json.Get(entries[0], "hooks"))[0];
             TestRunner.Eq(120.0, Json.Num(Json.Get(handler, "timeout")).Value, "questions have time to be answered");
             string command = Json.Str(Json.Get(handler, "command"));
-            TestRunner.Eq("cmd.exe /d /c \"C:\\My Tools\\capsule-hook.exe\" --codex", command, "the launcher preserves spaces and the provider argument");
+            TestRunner.Eq("cmd.exe /d /v:off /c \"C:\\My Tools\\capsule-hook.exe\" --codex", command, "the launcher preserves spaces and the provider argument");
             TestRunner.Check(Json.Get(handler, "args") == null, "Codex does not receive Claude's unsupported exec arguments");
             HookSetup.Disconnect(path, DateTime.Now);
             root = Json.Parse(File.ReadAllText(path));
             TestRunner.Eq("keep me", Json.Str(Json.Get(root, "description")), "disconnect preserves unrelated settings");
             TestRunner.Check(Json.Get(root, "hooks", "Stop") != null && Json.Get(root, "hooks", "PreToolUse") == null, "disconnect removes only Capsule's hooks");
             TestRunner.Check(CodexHook.Command(@"C:\O'Brien\capsule-hook.exe").Contains("O'Brien"), "the launcher preserves apostrophes");
-            bool rejected = false;
-            try { HookSetup.ConnectCodex(path, @"C:\%literal%\capsule-hook.exe", DateTime.Now); }
-            catch (ArgumentException) { rejected = true; }
-            TestRunner.Check(rejected && File.ReadAllText(path) == Json.Write(root) + "\n", "unsafe installation paths leave settings unchanged");
+            foreach (char special in new[] { '%', '$', '`', '\n' })
+            {
+                bool rejected = false;
+                try { HookSetup.ConnectCodex(path, "C:\\" + special + "literal\\capsule-hook.exe", DateTime.Now); }
+                catch (ArgumentException) { rejected = true; }
+                TestRunner.Check(rejected && File.ReadAllText(path) == Json.Write(root) + "\n", "unsafe installation paths leave settings unchanged");
+            }
         }
     }
 }

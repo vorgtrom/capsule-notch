@@ -80,7 +80,7 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
 
 ### Codex and local ChatGPT Work
 
-1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder without `%` in its path.
+1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder without `%`, `$` or backticks in its path.
 2. Right-click Capsule and choose **Connect to Codex / Work**.
 3. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Capsule does not grant trust.
 4. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.

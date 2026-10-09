@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Capsule
 {
@@ -15,10 +14,10 @@ namespace Capsule
         // Both Windows hook shells can launch cmd; stdin and stdout stay attached to the hook executable.
         public static string Command(string exe)
         {
-            // shortcut: cmd expands percent variables in paths, use a normal installation folder until a native hook launcher exists.
-            if (exe.IndexOf('%') >= 0 || exe.IndexOf('"') >= 0 || !PromptRequest.VisibleText(exe, false))
-                throw new ArgumentException("Install Capsule in a folder without percent signs or control characters before connecting Codex.");
-            return "cmd.exe /d /c \"" + exe + "\" --codex";
+            // shortcut: host shells expand these path characters, use a normal folder until a native hook launcher exists.
+            if (exe.IndexOfAny(new[] { '%', '$', '`', '"' }) >= 0 || !PromptRequest.VisibleText(exe, false))
+                throw new ArgumentException("Install Capsule in a folder without %, $, backticks or control characters before connecting Codex.");
+            return "cmd.exe /d /v:off /c \"" + exe + "\" --codex";
         }
 
         public static PromptRequest Request(Dictionary<string, object> root, long now)
@@ -59,6 +58,7 @@ namespace Capsule
 
         static Dictionary<string, object> Questions(Dictionary<string, object> input, bool async)
         {
+            foreach (string key in input.Keys) if (key != "questions") return null;
             object[] raw = Json.Arr(Json.Get(input, "questions"));
             if (raw == null || raw.Length == 0 || raw.Length > HookReply.MaxQuestions) return null;
             var questions = new List<object>();
@@ -66,13 +66,21 @@ namespace Capsule
             var ids = new HashSet<string>();
             foreach (object item in raw)
             {
+                var question = Json.Obj(item);
+                if (question == null) return null;
+                foreach (string key in question.Keys)
+                    if (key != "options" && key != "isSecret" && key != "is_secret" &&
+                        (async ? key != "title" : key != "id" && key != "header" && key != "question" && key != "isOther")) return null;
                 string text = Json.Str(Json.Get(item, async ? "title" : "question"));
                 string header = async ? "" : Json.Str(Json.Get(item, "header"));
                 string id = async ? text : Json.Str(Json.Get(item, "id"));
                 if (string.IsNullOrWhiteSpace(text) || !Fits(text, 300, true) || !texts.Add(text)) return null;
-                if (header == null || !Fits(header, 40, false) || string.IsNullOrWhiteSpace(id) || !ids.Add(id)) return null;
+                if (header == null || !Fits(header, 40, false) || string.IsNullOrWhiteSpace(id)
+                    || !Fits(id, async ? 300 : 80, false) || !ids.Add(id)) return null;
                 object secret = Json.Get(item, "isSecret") ?? Json.Get(item, "is_secret");
                 if (secret != null && (!(secret is bool) || (bool)secret)) return null;
+                object other = Json.Get(item, "isOther");
+                if (other != null && (!(other is bool) || !(bool)other)) return null;
                 object[] options = Json.Arr(Json.Get(item, "options"));
                 if ((!async && options == null) || (options != null && (options.Length == 0 || options.Length > 4))) return null;
                 if (Json.Get(item, "options") != null && options == null) return null;
@@ -80,6 +88,12 @@ namespace Capsule
                 var labels = new HashSet<string>();
                 foreach (object option in options ?? new object[0])
                 {
+                    if (!async)
+                    {
+                        var optionObject = Json.Obj(option);
+                        if (optionObject == null) return null;
+                        foreach (string key in optionObject.Keys) if (key != "label" && key != "description") return null;
+                    }
                     string label = async ? Json.Str(option) : Json.Str(Json.Get(option, "label"));
                     string description = async ? "" : Json.Str(Json.Get(option, "description"));
                     if (string.IsNullOrWhiteSpace(label) || !Fits(label, 80, false) || !labels.Add(label)
