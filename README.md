@@ -175,7 +175,9 @@ adds itself to Start with Windows. You can turn that off in the menu.
   has a **Sign in** button, which runs `claude auth login`.
 - **Ctrl+Alt+N** from any app opens the panel with the cursor in the Ideas box. Type, press Enter, and it's
   saved and the panel closes. Opened by a click, the panel stays open after you save.
-- **Esc**, or clicking anywhere else, closes the panel.
+- **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
+  so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
+- The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
 - **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
 - **Right-click** the capsule or the tray icon for the menu.
 - **Left-click** the tray icon to hide or show the capsule.

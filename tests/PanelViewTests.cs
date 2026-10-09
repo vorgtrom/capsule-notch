@@ -33,6 +33,84 @@ namespace Capsule
             ShowsTheSettingsIcons();
             SurvivesBeingClosed();
             DiskNoteIsAmberEvenBeforeSetup();
+            PagesScrollInsideTheWorkArea();
+            SettingsAndFormsKeepThePanelOpen();
+        }
+
+        static ScrollViewer ScrollOf(DependencyObject root)
+        {
+            var element = root as UIElement;
+            if (element != null && element.Visibility != Visibility.Visible) return null;
+            if (root is ScrollViewer) return (ScrollViewer)root;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                ScrollViewer found = ScrollOf(VisualTreeHelper.GetChild(root, i));
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        static void CheckScroll(PanelView view, double height, string title)
+        {
+            view.ConstrainHeight(height);
+            view.Relayout();
+            Lay(view);
+            TestRunner.Check(view.DesiredSize.Height <= height + 2 * PanelView.ShadowMargin + 0.5, "the page fits the monitor's work area");
+            TestRunner.Near(view.DesiredSize.Height - 2 * PanelView.ShadowMargin, view.Outline.Bounds.Height, "glass fits the viewport, not the hidden content");
+            ScrollViewer scroll = ScrollOf(view);
+            TestRunner.Check(scroll != null && scroll.ScrollableHeight > 0, "the overflowing page scrolls");
+            TextBlock header = FindText(view, title);
+            double top = header.TranslatePoint(new Point(), view).Y;
+            scroll.ScrollToBottom();
+            view.UpdateLayout();
+            TestRunner.Check(scroll.VerticalOffset > 0, "the bottom can be reached");
+            TestRunner.Near(top, header.TranslatePoint(new Point(), view).Y, "the header stays fixed while the body scrolls");
+        }
+
+        static void PagesScrollInsideTheWorkArea()
+        {
+            var view = new PanelView();
+            view.Update(Sample(5));
+            foreach (double height in new[] { 320.0, 240.0, 192.0 }) CheckScroll(view, height, "Capsule");
+            view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowGoogle(new GoogleSettings { ClientId = "synthetic-client" });
+            CheckScroll(view, 320, "Settings");
+            view.ClientIdBox.Text = "unfinished-client";
+            view.ClientSecretBox.Password = "synthetic-secret";
+            view.ConstrainHeight(240);
+            view.Relayout();
+            Lay(view);
+            TestRunner.Check(view.ClientIdBox.Text == "unfinished-client" && view.ClientSecretBox.Password == "synthetic-secret", "resizing keeps unfinished settings in memory");
+            MonthModel month = CalendarMonth.Build(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.Fixture(), new List<GoogleTask>(), CalendarDayTests.At(10, 6, 8, 0), CalendarDayTests.Zone, En);
+            view.ShowMonth(month);
+            view.ConstrainHeight(240);
+            view.Relayout();
+            Lay(view);
+            TestRunner.Check(view.DesiredSize.Height <= 280.5 && ScrollOf(view).ScrollableHeight > 0, "the month page also scrolls within the work area");
+        }
+
+        static void SettingsAndFormsKeepThePanelOpen()
+        {
+            var view = new PanelView();
+            view.Update(Sample(0));
+            TestRunner.Check(!view.KeepOpenOnDeactivate, "the normal board still dismisses on an app switch");
+            view.ShowSettings(false, "", "Ctrl+Alt+N");
+            TestRunner.Check(view.KeepOpenOnDeactivate, "settings remain open while copying values from another app");
+            view.ShowBoard();
+            TestRunner.Check(!view.KeepOpenOnDeactivate, "Back restores normal dismissal");
+            MonthModel month = CalendarMonth.Build(2026, 10, new DateTime(2026, 10, 6), CalendarDayTests.Fixture(), new List<GoogleTask>(), CalendarDayTests.At(10, 6, 8, 0), CalendarDayTests.Zone, En);
+            month.CanAdd = true;
+            month.Calendars.Add(new CalendarChoice { Id = "synthetic", Name = "Synthetic" });
+            view.ShowMonth(month);
+            Lay(view);
+            TestRunner.Check(!view.KeepOpenOnDeactivate, "a month with no open form remains transient");
+            Click(Holder(view, "+ Add event"));
+            TestRunner.Check(view.Month.FormOpen && view.KeepOpenOnDeactivate, "an open event form survives an app switch");
+            view.Month.TitleBox.Text = "unfinished event";
+            view.ShowMonth(month);
+            TestRunner.Eq("unfinished event", view.Month.TitleBox.Text, "an update keeps the unfinished form");
+            view.Month.HandleKey(Key.Escape, view.Month.TitleBox);
+            TestRunner.Check(!view.KeepOpenOnDeactivate, "cancelling the form restores dismissal");
         }
 
         // Polish spec §4.3: what the Ideas tile says about the disk is amber, also while Notion isn't set up and the setup

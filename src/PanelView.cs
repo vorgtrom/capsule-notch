@@ -28,6 +28,7 @@ namespace Capsule
 
         readonly GlassSurface glass = new GlassSurface();
         readonly StackPanel board = new StackPanel();
+        readonly ScrollViewer boardScroll = BodyScroll();
         readonly DockPanel header = new DockPanel { LastChildFill = false };
         readonly Grid tiles = new Grid();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
@@ -41,6 +42,8 @@ namespace Capsule
 
         // The settings sheet (spec §3): the Notion secret (write-only), the database link, and the shortcut.
         readonly StackPanel settings = new StackPanel();
+        readonly StackPanel settingsBody = new StackPanel();
+        readonly ScrollViewer settingsScroll = BodyScroll();
         readonly MonthView month = new MonthView();   // the month page (month spec §2), in the tiles' place like the settings
         readonly PasswordBox secretBox = new PasswordBox();
         readonly TextBox linkBox = new TextBox();
@@ -92,7 +95,8 @@ namespace Capsule
             Place(ideasTile, 6, 0, 3);
             calendarTile.Visibility = Visibility.Collapsed;
             tiles.RowDefinitions[5].Height = new GridLength(0);
-            board.Children.Add(tiles);
+            boardScroll.Content = tiles;
+            board.Children.Add(boardScroll);
 
             // The Ideas tile's header and box stay put (moving the box would take its keyboard focus); only the rows
             // and the footer below them are rebuilt on every update.
@@ -143,6 +147,7 @@ namespace Capsule
         public TextBox IdeaBox { get { return ideaBox; } }
         public bool ShowingSettings { get { return settings.Visibility == Visibility.Visible; } }
         public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
+        public bool KeepOpenOnDeactivate { get { return ShowingSettings || (ShowingMonth && month.FormOpen); } }
         public MonthView Month { get { return month; } }
         public event Action MonthClicked;      // the Calendar tile's month button: the Controller calls ShowMonth
         public event Action MonthClosed;       // the month page gave way to the tiles (←, or the panel closing)
@@ -242,6 +247,21 @@ namespace Capsule
             glass.Apply(new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius), null, ShadowMargin);
         }
 
+        internal static ScrollViewer BodyScroll()
+        {
+            return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
+        }
+
+        public void ConstrainHeight(double height)
+        {
+            header.Measure(new Size(PanelWidth, double.PositiveInfinity));
+            settingsHeader.Measure(new Size(PanelWidth, double.PositiveInfinity));
+            boardScroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height);
+            settingsScroll.MaxHeight = Math.Max(1, height - settingsHeader.DesiredSize.Height - Pad);
+            month.ConstrainHeight(height);
+        }
+
         public void FocusIdeas()
         {
             ideaBox.Focus();
@@ -275,8 +295,10 @@ namespace Capsule
             settings.Margin = new Thickness(0, 0, 0, Pad);
             settingsHeader.Margin = new Thickness(Pad + 4, Pad, Pad, 10);
             settings.Children.Add(settingsHeader);
+            settingsScroll.Content = settingsBody;
+            settings.Children.Add(settingsScroll);
 
-            settings.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
+            settingsBody.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
             notion.Children.Add(Section("Ideas → Notion"));
@@ -338,7 +360,7 @@ namespace Capsule
             shortcutResult.TextWrapping = TextWrapping.Wrap;
             shortcutResult.Margin = new Thickness(0, 3, 0, 0);
             notion.Children.Add(shortcutResult);
-            settings.Children.Add(notion);
+            settingsBody.Children.Add(notion);
         }
 
         void OnShortcutKey(object sender, KeyEventArgs e)
@@ -394,8 +416,7 @@ namespace Capsule
 
         public void ShowBoard()
         {
-            // Clicking away to copy the client secret closes the panel: what was typed into the client's fields is handed
-            // over first, so it isn't lost.
+            // Explicitly leaving settings hands over the client draft before clearing the secret fields.
             if (ShowingSettings && googleClient.Visibility == Visibility.Visible && (clientIdBox.Text.Trim() != "" || clientSecretBox.Password.Trim() != "") && GoogleClientDraft != null)
                 GoogleClientDraft(clientIdBox.Text, clientSecretBox.Password);
             capturing = false;
