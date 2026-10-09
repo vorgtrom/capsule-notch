@@ -102,7 +102,7 @@ namespace Capsule
             object handler = Json.Arr(Json.Get(entries[0], "hooks"))[0];
             TestRunner.Eq(120.0, Json.Num(Json.Get(handler, "timeout")).Value, "questions have time to be answered");
             string command = Json.Str(Json.Get(handler, "command"));
-            TestRunner.Eq("cmd.exe /d /s /c \"\"C:\\My Tools\\capsule-hook.exe\" --codex\"", command, "the launcher preserves spaces and the provider argument");
+            TestRunner.Eq("cmd.exe /d /c \"C:\\My Tools\\capsule-hook.exe\" --codex", command, "the launcher preserves spaces and the provider argument");
             TestRunner.Check(Json.Get(handler, "args") == null, "Codex does not receive Claude's unsupported exec arguments");
             HookSetup.Disconnect(path, DateTime.Now);
             root = Json.Parse(File.ReadAllText(path));

@@ -18,7 +18,7 @@ namespace Capsule
             // shortcut: cmd expands percent variables in paths, use a normal installation folder until a native hook launcher exists.
             if (exe.IndexOf('%') >= 0 || exe.IndexOf('"') >= 0 || !PromptRequest.VisibleText(exe, false))
                 throw new ArgumentException("Install Capsule in a folder without percent signs or control characters before connecting Codex.");
-            return "cmd.exe /d /s /c \"\"" + exe + "\" --codex\"";
+            return "cmd.exe /d /c \"" + exe + "\" --codex";
         }
 
         public static PromptRequest Request(Dictionary<string, object> root, long now)

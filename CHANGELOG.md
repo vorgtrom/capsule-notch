@@ -7,6 +7,20 @@ download for each one. A release takes its notes from its section here.
 
 Nothing yet.
 
+## v1.4.0
+
+- Connect Codex and local ChatGPT Work to approve commands and answer questions from the Codex ring.
+- Command cards show the command, working folder and reason. Choose Allow, Deny, or Answer in Codex / Work.
+- Answer with an option or type your own text. Free-text-only questions also work.
+- Claude and Codex requests use separate queues. Stale card actions cannot affect another request.
+- Connect backs up the host's hooks.json and preserves other hooks. Review and trust Capsule's hooks in the host,
+  then start a new local chat.
+- Existing timeout and foreground-window fallbacks apply. File edits, plans, secret questions and wider grants
+  stay in the host. Cloud orchestration and ordinary ChatGPT web chats are outside this connection.
+
+Question answers reach the model as hook feedback, rather than a native structured answer record. Command
+decisions run before the host's normal approval reviewer. See the README for setup and limits.
+
 ## v1.3.0
 
 **Usage you can trust at a glance.**

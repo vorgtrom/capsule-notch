@@ -422,7 +422,7 @@ namespace Capsule
                 string command = CodexHook.Command(capsule.HookExe);
                 foreach (string shell in new[] { "cmd.exe", "powershell.exe" })
                 {
-                    string args = shell == "cmd.exe" ? "/d /s /c \"" + command + "\"" : "-NoProfile -NonInteractive -Command " + command.Replace("\"", "\\\"");
+                    string args = shell == "cmd.exe" ? "/d /s /c \"" + command + "\"" : "-NoProfile -NonInteractive -Command \"" + command.Replace("\"", "\\\"") + "\"";
                     int code; long ms;
                     string output = RunHook(input, capsule.Name, args, out code, out ms, false, shell);
                     TestRunner.Eq(0, code, shell + ": the Codex launcher exits successfully");
