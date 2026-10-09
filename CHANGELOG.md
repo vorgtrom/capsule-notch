@@ -3,12 +3,14 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
-## Unreleased
+## v1.4.1
 
 - **Connect to Codex / Work** now refuses an install folder whose path holds `&`, `<`, `>`, `(`, `)`, `@`, `^` or `|`,
   and says why. Windows' `cmd`, which launches the hook, misreads those: in a folder such as `Capsule (1)` the hook
   failed without a word and Codex asked as usual, and a `&` split the path into two commands. Rename the folder and
   connect again.
+- A release whose version has no section here now publishes with GitHub's list of merged pull requests, instead of
+  failing.
 - README: Codex on **Full access** never asks, so nothing reaches the capsule; uninstalling now covers Codex; what
   the Codex connection reads and changes.
 

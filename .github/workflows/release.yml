@@ -77,5 +77,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = if (Test-Path release-notes.md) { @('--notes-file', 'release-notes.md') } else { @('--generate-notes') }
+          # @( ) keeps a one-item list a list: unwrapped, @notes would hand gh '--generate-notes' one letter at a time.
+          $notes = @(if (Test-Path release-notes.md) { '--notes-file', 'release-notes.md' } else { '--generate-notes' })
           gh release create $env:VERSION "Capsule-$env:VERSION.zip" "Capsule-$env:VERSION.zip.sha256" --target $env:GITHUB_SHA --title "Capsule $env:VERSION" @notes
