@@ -79,6 +79,8 @@ namespace Capsule
                 else if (command == "--connect-probe") result = HookSetup.Connect(Paths.ClaudeSettings, hookExe, HookEvents.ProbeWiring, new[] { "--probe" }, false, DateTime.Now);
                 else if (command == "--connect-probe-shell") result = HookSetup.Connect(Paths.ClaudeSettings, hookExe, HookEvents.ProbeWiring, new[] { "--probe" }, true, DateTime.Now);
                 else if (command == "--disconnect") result = HookSetup.Disconnect(Paths.ClaudeSettings, DateTime.Now);
+                else if (command == "--connect-codex") result = HookSetup.ConnectCodex(Paths.CodexHooks, hookExe, DateTime.Now);
+                else if (command == "--disconnect-codex") result = HookSetup.Disconnect(Paths.CodexHooks, DateTime.Now);
                 else { Log.Info("unknown command " + command); return 2; }
                 Log.Info("hooks: " + result);
                 return 0;

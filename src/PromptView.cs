@@ -91,7 +91,7 @@ namespace Capsule
 
         public void Show(PromptCardModel m)
         {
-            if (!drawn || drawnId != m.Id)
+            if (!drawn || drawnId != m.Id || (model != null && model.Provider != m.Provider))
             {
                 drawn = true;
                 drawnId = m.Id;
@@ -115,7 +115,8 @@ namespace Capsule
         // Everything the card draws is the same but the "1 of N" badge and the countdown.
         static bool SameButQueue(PromptCardModel a, PromptCardModel b)
         {
-            if (a.Id != b.Id || a.Step != b.Step || a.Kind != b.Kind) return false;
+            if (a.Id != b.Id || a.Provider != b.Provider || a.Step != b.Step || a.Kind != b.Kind) return false;
+            if (a.Detail != b.Detail || a.DetailFull != b.DetailFull || a.ProjectFull != b.ProjectFull) return false;
             if (a.Title != b.Title || a.What != b.What || a.Project != b.Project || a.WhatFull != b.WhatFull || a.WhatCut != b.WhatCut) return false;
             if (a.CanAlwaysAllow != b.CanAlwaysAllow || a.AlwaysAllowLabel != b.AlwaysAllowLabel || a.AlwaysAllowTip != b.AlwaysAllowTip || a.AlwaysAllowAlso != b.AlwaysAllowAlso) return false;
             if (a.Header != b.Header || a.QuestionText != b.QuestionText || a.MultiSelect != b.MultiSelect) return false;
@@ -225,7 +226,7 @@ namespace Capsule
             positionBadge = null;
             var logo = new WPath
             {
-                Data = Logos.For("claude"),
+                Data = Logos.For(m.Provider),
                 Fill = NotchView.Brush(Palette.Text),
                 Stretch = Stretch.Uniform,
                 Width = 16,
@@ -273,7 +274,19 @@ namespace Capsule
                 Children.Add(note);
             }
 
-            if (m.Project != "") Children.Add(CardView.MakeText(m.Project, 12, Palette.Secondary, FontWeights.Normal));
+            if (m.Detail != "")
+            {
+                bool overflows;
+                TextBlock detail = TwoLines(CardView.MakeText(m.Detail, 12, Palette.Secondary, FontWeights.Normal), out overflows);
+                detail.ToolTip = WholeCommand(m.DetailFull);
+                Children.Add(detail);
+            }
+            if (m.Project != "")
+            {
+                TextBlock project = CardView.MakeText(m.Project, 12, Palette.Secondary, FontWeights.Normal);
+                project.ToolTip = WholeCommand(m.ProjectFull);
+                Children.Add(project);
+            }
             countdown = CardView.MakeText(m.Countdown, 11.5, Palette.Secondary, FontWeights.Normal);
             countdown.Margin = new Thickness(0, 2, 0, 10);
             Children.Add(countdown);
@@ -301,10 +314,11 @@ namespace Capsule
                 buttons.Children.Add(advance);
                 SetCanAdvance(m.CanAdvance);
             }
-            Border inClaude = Button(CardView.MakeText("Answer in Claude", 12.5, Palette.Secondary, FontWeights.Normal),
+            string answerIn = "Answer in " + m.AppName;
+            Border inClaude = Button(CardView.MakeText(answerIn, 12.5, Palette.Secondary, FontWeights.Normal),
                 delegate { Raise(Make(PromptAction.InClaude)); }, Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(10, 4, 10, 5));
             inClaude.Margin = new Thickness(0, 0, 6, 6);
-            AutomationProperties.SetName(inClaude, "Answer in Claude");
+            AutomationProperties.SetName(inClaude, answerIn);
             buttons.Children.Add(inClaude);
             Children.Add(buttons);
             // What else Always allow would do, in plain sight and not only in its tooltip.

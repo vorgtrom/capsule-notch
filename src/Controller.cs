@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9;
 
         readonly Application app;
         Config config;
@@ -36,6 +36,7 @@ namespace Capsule
         Tray tray;
         MenuOwner menuOwner;
         PromptBroker prompts;        // the requests held, and their rules
+        PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
         DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick;
         List<UsageModule> shown = new List<UsageModule>();
@@ -110,6 +111,8 @@ namespace Capsule
             // or under a fullscreen app): the card can't be seen then, and holding would only delay the app's own prompt.
             prompts = new PromptBroker(() => !notch.IsVisible || ClaudeApp.IsInFront());
             prompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
+            codexPrompts = new PromptBroker(() => !notch.IsVisible || CodexApp.IsInFront());
+            codexPrompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
 
             menuOwner = new MenuOwner();
             tray = new Tray();
@@ -251,10 +254,11 @@ namespace Capsule
                         link.Send(PromptReply.Passing());
                         return;
                     }
-                    HeldPrompt held = prompts.Arrive(request, delegate(PromptReply reply) { link.Send(reply); }, Clock.NowMs());
+                    PromptBroker broker = request.Provider == "codex" ? codexPrompts : prompts;
+                    HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply) { link.Send(reply); }, Clock.NowMs());
                     if (held == null) return;
                     int id = held.Id;
-                    link.WhenGone(delegate { app.Dispatcher.BeginInvoke(new Action(delegate { Guard("prompts", delegate { prompts.Gone(id); }); })); });
+                    link.WhenGone(delegate { app.Dispatcher.BeginInvoke(new Action(delegate { Guard("prompts", delegate { broker.Gone(id); }); })); });
                 }
                 catch (Exception e)
                 {
@@ -268,12 +272,14 @@ namespace Capsule
         // its usage again once none is left.
         void OnPromptsChanged()
         {
-            if (prompts.Count == 0) promptTick.Stop();
+            int count = prompts.Count + codexPrompts.Count;
+            if (count == 0) promptTick.Stop();
             else if (!promptTick.IsEnabled) promptTick.Start();
             if (disposed) return;
-            card.RequestsHeld = prompts.Count > 0;
-            if (prompts.Count == 0 && !card.IsVisible) card.View.Prompt.Clear();   // released while the card was away: no text left in it
-            if (card.IsOpen && cardCell >= 0 && cardCell < shown.Count && shown[cardCell] == claude) ShowCard(cardCell);
+            card.RequestsHeld = count > 0;
+            if (count == 0 && !card.IsVisible) card.View.Prompt.Clear();
+            Render();
+            if (card.IsOpen && cardCell >= 0 && cardCell < shown.Count) ShowCard(cardCell);
         }
 
         // Every 250 ms while a request is held: the Claude app coming to the front, or a countdown ending, sends requests to
@@ -282,13 +288,16 @@ namespace Capsule
         {
             long now = Clock.NowMs();
             prompts.Tick(now);
+            codexPrompts.Tick(now);
             ShowCountdown(now);
         }
 
         void ShowCountdown(long now)
         {
-            if (card.IsOpen && card.View.ShowingPrompt && prompts.Current != null)
-                card.View.Prompt.SetCountdown(PromptCardModel.CountdownText(prompts.MsLeft(now)));
+            PromptCardModel model = card.View.Prompt.Model;
+            PromptBroker broker = model != null && model.Provider == "codex" ? codexPrompts : prompts;
+            if (card.IsOpen && card.View.ShowingPrompt && broker.Current != null)
+                card.View.Prompt.SetCountdown(PromptCardModel.CountdownText(broker.MsLeft(now), model.AppName));
         }
 
         // Something done on the card, passed on exactly as the card raised it: it names the request it was built for, and
@@ -298,8 +307,11 @@ namespace Capsule
         void OnPromptActed(PromptAction action)
         {
             long now = Clock.NowMs();
-            prompts.Act(action, now);
-            HeldPrompt held = prompts.Current;
+            PromptCardModel model = card.View.Prompt.Model;
+            if (model == null) return;
+            PromptBroker broker = model.Provider == "codex" ? codexPrompts : prompts;
+            broker.Act(action, now);
+            HeldPrompt held = broker.Current;
             QuestionFlow flow = held != null && held.Id == action.Target ? held.Flow : null;
             if (action.Kind == PromptAction.Other && flow != null && flow.OtherOpen) card.TakeFocus();
             if (action.Kind == PromptAction.OtherText && flow != null) card.View.Prompt.SetCanAdvance(flow.CanAdvance);
@@ -356,8 +368,8 @@ namespace Capsule
             long now = Clock.NowMs();
             string activity = sessions.Activity;
             shown = new List<UsageModule> { claude };
-            if (codex.Current.Status != "none") shown.Add(codex);
-            string codexActivityNow = codexWorking ? States.Working : null;
+            if (codex.Current.Status != "none" || codexPrompts.Count > 0) shown.Add(codex);
+            string codexActivityNow = codexPrompts.Count > 0 ? States.Waiting : codexWorking ? States.Working : null;
             List<CellModel> cells = shown.Select(m => m.Cell(m == codex ? codexActivityNow : activity, now)).ToList();
             calendarCell = -1;
             if (calendar.Connected)   // under Claude and Codex, while there is a link or a sign-in (calendar spec §2)
@@ -740,8 +752,9 @@ namespace Capsule
             }
             if (cell >= shown.Count) return;
             cardCell = cell;
-            if (shown[cell] == claude && prompts.Current != null)   // Claude waits on a request Capsule holds: the card shows it
-                card.ShowPromptBeside(PromptCardModel.From(prompts.Current, prompts.Count, prompts.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+            PromptBroker broker = shown[cell] == codex ? codexPrompts : prompts;
+            if (broker.Current != null)
+                card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             else
                 card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             NotchOnTop();
@@ -809,6 +822,7 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdShow, Text = "Show notch", Checked = config.ShowNotch },
                 new MenuItemSpec { Separator = true },
                 new MenuItemSpec { Id = CmdHooks, Text = HookSetup.MenuText(sessions.HooksConnected, reconnect) },
+                new MenuItemSpec { Id = CmdCodexHooks, Text = HookSetup.IsConnected(Paths.CodexHooks) ? "Disconnect from Codex / Work" : "Connect to Codex / Work" },
                 new MenuItemSpec { Id = CmdAutostart, Text = "Start with Windows", Checked = autostart },
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
             });
@@ -829,6 +843,9 @@ namespace Capsule
                     break;
                 case CmdHooks:
                     ToggleHooks(reconnect);
+                    break;
+                case CmdCodexHooks:
+                    ToggleCodexHooks();
                     break;
                 case CmdAutostart:
                     try { Autostart.Set(!autostart, ExePath()); }
@@ -881,6 +898,31 @@ namespace Capsule
                 tray.Balloon("Capsule", "Couldn't change Claude Code's settings.json: " + e.Message);
             }
             Render();
+        }
+
+        void ToggleCodexHooks()
+        {
+            string hookExe = Path.Combine(Paths.ExeDir, "capsule-hook.exe");
+            if (!HookSetup.IsConnected(Paths.CodexHooks) && !File.Exists(hookExe))
+            {
+                tray.Balloon("Capsule", "Can't connect: capsule-hook.exe is missing next to Capsule.exe.");
+                return;
+            }
+            try
+            {
+                bool connected = HookSetup.IsConnected(Paths.CodexHooks);
+                string result = connected ? HookSetup.Disconnect(Paths.CodexHooks, DateTime.Now)
+                    : HookSetup.ConnectCodex(Paths.CodexHooks, hookExe, DateTime.Now);
+                Log.Info("Codex hooks: " + result);
+                if (connected) codexPrompts.ReleaseAll();
+                tray.Balloon("Capsule", connected ? "Disconnected from Codex / Work."
+                    : "Connected. Review and trust Capsule's hooks in Codex / Work, then start a new local chat. Command approvals and questions can use the capsule.");
+            }
+            catch (Exception e)
+            {
+                Log.Error("Codex hooks (" + e.GetType().Name + ")", null);
+                tray.Balloon("Capsule", "Couldn't change Codex / Work hooks.json: " + e.Message);
+            }
         }
 
         void ToggleNotch()
@@ -1008,6 +1050,7 @@ namespace Capsule
             try
             {
                 if (prompts != null) prompts.ReleaseAll();
+                if (codexPrompts != null) codexPrompts.ReleaseAll();
                 if (promptServer != null) promptServer.Dispose();
             }
             catch (Exception e) { Log.Error("stop prompts (" + e.GetType().Name + ")", null); }

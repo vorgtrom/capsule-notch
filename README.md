@@ -10,7 +10,7 @@ event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: yo
 and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
 idea that lands in **Notion**. And when Claude asks for
 permission or asks you a question, you can **approve it or answer it right on the capsule**, without switching
-to the Claude app. It's built to grow: each of these is a module, and more will follow.
+to the Claude app. You can also connect Codex and local ChatGPT Work for command approvals and answers.
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
@@ -23,10 +23,12 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 - **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions.
-- **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs. Codex has no "waiting on you" signal, so its ring never pulses.
+- **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
+  When Capsule holds a Codex / Work request, the Codex ring pulses amber.
 - **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses
   amber.
 - **Approve or answer Claude from the capsule**: see [below](#approve-and-answer-claude-from-the-capsule).
+- **Approve or answer Codex / Work**: see [setup and limits](#codex-and-local-chatgpt-work).
 - **Your calendar**, once you [connect Google Calendar](#google-calendar) (a one-minute paste): a third cell under Claude and Codex.
   - It shows when your next event today starts ("2:30", or "14:30" with a 24-hour clock).
   - During an event it shows **now**, and its ring fills as the event runs.
@@ -75,6 +77,32 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
 - **Several requests** wait their turn, oldest first ("1 of 3").
 - It needs **Connect to Claude Code** (see [Use](#use)); if you connected with an older Capsule, choose
   **Reconnect to Claude Code** once.
+
+### Codex and local ChatGPT Work
+
+1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder without `%` in its path.
+2. Right-click Capsule and choose **Connect to Codex / Work**.
+3. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Capsule does not grant trust.
+4. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.
+
+The command card shows the full command, working folder and reason. Choose **Allow**, **Deny**, or
+**Answer in Codex / Work**. There is no persistent **Always allow** for this connection. Questions support
+options and typed answers, including free-text-only questions. Claude and Codex have separate queues.
+The same 60-second fallback and 80-second interaction limit apply. A hidden Capsule, disconnected hook or
+foreground Codex / Work window leaves the request with the host.
+
+Connect writes `%USERPROFILE%\.codex\hooks.json`, or `hooks.json` under `CODEX_HOME` when set. It backs up
+the existing file and preserves other hooks. **Disconnect from Codex / Work** removes only Capsule's entries.
+The command-line equivalents are `Capsule.exe --connect-codex` and `Capsule.exe --disconnect-codex`.
+
+This needs a host with command hooks. It covers local orchestration and local execution. Cloud Work,
+ordinary ChatGPT web chats, file edits, plans, wider permission grants, secret questions, and requests that
+cannot fit a complete preview stay in the host. See [OpenAI's hook documentation](https://learn.chatgpt.com/docs/hooks).
+
+Command decisions use `PermissionRequest`. These decisions run before the host's normal approval reviewer.
+Question answers use `PreToolUse` feedback: Capsule skips the original question and sends your answers to
+the model. This does not create the host's native structured answer record. The model must continue from
+that feedback. Use **Answer in Codex / Work** when that distinction matters.
 
 On Windows 11 the capsule, its cards and the panel are clear glass, with the windows behind them blurred
 live. They follow Windows' light or dark mode. With **Transparency effects** off in Windows' settings, or on

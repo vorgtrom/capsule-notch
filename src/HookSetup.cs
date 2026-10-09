@@ -75,7 +75,11 @@ namespace Capsule
             {
                 var handler = new Dictionary<string, object>();
                 handler["type"] = "command";
-                if (shellForm)
+                if (Array.IndexOf(args, "--codex") >= 0)
+                {
+                    handler["command"] = CodexHook.Command(hookExePath);
+                }
+                else if (shellForm)
                 {
                     handler["command"] = "\"" + hookExePath.Replace('\\', '/') + "\"" + (args.Length > 0 ? " " + string.Join(" ", args) : "");
                 }
@@ -84,7 +88,7 @@ namespace Capsule
                     handler["command"] = hookExePath;
                     handler["args"] = args;
                 }
-                handler["timeout"] = wire[0] == HookEvents.PermissionRequest ? PromptTimeoutSeconds : 5;
+                handler["timeout"] = wire[0] == HookEvents.PermissionRequest || Array.IndexOf(args, "--codex") >= 0 ? PromptTimeoutSeconds : 5;
                 var entry = new Dictionary<string, object>();
                 if (wire[1] != null) entry["matcher"] = wire[1];
                 entry["hooks"] = new object[] { handler };
@@ -94,6 +98,12 @@ namespace Capsule
             }
             Save(settingsPath, root);
             return "connected " + wiring.Length + " hook events (replaced " + replaced + " old entries)";
+        }
+
+        public static string ConnectCodex(string settingsPath, string hookExePath, DateTime now)
+        {
+            CodexHook.Command(hookExePath); // Validate before touching settings or making a backup.
+            return Connect(settingsPath, hookExePath, CodexHook.Wiring, new[] { "--codex" }, true, now);
         }
 
         public static string Disconnect(string settingsPath, DateTime now)

@@ -57,6 +57,7 @@ namespace Capsule
         }
 
         public static string ExeDir { get { return AppDomain.CurrentDomain.BaseDirectory; } }
+        public static string CodexHooks { get { return Path.Combine(CodexHome, "hooks.json"); } }
     }
 
     // Milliseconds since 1970-01-01 UTC: the unit every timestamp in Capsule uses.

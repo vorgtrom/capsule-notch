@@ -47,6 +47,7 @@ namespace Capsule
             Run("PromptMessages", PromptMessagesTests.Run);
             Run("PromptServer", PromptServerTests.Run);
             Run("PromptHook", PromptHookTests.Run);
+            Run("CodexHook", CodexHookTests.Run);
             Run("ClaudeApp", ClaudeAppTests.Run);
             Run("QuestionFlow", QuestionFlowTests.Run);
             Run("PromptBroker", PromptBrokerTests.Run);

@@ -25,3 +25,16 @@ jobs:
       - name: Build and run the tests
         shell: cmd
         run: build.cmd
+      - name: Render synthetic previews
+        shell: pwsh
+        run: |
+          $env:CAPSULE_DATA = Join-Path $env:RUNNER_TEMP 'capsule-preview-data'
+          $process = Start-Process -FilePath .\bin\Capsule.exe -ArgumentList '--preview preview' -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw 'Preview failed' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: capsule-review
+          path: |
+            bin/
+            preview/
+          retention-days: 7

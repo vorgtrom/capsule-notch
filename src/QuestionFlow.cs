@@ -38,7 +38,7 @@ namespace Capsule
             foreach (PromptQuestion q in questions)
             {
                 chosen.Add(new List<int>());
-                otherOpen.Add(false);
+                otherOpen.Add(q.Options.Count == 0);
                 otherText.Add("");
             }
         }
@@ -59,7 +59,8 @@ namespace Capsule
                 object multi = Json.Get(item, "multiSelect");
                 q.MultiSelect = multi is bool && (bool)multi;
                 object[] options = Json.Arr(Json.Get(item, "options"));
-                if (q.Text.Trim() == "" || options == null || options.Length == 0 || options.Length > MaxOptions) return null;
+                bool freeText = Json.Get(item, "freeText") is bool && (bool)Json.Get(item, "freeText");
+                if (q.Text.Trim() == "" || options == null || (options.Length == 0 && !freeText) || options.Length > MaxOptions) return null;
                 if (list.Any(other => other.Text == q.Text)) return null;
                 foreach (object o in options)
                 {

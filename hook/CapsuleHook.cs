@@ -22,6 +22,11 @@ namespace Capsule
                 bool probe = args.Length > 0 && args[0] == "--probe";
                 if (input == null) return 0;
                 long now = Clock.NowMs();
+                if (args.Length > 0 && args[0] == "--codex")
+                {
+                    Print(CodexHook.Handle(input, now, PromptPipe.Name, PromptClient.ConnectMs, PromptClient.ReplyMs));
+                    return 0;
+                }
                 HookEvents.Handle(input, probe, now);
                 // A hook connected for probing only watches.
                 if (!probe) Print(PromptClient.Handle(input, now, PromptPipe.Name, PromptClient.ConnectMs, PromptClient.ReplyMs));

@@ -23,6 +23,9 @@ namespace Capsule
         public const int MaxHeader = 40, MaxQuestion = 300, MaxLabel = 80, MaxDescription = 160;   // so a long question can't push the buttons off the card
 
         public int Id;                    // the HeldPrompt this is built for: every action on the card carries it
+        public string Provider = "claude";
+        public string AppName = "Claude";
+        public string ProjectFull = "", Detail = "", DetailFull = "";
         public string Kind = Approval;
         public string Title = "";
         public string What = "";          // an approval's "Bash: npm test"
@@ -51,11 +54,14 @@ namespace Capsule
         public static PromptCardModel From(HeldPrompt held, int count, long msLeft)
         {
             PromptRequest r = held.Request;
-            var m = new PromptCardModel { Id = held.Id };
-            m.Title = TitleFor(r.ToolName);
+            var m = new PromptCardModel { Id = held.Id, Provider = r.Provider, AppName = r.Provider == "codex" ? "Codex / Work" : "Claude" };
+            m.Title = TitleFor(r.ToolName).Replace("Claude", m.AppName);
             m.Project = Safe(r.Project);
+            m.ProjectFull = r.Cwd;
+            m.Detail = Cap(r.Description, MaxWhat);
+            m.DetailFull = r.Description;
             m.Position = PositionText(count);
-            m.Countdown = CountdownText(msLeft);
+            m.Countdown = CountdownText(msLeft, m.AppName);
             if (held.IsPlan) m.Kind = Plan;
             else if (held.IsQuestion) m.Kind = held.Flow != null ? Question : Asked;
             else
@@ -325,10 +331,10 @@ namespace Capsule
             return text.Substring(0, cut) + "…";
         }
 
-        public static string CountdownText(long msLeft)
+        public static string CountdownText(long msLeft, string appName = "Claude")
         {
             long seconds = Math.Max(0, (msLeft + 999) / 1000);
-            return "Goes to Claude in " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
+            return "Goes to " + appName + " in " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
         }
 
         // The card always shows the oldest request, so it is always the first of the count.

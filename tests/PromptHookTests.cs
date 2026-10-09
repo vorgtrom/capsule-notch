@@ -27,6 +27,8 @@ namespace Capsule
             AWritesContentNeverReachesCapsule();
             IncompleteApprovalsNeverReachCapsule();
             CompleteCommandsStillReachCapsule();
+            CodexHooksUseTheirOwnProtocol();
+            CodexLauncherPreservesInputAndOutput();
         }
 
         // A filename alone cannot describe a Write safely. Its content stays with Claude, which asks as usual.
@@ -149,6 +151,9 @@ namespace Capsule
         {
             PromptReply reply;
             if (kind == "always") reply = PromptReply.AlwaysAllowing();
+            else if (kind == "allow") reply = PromptReply.Allowing();
+            else if (kind == "deny") reply = PromptReply.Denying("Denied from the capsule");
+            else if (kind == "pass") reply = PromptReply.Passing();
             else
             {
                 var answers = new Dictionary<string, object>();
@@ -170,12 +175,15 @@ namespace Capsule
             public readonly string Name = NewName();
             public readonly string HookExe;
             readonly Process process;
+            readonly string root;
             readonly string dir;   // the folder this stand-in made (its copies of Capsule.exe and capsule-hook.exe), and nothing else
             public string Folder { get { return dir; } }
 
             public FakeCapsuleProcess(string kind)
             {
-                dir = TestRunner.NewTempDir();
+                root = TestRunner.NewTempDir();
+                dir = Path.Combine(root, "App's Capsule café");
+                Directory.CreateDirectory(dir);
                 File.Copy(Process.GetCurrentProcess().MainModule.FileName, Path.Combine(dir, "Capsule.exe"));
                 File.Copy(Path.Combine(Paths.ExeDir, "capsule-hook.exe"), Path.Combine(dir, "capsule-hook.exe"));
                 HookExe = Path.Combine(dir, "capsule-hook.exe");
@@ -199,7 +207,7 @@ namespace Capsule
                 {
                     try
                     {
-                        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                        if (Directory.Exists(root)) Directory.Delete(root, true);
                         return;
                     }
                     catch (Exception) { Thread.Sleep(100); }
@@ -385,6 +393,43 @@ namespace Capsule
                 TestRunner.Check(Directory.Exists(folder), "the stand-in's folder is there while it runs");
             }
             TestRunner.Check(!Directory.Exists(folder), "and gone once it is disposed: the copied exes aren't left behind");
+        }
+
+        static void CodexHooksUseTheirOwnProtocol()
+        {
+            using (var capsule = new FakeCapsuleProcess("answer"))
+            {
+                int code; long ms;
+                string input = Json.Write(CodexHookTests.Sample("PreToolUse", "request_user_input", CodexHookTests.Question));
+                string output = RunHook(input, capsule.Name, "--codex", out code, out ms, false, capsule.HookExe);
+                TestRunner.Check(code == 0 && Json.Str(Json.Get(Json.Parse(output), "hookSpecificOutput", "permissionDecisionReason")).Contains("Café …"), "the real Codex hook returns answers as UTF-8 feedback");
+                TestRunner.Check(!File.Exists(Path.Combine(Paths.SessionsDir, "codex-test.json")), "Codex hooks do not pollute Claude session files");
+            }
+            using (var capsule = new FakeCapsuleProcess("allow"))
+            {
+                int code; long ms;
+                string input = Json.Write(CodexHookTests.Sample("PermissionRequest", "Bash", "{\"command\":\"echo synthetic\"}"));
+                string output = RunHook(input, capsule.Name, "--codex", out code, out ms, false, capsule.HookExe);
+                TestRunner.Eq("allow", Json.Str(Json.Get(Decision(output), "behavior")), "the real Codex hook returns a command decision");
+            }
+        }
+
+        static void CodexLauncherPreservesInputAndOutput()
+        {
+            using (var capsule = new FakeCapsuleProcess("answer"))
+            {
+                string input = Json.Write(CodexHookTests.Sample("PreToolUse", "request_user_input", CodexHookTests.Question));
+                string command = CodexHook.Command(capsule.HookExe);
+                foreach (string shell in new[] { "cmd.exe", "powershell.exe" })
+                {
+                    string args = shell == "cmd.exe" ? "/d /s /c \"" + command + "\"" : "-NoProfile -NonInteractive -Command " + command.Replace("\"", "\\\"");
+                    int code; long ms;
+                    string output = RunHook(input, capsule.Name, args, out code, out ms, false, shell);
+                    TestRunner.Eq(0, code, shell + ": the Codex launcher exits successfully");
+                    TestRunner.Check((Json.Str(Json.Get(Json.TryParse(output), "hookSpecificOutput", "permissionDecisionReason")) ?? "").Contains("Café …"),
+                        shell + ": Unicode answers survive the launcher and an installation path with spaces and apostrophe");
+                }
+            }
         }
 
         static void WithNoCapsuleTheHookExePrintsNothing()
