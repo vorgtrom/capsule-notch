@@ -126,7 +126,8 @@ namespace Capsule
         {
             var tip = e.ToolTip as ToolTip;
             if (tip == null) return e.ToolTip as string;
-            var block = tip.Content as TextBlock;
+            var scroll = tip.Content as ScrollViewer;
+            var block = (scroll == null ? tip.Content : scroll.Content) as TextBlock;
             return block != null ? block.Text : tip.Content as string;
         }
 
@@ -142,7 +143,7 @@ namespace Capsule
             CardView view = Shown(PromptCardModel.From(Held("Bash", "{\"command\":\"echo a\\nrm b\"}"), 1, 60000));
             TextBlock what = Summary(view);
             TestRunner.Eq("Bash: echo a ⏎ rm b", what.Text, "a two-line command shows its break");
-            TestRunner.Check(what.ToolTip == null, "a command that fits has no tooltip");
+            TestRunner.Eq("echo a\nrm b", TipText(what), "even a short command has its exact text in the tooltip");
 
             string cutByLength = string.Join(" ", Enumerable.Repeat("npm run build", 30));
             view = Shown(PromptCardModel.From(Held("Bash", "{\"command\":\"" + cutByLength + "\"}"), 1, 60000));
@@ -439,7 +440,7 @@ namespace Capsule
                 TestRunner.Check(texts.Contains(t), "an approval shows " + t);
             foreach (string b in new[] { "Allow", "Always allow", "Deny", "Answer in Claude" })
                 TestRunner.Check(ButtonFor(view, b) != null, "and has " + b);
-            TestRunner.Eq("Don't ask again: Bash(npm test:*)", ButtonFor(view, "Always allow").ToolTip as string, "Always allow names the rule it applies");
+            TestRunner.Eq("Don't ask again: Bash(npm test:*)", TipText(ButtonFor(view, "Always allow")), "Always allow names the rule it applies");
             TestRunner.Check(view.ShowingPrompt, "the card shows the request");
             TestRunner.Near(CardView.CardWidth + CardView.PointerWidth + 2 * CardView.ShadowMargin, view.DesiredSize.Width, "at the usage card's width");
             TestRunner.Check(ButtonFor(Shown(Approval(false)), "Always allow") == null, "no Always allow without a suggested rule");
@@ -455,7 +456,7 @@ namespace Capsule
             CardView view = Shown(PromptCardModel.From(held, 1, 45000));
             Border pill = ButtonFor(view, "Always allow");
             TestRunner.Check(pill != null && ButtonFor(view, "Allow all edits") == null, "a rule alone: Always allow");
-            TestRunner.Eq("Don't ask again: Bash(npm test:*) (saved for this project)", pill == null ? null : pill.ToolTip as string, "its tooltip names where it is kept");
+            TestRunner.Eq("Don't ask again: Bash(npm test:*) (saved for this project)", pill == null ? null : TipText(pill), "its tooltip names where it is kept");
             TestRunner.Check(!Texts(view).Any(t => t.StartsWith("Also gives access", StringComparison.Ordinal)), "and the card has no extra line");
 
             held = Held("Bash", "{\"command\":\"npm test\"}");
@@ -466,7 +467,7 @@ namespace Capsule
             view = Shown(PromptCardModel.From(held, 1, 45000));
             pill = ButtonFor(view, "Allow all edits");
             TestRunner.Check(pill != null && ButtonFor(view, "Always allow") == null, "accepting edits: the pill is Allow all edits, not Always allow");
-            TestRunner.Eq("Applies: Accept all edits, Access to docs (for this session)", pill == null ? null : pill.ToolTip as string, "and its tooltip names what it does, and for how long");
+            TestRunner.Eq("Applies: Accept all edits, Access to docs (for this session)", pill == null ? null : TipText(pill), "and its tooltip names what it does, and for how long");
             TestRunner.Check(Texts(view).Contains("Also gives access to docs"), "a directory is on the card itself, under the pills");
             List<string> got = ActionsOf(view);
             Click(pill);

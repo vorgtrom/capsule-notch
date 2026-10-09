@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Capsule
@@ -33,6 +34,7 @@ namespace Capsule
             r.SessionId = Json.Str(Json.Get(root, "session_id")) ?? "";
             r.ToolName = Json.Str(Json.Get(root, "tool_name")) ?? "";
             if (!HookEvents.IsValidSessionId(r.SessionId) || r.ToolName == "") return null;
+            if (!CanReview(r.ToolName, Json.Obj(Json.Get(root, "tool_input")))) return null;
             r.Cwd = Json.Str(Json.Get(root, "cwd")) ?? "";
             r.Project = HookEvents.ProjectName(r.Cwd);
             r.ToolUseId = Json.Str(Json.Get(root, "tool_use_id")) ?? "";
@@ -58,8 +60,36 @@ namespace Capsule
             }
             r.Rules.AddRange(names);
             r.Destinations.AddRange(destinations);
+            if (!HookReply.AllNameable(root)) { r.Rules.Clear(); r.Destinations.Clear(); }
             r.At = now;
             return r;
+        }
+
+        // shortcut: only complete commands and questions have a full preview, add other tools when their full input is shown.
+        internal static bool CanReview(string tool, Dictionary<string, object> input)
+        {
+            if (input == null) return false;
+            if (tool == ToolNames.AskUserQuestion) return true;
+            if (tool != ToolNames.Bash && tool != ToolNames.PowerShell) return false;
+            string command = Json.Str(Json.Get(input, "command"));
+            return !string.IsNullOrWhiteSpace(command) && command.Length <= MaxCommand && VisibleText(command, true);
+        }
+
+        internal static bool VisibleText(string text, bool lineBreaks)
+        {
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (lineBreaks && (c == '\r' || c == '\n' || c == '\t')) continue;
+                if (char.IsControl(c) || CharUnicodeInfo.GetUnicodeCategory(text, i) == UnicodeCategory.Format) return false;
+                if (char.IsHighSurrogate(c))
+                {
+                    if (i + 1 >= text.Length || !char.IsLowSurrogate(text[i + 1])) return false;
+                    i++;
+                }
+                else if (char.IsLowSurrogate(c)) return false;
+            }
+            return true;
         }
 
         // Only what the card shows is sent to Capsule (the hook's own reply never takes tool input from Capsule's reply,
@@ -314,6 +344,7 @@ namespace Capsule
             }
             else if (reply.Kind == PromptReply.Allow)
             {
+                if (!PromptRequest.CanReview(tool, Json.Obj(Json.Get(hookInput, "tool_input")))) return "";
                 decision["behavior"] = "allow";
                 if (tool == ToolNames.AskUserQuestion)
                 {
@@ -352,9 +383,19 @@ namespace Capsule
         }
 
         // Every suggestion can be named on the card (so the user saw what Always allow does).
-        static bool AllNameable(Dictionary<string, object> hookInput)
+        internal static bool AllNameable(Dictionary<string, object> hookInput)
         {
-            foreach (object s in Suggestions(hookInput)) if (PromptRequest.NamesOf(s) == null) return false;
+            int length = 0;
+            foreach (object s in Suggestions(hookInput))
+            {
+                List<string> names = PromptRequest.NamesOf(s);
+                if (names == null) return false;
+                foreach (string name in names)
+                {
+                    length += name.Length;
+                    if (length > PromptRequest.MaxCommand || !PromptRequest.VisibleText(name, false)) return false;
+                }
+            }
             return true;
         }
 

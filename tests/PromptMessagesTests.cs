@@ -27,6 +27,28 @@ namespace Capsule
             EachNameKnowsWhereItWouldBeKept();
             AlwaysAllowEchoesTheOriginalSuggestions();
             TheHookSendsOnlyWhatTheCardShows();
+            IncompleteApprovalsPassEvenAfterAnAllowReply();
+            CommandsAreCompleteAtTheBoundary();
+            HiddenCommandsAndScopesStayWithClaude();
+        }
+
+        static void HiddenCommandsAndScopesStayWithClaude()
+        {
+            foreach (string command in new[] { "", "   ", "echo a\u202Eb", "echo a\u200Bb", "echo a\0b", "echo a\ud800" })
+            {
+                Dictionary<string, object> root = Input(Bash);
+                root["tool_input"] = new Dictionary<string, object> { { "command", command } };
+                TestRunner.Check(PromptRequest.FromHookInput(root, 1000) == null, "a blank or hidden command does not reach Capsule");
+                TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), root), "a reply cannot approve an invisible command");
+            }
+            foreach (string scope in new[] { new string('x', 4001), "Bash(a\u202Eb)" })
+            {
+                Dictionary<string, object> root = Input(Bash);
+                root["suggestions"] = new object[] { new Dictionary<string, object> { { "rule", scope } } };
+                TestRunner.Eq(0, PromptRequest.FromHookInput(root, 1000).Rules.Count, "an unreviewable scope hides Always allow");
+                TestRunner.Eq("", HookReply.Output(PromptReply.AlwaysAllowing(), root), "a stale reply cannot apply the hidden scope");
+                TestRunner.Eq("allow", Json.Str(Json.Get(Decision(HookReply.Output(PromptReply.Allowing(), root)), "behavior")), "Allow once still works for its complete command");
+            }
         }
 
         static PromptRequest WithSuggestions(string suggestions)
@@ -130,22 +152,22 @@ namespace Capsule
         // Capsule is sent what the card shows, not whole files (F8).
         static void TheHookSendsOnlyWhatTheCardShows()
         {
-            string wire = Sent("Write", "{\"file_path\":\"C:\\\\work\\\\a.txt\",\"content\":\"SECRET-CONTENT\"}").ToJson();
+            string wire = Json.Write(PromptRequest.ForTheCard("Write", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"content\":\"SECRET-CONTENT\"}")));
             TestRunner.Check(!wire.Contains("SECRET-CONTENT") && wire.Contains("a.txt"), "a Write's content isn't sent, its file is");
-            PromptRequest edit = Sent("Edit", "{\"file_path\":\"C:\\\\work\\\\a.txt\",\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\",\"replace_all\":true}");
-            string editWire = edit.ToJson();
+            Dictionary<string, object> edit = PromptRequest.ForTheCard("Edit", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\",\"replace_all\":true}"));
+            string editWire = Json.Write(edit);
             TestRunner.Check(!editWire.Contains("OLD-TEXT") && !editWire.Contains("NEW-TEXT") && editWire.Contains("a.txt"), "an Edit's old and new text aren't sent");
-            string multi = Sent("MultiEdit", "{\"file_path\":\"C:\\\\work\\\\a.txt\",\"edits\":[{\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\"}]}").ToJson();
+            string multi = Json.Write(PromptRequest.ForTheCard("MultiEdit", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"edits\":[{\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\"}]}")));
             TestRunner.Check(!multi.Contains("OLD-TEXT") && !multi.Contains("NEW-TEXT") && !multi.Contains("edits"), "nor a MultiEdit's edits");
-            string notebook = Sent("NotebookEdit", "{\"notebook_path\":\"C:\\\\work\\\\n.ipynb\",\"new_source\":\"NEW-SOURCE\",\"cell_id\":\"c1\"}").ToJson();
+            string notebook = Json.Write(PromptRequest.ForTheCard("NotebookEdit", Input("{\"notebook_path\":\"C:\\\\work\\\\n.ipynb\",\"new_source\":\"NEW-SOURCE\",\"cell_id\":\"c1\"}")));
             TestRunner.Check(!notebook.Contains("NEW-SOURCE") && notebook.Contains("n.ipynb"), "nor a notebook's new source");
-            TestRunner.Eq("C:\\work\\a.txt", Json.Str(Json.Get(PromptRequest.Parse(editWire).ToolInput, "file_path")), "and the card still has the file to name");
-            string plan = Sent("ExitPlanMode", "{\"plan\":\"SECRET-PLAN\"}").ToJson();
+            TestRunner.Eq("C:\\work\\a.txt", Json.Str(Json.Get(Json.Parse(editWire), "file_path")), "and the projection still has the file to name");
+            string plan = Json.Write(PromptRequest.ForTheCard("ExitPlanMode", Input("{\"plan\":\"SECRET-PLAN\"}")));
             TestRunner.Check(!plan.Contains("SECRET-PLAN"), "a plan isn't sent: the card doesn't show it");
-            PromptRequest unknown = Sent("mcp__x__y", "{\"title\":\"" + new string('t', 5000) + "\",\"count\":3,\"nested\":{\"deep\":\"BULK\"}}");
-            string title = Json.Str(Json.Get(unknown.ToolInput, "title"));
+            Dictionary<string, object> unknown = PromptRequest.ForTheCard("mcp__x__y", Input("{\"title\":\"" + new string('t', 5000) + "\",\"count\":3,\"nested\":{\"deep\":\"BULK\"}}"));
+            string title = Json.Str(Json.Get(unknown, "title"));
             TestRunner.Check(title != null && title.Length == 2000, "another tool's text is cut to 2000 characters (" + (title == null ? -1 : title.Length) + ")");
-            TestRunner.Check(!unknown.ToJson().Contains("BULK"), "and what the card can't use isn't sent");
+            TestRunner.Check(!Json.Write(unknown).Contains("BULK"), "and what the card can't use isn't in the projection");
             PromptRequest bash = Sent("Bash", "{\"command\":\"npm test\",\"description\":\"Run the tests\",\"timeout\":5000}");
             TestRunner.Eq("npm test", Json.Str(Json.Get(bash.ToolInput, "command")), "a command is sent");
             PromptRequest question = Sent("AskUserQuestion", "{\"questions\":[{\"question\":\"Which?\",\"header\":\"H\",\"multiSelect\":false,\"options\":[{\"label\":\"A\"}]}],\"metadata\":{\"source\":\"sample\"}}");
@@ -161,8 +183,39 @@ namespace Capsule
             bool same = updated != null && original != null;
             if (same) foreach (KeyValuePair<string, object> pair in original) if (Json.Write(updated.ContainsKey(pair.Key) ? updated[pair.Key] : null) != Json.Write(pair.Value)) same = false;
             TestRunner.Check(same && Json.Str(Json.Get(updated, "metadata", "source")) == "sample", "the reply's updatedInput still holds Claude Code's own whole input");
-            d = Decision(HookReply.Output(PromptReply.Allowing(), Input(BigHook.Replace("TOOL", "Write").Replace("INPUT", "{\"file_path\":\"a\",\"content\":\"X\"}"))));
-            TestRunner.Check(d != null && !d.ContainsKey("updatedInput"), "and an allowed Write carries no input at all: Claude Code uses its own");
+            TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), Input(BigHook.Replace("TOOL", "Write").Replace("INPUT", "{\"file_path\":\"a\",\"content\":\"X\"}"))), "a filename-only Write preview cannot authorize Claude's full input");
+        }
+
+        static void IncompleteApprovalsPassEvenAfterAnAllowReply()
+        {
+            foreach (string tool in new[] { "Bash", "PowerShell", "Write", "Edit", "MultiEdit", "NotebookEdit", "ExitPlanMode", "mcp__sample__change" })
+            {
+                var input = new Dictionary<string, object> {
+                    { "command", new string('x', 4001) }, { "file_path", "synthetic.txt" }, { "notebook_path", "synthetic.ipynb" },
+                    { "nested", new Dictionary<string, object> { { "secret", "SYNTHETIC-CONTENT" } } }
+                };
+                Dictionary<string, object> root = Input(Bash);
+                root["tool_name"] = tool;
+                root["tool_input"] = input;
+                TestRunner.Check(PromptRequest.FromHookInput(root, 1000) == null, tool + ": an incomplete approval stays with Claude before card truncation");
+                TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), root), tool + ": a stale or fake Allow cannot authorize an incomplete approval");
+                TestRunner.Eq("", HookReply.Output(PromptReply.AlwaysAllowing(), root), tool + ": a stale or fake AlwaysAllow cannot authorize an incomplete approval");
+            }
+        }
+
+        static void CommandsAreCompleteAtTheBoundary()
+        {
+            foreach (string tool in new[] { "Bash", "PowerShell" })
+            {
+                Dictionary<string, object> root = Input(Bash);
+                root["tool_name"] = tool;
+                string command = new string('x', 4000);
+                root["tool_input"] = new Dictionary<string, object> { { "command", command } };
+                PromptRequest request = PromptRequest.FromHookInput(root, 1000);
+                TestRunner.Eq(command, request == null ? null : Json.Str(Json.Get(request.ToolInput, "command")), tool + ": all 4000 original characters are shown");
+                TestRunner.Eq("allow", Json.Str(Json.Get(Decision(HookReply.Output(PromptReply.Allowing(), root)), "behavior")), tool + ": a complete 4000-character command can be allowed");
+                TestRunner.Eq("allow", Json.Str(Json.Get(Decision(HookReply.Output(PromptReply.AlwaysAllowing(), root)), "behavior")), tool + ": the complete boundary command still supports AlwaysAllow");
+            }
         }
 
         static Dictionary<string, object> Answered(string colour, object sizes)
@@ -369,8 +422,7 @@ namespace Capsule
             TestRunner.Eq(HookReply.DeniedMessage, d == null ? null : Json.Str(Json.Get(d, "message")), "a message that is too long becomes the usual one");
             d = Decision(HookReply.Output(PromptReply.Denying("line\nbreak"), Input(Bash)));
             TestRunner.Eq(HookReply.DeniedMessage, d == null ? null : Json.Str(Json.Get(d, "message")), "so does one with control characters");
-            d = Decision(HookReply.Output(PromptReply.Allowing(), Input(Question.Replace("AskUserQuestion", "ExitPlanMode"))));
-            TestRunner.Check(d != null && Json.Str(Json.Get(d, "behavior")) == "allow" && d.Count == 1, "a plan is approved with a plain allow");
+            TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), Input(Question.Replace("AskUserQuestion", "ExitPlanMode"))), "a plan without a full preview is returned to Claude");
         }
 
         static void AlwaysAllowAppliesClaudeCodesOwnSuggestions()
@@ -385,8 +437,7 @@ namespace Capsule
             rules = d == null ? null : Json.Arr(Json.Get(d, "updatedPermissions"));
             TestRunner.Check(rules != null && rules.Length == 1 && Json.Str(Json.Get(rules[0], "type")) == "addRules"
                 && Json.Str(Json.Get(rules[0], "destination")) == "localSettings", "a suggestion without a rule string goes back as it came");
-            d = Decision(HookReply.Output(PromptReply.AlwaysAllowing(), Input(Question.Replace("AskUserQuestion", "ExitPlanMode"))));
-            TestRunner.Check(d != null && Json.Str(Json.Get(d, "behavior")) == "allow" && d.Count == 1, "with nothing suggested, always allow is a plain allow");
+            TestRunner.Eq("", HookReply.Output(PromptReply.AlwaysAllowing(), Input(Question.Replace("AskUserQuestion", "ExitPlanMode"))), "always allow cannot approve a plan without a full preview");
         }
 
         static Dictionary<string, object> SampleAnswers()

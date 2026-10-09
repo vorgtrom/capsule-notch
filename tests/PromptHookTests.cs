@@ -25,10 +25,11 @@ namespace Capsule
             ThePeerHelpersKnowThisProcess();
             AnotherProcessOnTheNameIsNeverTold();
             AWritesContentNeverReachesCapsule();
+            IncompleteApprovalsNeverReachCapsule();
+            CompleteCommandsStillReachCapsule();
         }
 
-        // Data minimisation (F8): through the whole client, Capsule is sent the file a Write names, never what it writes, and
-        // the hook's own reply doesn't depend on what was left out.
+        // A filename alone cannot describe a Write safely. Its content stays with Claude, which asks as usual.
         static void AWritesContentNeverReachesCapsule()
         {
             string write = "{\"session_id\":\"ph-3\",\"hook_event_name\":\"PermissionRequest\",\"cwd\":\"C:\\\\work\\\\confetti\",\"tool_name\":\"Write\"," +
@@ -36,10 +37,55 @@ namespace Capsule
             using (var capsule = new Answerer(PromptReply.Allowing()))
             {
                 string output = PromptClient.Handle(write, 1000, capsule.Name, 1000, 5000);
-                TestRunner.Eq(1, capsule.Requests, "a Write is put to Capsule");
-                TestRunner.Check(capsule.Last != null && !capsule.Last.ToJson().Contains("SECRET-CONTENT") && Json.Str(Json.Get(capsule.Last.ToolInput, "file_path")) != null, "with its file, and not what it writes");
-                Dictionary<string, object> d = Decision(output);
-                TestRunner.Check(d != null && Json.Str(Json.Get(d, "behavior")) == "allow" && !d.ContainsKey("updatedInput"), "and the hook's allow carries no tool input");
+                TestRunner.Eq("", output, "a Write without a full preview passes to Claude");
+                TestRunner.Eq(0, capsule.Requests, "a Write sends neither its filename nor its content to Capsule");
+                TestRunner.Check(capsule.Last == null, "Capsule never receives the Write request");
+            }
+        }
+
+        static string ToolRequest(string tool, Dictionary<string, object> input)
+        {
+            Dictionary<string, object> root = Json.Obj(Json.Parse(Bash));
+            root["tool_name"] = tool;
+            root["tool_input"] = input;
+            return Json.Write(root);
+        }
+
+        static void IncompleteApprovalsNeverReachCapsule()
+        {
+            using (var capsule = new Answerer(PromptReply.AlwaysAllowing()))
+            {
+                foreach (string tool in new[] { "Bash", "PowerShell" })
+                {
+                    string hook = ToolRequest(tool, new Dictionary<string, object> { { "command", new string('x', 4001) } });
+                    var clock = Stopwatch.StartNew();
+                    TestRunner.Eq("", PromptClient.Handle(hook, 1000, capsule.Name, 1000, 5000), tool + ": an oversized original command passes to Claude");
+                    TestRunner.Check(clock.ElapsedMilliseconds < 1000, tool + ": fallback does not wait for Capsule");
+                }
+                foreach (string tool in new[] { "Write", "Edit", "MultiEdit", "NotebookEdit", "ExitPlanMode", "mcp__sample__change" })
+                {
+                    string hook = ToolRequest(tool, new Dictionary<string, object> {
+                        { "file_path", "C:\\work\\synthetic.txt" }, { "notebook_path", "C:\\work\\synthetic.ipynb" },
+                        { "nested", new Dictionary<string, object> { { "secret", "SYNTHETIC-CONTENT" } } }
+                    });
+                    TestRunner.Eq("", PromptClient.Handle(hook, 1000, capsule.Name, 1000, 5000), tool + ": a request without a complete card preview passes to Claude");
+                }
+                TestRunner.Eq(0, capsule.Requests, "incomplete approvals never contact Capsule, even when it would always allow");
+            }
+        }
+
+        static void CompleteCommandsStillReachCapsule()
+        {
+            using (var capsule = new Answerer(PromptReply.Allowing()))
+            {
+                foreach (string tool in new[] { "Bash", "PowerShell" })
+                    foreach (string command in new[] { "echo synthetic", new string('x', 4000) })
+                    {
+                        string output = PromptClient.Handle(ToolRequest(tool, new Dictionary<string, object> { { "command", command } }), 1000, capsule.Name, 1000, 5000);
+                        TestRunner.Eq("allow", Json.Str(Json.Get(Decision(output), "behavior")), tool + ": a complete command can still be allowed");
+                        TestRunner.Eq(command, capsule.Last == null ? null : Json.Str(Json.Get(capsule.Last.ToolInput, "command")), tool + ": Capsule receives the whole command");
+                    }
+                TestRunner.Eq(4, capsule.Requests, "both short commands and the 4000-character boundary reach Capsule");
             }
         }
 
