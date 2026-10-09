@@ -769,8 +769,10 @@ namespace Capsule
                 percent.Margin = new Thickness(0, 2, 0, 0);
                 if (t.Dimmed) percent.Opacity = 0.45;
                 box.Children.Add(percent);
+                if (t.WindowLabel != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal)));
                 if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color, SmallInner));
                 if (t.ResetText != "") box.Children.Add(CardView.MakeText(t.ResetText, 11.5, Palette.Secondary, FontWeights.Normal));
+                if (t.Freshness != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Freshness, 10.5, Palette.Secondary, FontWeights.Normal)));
             }
             if (t.Note != "")
             {

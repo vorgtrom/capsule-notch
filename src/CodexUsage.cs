@@ -77,6 +77,7 @@ namespace Capsule
             if (fromLogs != null && (cred == null || previous.Windows.Count == 0 || previous.FromLogs || fromLogs.DataAtMs >= previous.DataAtMs))
             {
                 fromLogs.Note = note;
+                fromLogs.LastCheckFailed = cred != null;
                 return Publish(fromLogs);
             }
             if (cred == null && fromLogs == null) return Publish(new Reading { Provider = "codex", Status = "none" });

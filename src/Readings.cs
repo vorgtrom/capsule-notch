@@ -29,11 +29,12 @@ namespace Capsule
         public string Note = "";          // what went wrong, for the card's footer
 
         public LimitWindow Headline { get { return Windows.FirstOrDefault(w => w.Id == HeadlineId); } }
+        public LimitWindow DisplayWindow { get { return Windows.OrderByDescending(w => w.Used).ThenBy(w => w.Id == HeadlineId ? 0 : 1).FirstOrDefault(); } }
 
-        // Dimmed: the last check failed and the numbers are over 10 minutes old. Log readings never dim.
+        // A failed check or a log snapshot over 10 minutes old is visibly stale.
         public bool IsDimmed(long now)
         {
-            return LastCheckFailed && !FromLogs && DataAtMs > 0 && now - DataAtMs > 10 * 60 * 1000;
+            return (LastCheckFailed || FromLogs) && DataAtMs > 0 && now - DataAtMs > 10 * 60 * 1000;
         }
 
         public Reading Clone()

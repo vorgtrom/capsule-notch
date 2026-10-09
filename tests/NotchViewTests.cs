@@ -88,7 +88,7 @@ namespace Capsule
             stale.DataAtMs = now - 11 * 60 * 1000;
             TestRunner.Check(NotchView.CellFor(stale, null, now).Dimmed, "kept numbers dim after 10 minutes");
             stale.FromLogs = true;
-            TestRunner.Check(!NotchView.CellFor(stale, null, now).Dimmed, "numbers from logs are never dimmed");
+            TestRunner.Check(NotchView.CellFor(stale, null, now).Dimmed, "old numbers from logs are dimmed");
             CellModel error = NotchView.CellFor(new Reading { Provider = "claude", Status = "error" }, null, now);
             TestRunner.Check(error.Text == "–" && !error.ShowArc, "no numbers: a dash and no arc");
         }

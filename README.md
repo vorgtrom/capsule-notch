@@ -20,7 +20,7 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 
 ## What it shows
 
-- **One ring per tool.** It shows how much of the current limit you've used: green under 50%, yellow from
+- **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions.
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs. Codex has no "waiting on you" signal, so its ring never pulses.
@@ -35,6 +35,8 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
     days that aren't done.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
+  Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
+  after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add, edit or delete one.

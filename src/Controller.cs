@@ -363,7 +363,7 @@ namespace Capsule
             }
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
             notch.SetCells(cells);
-            LimitWindow headline = claude.Current.Headline;
+            LimitWindow headline = claude.Current.DisplayWindow;
             tray.Update(headline != null ? (double?)headline.Used : null, TrayText());
             // Not while it folds: that would turn it round. Nor while it shows a request: OnPromptsChanged redraws that.
             if (card.IsOpen && cardCell >= 0 && !card.View.ShowingPrompt) ShowCard(cardCell);
@@ -683,7 +683,7 @@ namespace Capsule
             foreach (UsageModule m in shown)
             {
                 Reading r = m.Current;
-                parts.Add((r.Provider == "codex" ? "Codex " : "Claude ") + (r.Status == "signin" ? "sign in" : Format.Percent(r.Headline)));
+                parts.Add((r.Provider == "codex" ? "Codex " : "Claude ") + (r.Status == "signin" ? "sign in" : Format.Percent(r.DisplayWindow)));
             }
             return string.Join(" · ", parts);
         }

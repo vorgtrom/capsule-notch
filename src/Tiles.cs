@@ -24,6 +24,7 @@ namespace Capsule
         public string Color = Palette.Green;
         public bool ShowBar;
         public string ResetText = "";
+        public string WindowLabel = "", Freshness = "";
         public string Note = "";     // why numbers are old or missing
         public bool Dimmed;
         public bool SignIn;          // Claude needs signing in: the tile shows a Sign in button
@@ -47,16 +48,18 @@ namespace Capsule
                 t.Note = t.Missing ? "Codex isn't set up on this PC" : "Checking…";
                 return t;
             }
-            LimitWindow headline = r.Headline;
+            LimitWindow headline = r.DisplayWindow;
             t.Percent = Format.Percent(headline);
             if (headline != null)
             {
                 t.ShowBar = true;
                 t.Used = headline.Used;
                 t.Color = Palette.ForUsed(headline.Used);
+                t.WindowLabel = headline.Label;
                 t.ResetText = headline.Note != "" ? headline.Note : Format.ResetText(headline.ResetsAtMs, now, culture);
             }
             t.Note = r.Note;
+            if (r.DataAtMs > 0) t.Freshness = (r.FromLogs ? "Logs" : r.LastCheckFailed ? "Cached API" : "API") + " · " + Format.Ago(r.DataAtMs, now);
             t.Dimmed = r.IsDimmed(now);
             return t;
         }

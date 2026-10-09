@@ -61,7 +61,7 @@ namespace Capsule
                 c.Text = "Sign in";
                 return c;
             }
-            LimitWindow headline = r.Headline;
+            LimitWindow headline = r.DisplayWindow;
             c.Text = Format.Percent(headline);
             if (headline != null)
             {
