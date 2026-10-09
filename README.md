@@ -125,6 +125,8 @@ have already.
      anyway**. Each release is built and tested by GitHub from the code in this repo; the zip's SHA-256 is next to it.
    - If your antivirus objects, see [Antivirus](#antivirus).
 
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and on each release's page.
+
 **Or build it yourself.** In PowerShell:
 
 ```powershell
@@ -153,10 +155,21 @@ To see how many checks each group of tests ran, run `bin\Tests.exe --groups` aft
 To try a change while Capsule is running, run `build.cmd dev` instead. It builds into `bin-dev\`, runs the
 tests there, and leaves a running Capsule alone.
 
+### Publish a release
+
+1. In [CHANGELOG.md](CHANGELOG.md), rename **Unreleased** to the new version (such as `## v1.4.0`), say what changed
+   in plain words, and add a fresh **Unreleased** above it. Merge that to `main`.
+2. On GitHub, open **Actions → Release → Run workflow** and enter the same version.
+
+GitHub builds Capsule, runs every test, and publishes `Capsule-<version>.zip` with its SHA-256, under that version's
+notes from the changelog. If the changelog has no section for it, the notes list the merged pull requests instead.
+Downloaded copies hear about it within a day.
+
 ### Update to the latest version
 
 **If you downloaded a release:** once a day it checks whether a newer one is out. When one is, a balloon says so and
-the menu's first item reads **Capsule v1.2.0 is available…**; choose it for the release's page. Then quit Capsule
+the menu's first item reads **Capsule v1.4.0 is available…** (with the new version's number); choose it for the
+release's page, which says what's new. Then quit Capsule
 (right-click it → **Quit Capsule**), download the new zip, unzip it over the same folder, and start `Capsule.exe`
 again. Your settings carry over, as below. To stop the daily check, untick **Check for updates** in the menu.
 
