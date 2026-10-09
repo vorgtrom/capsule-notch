@@ -231,25 +231,28 @@ namespace Capsule
             top.Children.Add(reset);
             top.Children.Add(MakeText(row.Label, 13, Palette.Text, FontWeights.Normal));
             box.Children.Add(top);
-            box.Children.Add(Bar(row.Used, row.Color, CardWidth - 2 * Inset));
+            box.Children.Add(Bar(row.Used, row.Color));
             box.Children.Add(MakeText(row.UsedText, 12, Palette.Text, FontWeights.Normal));
             return box;
         }
 
         // A usage bar: the track, and the used part in its colour. Shared with the panel's tiles.
-        public static Grid Bar(double used, string color, double width)
+        public static Grid Bar(double used, string color)
         {
             var bar = new Grid { Height = 6, Margin = new Thickness(0, 6, 0, 5) };
-            bar.Children.Add(new Border { Background = NotchView.Brush(Palette.Track), CornerRadius = new CornerRadius(3) });
             double fraction = Math.Max(0, Math.Min(100, used)) / 100;
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(fraction, GridUnitType.Star) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1 - fraction, GridUnitType.Star) });
+            var track = new Border { Background = NotchView.Brush(Palette.Track), CornerRadius = new CornerRadius(3) };
+            Grid.SetColumnSpan(track, 2);
+            bar.Children.Add(track);
             if (fraction > 0)
             {
                 bar.Children.Add(new Border
                 {
                     Background = NotchView.Brush(color),
                     CornerRadius = new CornerRadius(3),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Width = Math.Max(6, fraction * width),
+                    MinWidth = 6,
                 });
             }
             return bar;

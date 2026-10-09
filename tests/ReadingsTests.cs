@@ -18,6 +18,7 @@ namespace Capsule
             ResetTextAtEachBoundary();
             AgesAndPlans();
             HeadlineAndDimming();
+            TheDisplayWindowShowsTheHighestUsage();
             ReadingsRoundTripThroughTheCache();
             ConfigDefaultsAndRoundTrip();
         }
@@ -84,9 +85,25 @@ namespace Capsule
             TestRunner.Check(failed.IsDimmed(Now + 10 * Min), "failed and over 10 minutes old");
             Reading logs = failed.Clone();
             logs.FromLogs = true;
-            TestRunner.Check(!logs.IsDimmed(Now + 60 * Min), "log readings never dim");
+            TestRunner.Check(logs.IsDimmed(Now + 60 * Min), "old log snapshots dim too");
             failed.Windows[0].Used = 99;
             TestRunner.Near(7, r.Windows[0].Used, "clone is deep");
+        }
+
+        static void TheDisplayWindowShowsTheHighestUsage()
+        {
+            Reading r = Sample();
+            r.Windows[0].Used = 99;
+            r.Windows[1].Used = 10;
+            TestRunner.Eq("seven_day", r.DisplayWindow.Id, "99% weekly usage cannot hide behind a 10% session");
+            UsageTile tile = UsageTile.From(r, Now, En);
+            TestRunner.Eq("99%", tile.Percent, "the panel shows the highest usage");
+            TestRunner.Eq("Weekly · all models", tile.WindowLabel, "the panel names that window");
+            TestRunner.Eq("99%", NotchView.CellFor(r, null, Now).Text, "the ring agrees with the panel");
+            r.Windows[0].Used = 10;
+            TestRunner.Eq("five_hour", r.DisplayWindow.Id, "equal usage keeps the usual window");
+            r.Windows.Clear();
+            TestRunner.Check(r.DisplayWindow == null, "an empty reading has no display window");
         }
 
         static void ReadingsRoundTripThroughTheCache()

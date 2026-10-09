@@ -22,10 +22,7 @@ namespace Capsule
         const string ClientSecretSavedHint = "Secret saved. Paste a new one to replace it.";
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
         const string ClientSecretPendingHint = "Secret kept for the next sign-in. Paste a new one to replace it.";
-        const string LinkHint = "In Google Calendar on the web: ⚙ Settings → your calendar → Integrate calendar → Secret address in iCal format. Capsule only reads it.";
-        // A small tile's inside: half the board less the gap, its padding and its 1-px border.
-        public const double SmallInner = (PanelWidth - 2 * Pad - Gap) / 2 - 2 * TilePad - 2;
-
+        const string LinkHint = "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format.";
         readonly GlassSurface glass = new GlassSurface();
         readonly StackPanel board = new StackPanel();
         readonly ScrollViewer boardScroll = BodyScroll();
@@ -244,7 +241,9 @@ namespace Capsule
             UpdateLayout();   // a change deep in the page (a rebuilt list) reaches this panel's size only once laid out
             Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double height = Math.Max(DesiredSize.Height - 2 * ShadowMargin, 2 * Radius);
-            glass.Apply(new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius), null, ShadowMargin);
+            var outline = new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius);
+            board.Clip = settings.Clip = month.Clip = outline;
+            glass.Apply(outline, null, ShadowMargin);
         }
 
         internal static ScrollViewer BodyScroll()
@@ -606,7 +605,7 @@ namespace Capsule
             // asked for.
             calendarLinkBlock.Visibility = google.SignedIn ? Visibility.Collapsed : Visibility.Visible;
             calendarLinkHint.Text = !google.LinkSaved ? LinkHint
-                : "Link saved" + (google.LinkName != "" ? ": showing " + google.LinkName : "") + ". Paste a new one to replace it.";
+                : "Link saved" + (google.LinkName != "" ? ": showing " + google.LinkName : "") + ". Read-only events, no Google Tasks. Paste a new one to replace it.";
             calendarLinkButtons.Children.Clear();
             calendarLinkButtons.Children.Add(PillButton("Save link", delegate { if (GoogleLinkSaved != null) GoogleLinkSaved(calendarLinkBox.Password); }));
             if (google.LinkSaved)
@@ -769,8 +768,10 @@ namespace Capsule
                 percent.Margin = new Thickness(0, 2, 0, 0);
                 if (t.Dimmed) percent.Opacity = 0.45;
                 box.Children.Add(percent);
-                if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color, SmallInner));
+                if (t.WindowLabel != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal)));
+                if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color));
                 if (t.ResetText != "") box.Children.Add(CardView.MakeText(t.ResetText, 11.5, Palette.Secondary, FontWeights.Normal));
+                if (t.Freshness != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Freshness, 10.5, Palette.Secondary, FontWeights.Normal)));
             }
             if (t.Note != "")
             {

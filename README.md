@@ -20,7 +20,7 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 
 ## What it shows
 
-- **One ring per tool.** It shows how much of the current limit you've used: green under 50%, yellow from
+- **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions.
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs. Codex has no "waiting on you" signal, so its ring never pulses.
@@ -35,6 +35,8 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
     days that aren't done.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
 - **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
+  Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
+  after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add, edit or delete one.
@@ -167,8 +169,8 @@ Only exclusions survive updates and rebuilds. All the source is in this repo, so
 
 ## Use
 
-Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. The first time, it
-adds itself to Start with Windows. You can turn that off in the menu.
+Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. On first run, Capsule
+asks whether to start with Windows. **No** is the default. You can change the choice in the tray menu.
 
 - **Hover** a ring to see the details.
 - **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile
@@ -207,6 +209,7 @@ There are two ways to connect. The quick one takes about a minute and only reads
 
 The capsule then gets a third cell, and the panel a Calendar tile.
 - The link shows one calendar, your main one. Its events and the ones you're invited to are in it.
+- The link is read-only. It does not show Google Tasks or let Capsule add, edit, or delete events.
 - Capsule reads it every 15 minutes, because Google itself only refreshes the link's file every so often. A change
   you make in Google Calendar can take a while to show.
 - Some work and school accounts have the secret address turned off by their admin. Use your own client (below) then.

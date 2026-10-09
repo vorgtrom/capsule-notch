@@ -82,6 +82,8 @@ namespace Capsule
             TestRunner.Check(t.ShowBar && t.Used == 73, "a bar at 73%");
             TestRunner.Eq(Palette.Red, t.Color, "red from 70%");
             TestRunner.Eq("Resets in 51 min", t.ResetText, "reset time");
+            TestRunner.Eq("Current session", t.WindowLabel, "the usage window is named");
+            TestRunner.Eq("API · just now", t.Freshness, "the source and age are shown");
             TestRunner.Check(!t.SignIn && !t.Missing && !t.Dimmed && t.Note == "", "nothing wrong");
 
             Reading stale = r.Clone();
@@ -90,6 +92,10 @@ namespace Capsule
             stale.Note = "Network error (Timeout)";
             UsageTile old = UsageTile.From(stale, Now, En);
             TestRunner.Check(old.Dimmed && old.Note == "Network error (Timeout)", "old numbers dim, with the reason");
+            TestRunner.Check(old.Freshness.StartsWith("Cached API", StringComparison.Ordinal), "a failed check identifies the cached numbers");
+            stale.FromLogs = true;
+            UsageTile log = UsageTile.From(stale, Now, En);
+            TestRunner.Check(log.Dimmed && log.Freshness.StartsWith("Logs", StringComparison.Ordinal), "old log data identifies its source and dims");
 
             UsageTile signIn = UsageTile.From(new Reading { Provider = "claude", Status = "signin" }, Now, En);
             TestRunner.Check(signIn.SignIn && signIn.Percent == "–" && !signIn.ShowBar && signIn.Note != "", "Claude needing sign-in gets the Sign in button");

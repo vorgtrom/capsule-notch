@@ -602,7 +602,7 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(HasText(view, "Calendar link") && HasText(view, "Save link") && HasText(view, "Use your own Google client instead"), "nothing set up: the calendar link first, your own client behind a link");
             TestRunner.Check(!HasText(view, "Client ID") && !HasText(view, "Remove link"), "the client's fields hidden, and nothing to remove");
-            TestRunner.Check(HasText(view, "In Google Calendar on the web: ⚙ Settings → your calendar → Integrate calendar → Secret address in iCal format. Capsule only reads it."), "where to find the link");
+            TestRunner.Check(HasText(view, "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format."), "the link explains read-only access and the absence of tasks");
             string saved = null;
             int removed = 0;
             view.GoogleLinkSaved += delegate(string text) { saved = text; };
@@ -614,7 +614,7 @@ namespace Capsule
             view.LinkKept();
             view.ShowGoogle(new GoogleSettings { LinkSaved = true, LinkName = GoogleCalendarTests.Primary });
             Lay(view);
-            TestRunner.Check(view.CalendarLinkBox.Password == "" && HasText(view, "Link saved: showing " + GoogleCalendarTests.Primary + ". Paste a new one to replace it."), "kept: the box empties, and the hint says whose calendar shows");
+            TestRunner.Check(view.CalendarLinkBox.Password == "" && HasText(view, "Link saved: showing " + GoogleCalendarTests.Primary + ". Read-only events, no Google Tasks. Paste a new one to replace it."), "the saved link retains its read-only and no-tasks explanation");
             Click(Holder(view, "Remove link"));
             TestRunner.Eq(1, removed, "Remove link is handed over");
             Click(Holder(view, "Use your own Google client instead"));
