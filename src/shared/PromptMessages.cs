@@ -9,9 +9,11 @@ namespace Capsule
     // memory only. The tool input is shown on screen and never logged or written anywhere.
     public sealed class PromptRequest
     {
+        public string Provider = "claude";
         public string SessionId = "";
         public string Project = "";     // the project folder's name
         public string Cwd = "";         // the folder itself, to shorten file paths on the card
+        public string Description = "";
         public string ToolName = "";
         public string ToolUseId = "";
         public Dictionary<string, object> ToolInput = new Dictionary<string, object>();
@@ -234,9 +236,11 @@ namespace Capsule
         public string ToJson()
         {
             var d = new Dictionary<string, object>();
+            d["provider"] = Provider;
             d["session_id"] = SessionId;
             d["project"] = Project;
             d["cwd"] = Cwd;
+            d["description"] = Description;
             d["tool_name"] = ToolName;
             d["tool_use_id"] = ToolUseId;
             d["tool_input"] = ToolInput;
@@ -252,11 +256,14 @@ namespace Capsule
             var root = Json.Obj(Json.TryParse(json));
             if (root == null) return null;
             var r = new PromptRequest();
+            r.Provider = Json.Str(Json.Get(root, "provider")) ?? "claude";
+            if (r.Provider != "claude" && r.Provider != "codex") return null;
             r.SessionId = Json.Str(Json.Get(root, "session_id")) ?? "";
             r.ToolName = Json.Str(Json.Get(root, "tool_name")) ?? "";
             if (!HookEvents.IsValidSessionId(r.SessionId) || r.ToolName == "") return null;
             r.Project = Json.Str(Json.Get(root, "project")) ?? "";
             r.Cwd = Json.Str(Json.Get(root, "cwd")) ?? "";
+            r.Description = Json.Str(Json.Get(root, "description")) ?? "";
             r.ToolUseId = Json.Str(Json.Get(root, "tool_use_id")) ?? "";
             r.ToolInput = Json.Obj(Json.Get(root, "tool_input")) ?? new Dictionary<string, object>();
             object[] rules = Json.Arr(Json.Get(root, "rules"));

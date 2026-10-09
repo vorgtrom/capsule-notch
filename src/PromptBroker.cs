@@ -63,7 +63,7 @@ namespace Capsule
 
         readonly Func<bool> stepAside;
         readonly List<HeldPrompt> queue = new List<HeldPrompt>();
-        int lastId;
+        static int lastId;       // shared cards need unique ids across the Claude and Codex brokers
         long lastNow;            // the latest time the broker was told, for what it does without one
         HeldPrompt shown;        // the request the card showed last
 
@@ -216,7 +216,7 @@ namespace Capsule
         {
             queue.Remove(held);
             Send(held.Reply, reply);
-            Log.Info("prompts: " + (reply.Kind == PromptReply.Pass ? "passed to the app (Answer in Claude)"
+            Log.Info("prompts: " + (reply.Kind == PromptReply.Pass ? "passed to the app (Answer in app)"
                 : "answered from the capsule (" + reply.Kind + (reply.Always ? ", always" : "") + (reply.Answers != null ? ", with answers" : "") + ")"));
             Raise();
         }

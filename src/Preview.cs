@@ -300,6 +300,14 @@ namespace Capsule
             bash.ToolInput["command"] = "npm test -- --watchAll=false --coverage --reporters=default --reporters=jest-junit && npm run build";
             bash.Rules.Add("Bash(npm test:*)");
             samples["approval"] = PromptCardModel.From(new HeldPrompt { Request = bash }, 3, 45000);
+            var codexCommand = new PromptRequest { Provider = "codex", SessionId = "codex", ToolName = "Bash", Project = "capsule",
+                Cwd = @"C:\work\capsule", Description = "Run the tests before publishing this change." };
+            codexCommand.ToolInput["command"] = "dotnet test --configuration Release";
+            samples["codex-approval"] = PromptCardModel.From(new HeldPrompt { Request = codexCommand }, 2, 45000);
+            PromptRequest codexQuestion = CodexHook.Request(Json.Obj(Json.Parse("{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"request_user_input_async\",\"cwd\":\"C:\\\\work\\\\capsule\",\"session_id\":\"codex\",\"tool_input\":{\"questions\":[{\"title\":\"What should the release notes say?\"}]}}")), 0);
+            var codexFlow = new QuestionFlow(QuestionFlow.Parse(codexQuestion.ToolInput));
+            codexFlow.SetOther("Add Codex and local Work approvals and answers.");
+            samples["codex-question"] = PromptCardModel.From(new HeldPrompt { Request = codexQuestion, Flow = codexFlow }, 1, 52000);
             var ask = new PromptRequest { SessionId = "b", ToolName = "AskUserQuestion", Project = "website" };
             ask.ToolInput = Json.Obj(Json.Parse("{\"questions\":[" +
                 "{\"question\":\"Which layout should the landing page use?\",\"header\":\"Layout\",\"multiSelect\":false,\"options\":[" +
