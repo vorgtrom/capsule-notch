@@ -95,6 +95,10 @@ Connect writes `%USERPROFILE%\.codex\hooks.json`, or `hooks.json` under `CODEX_H
 the existing file and preserves other hooks. **Disconnect from Codex / Work** removes only Capsule's entries.
 The command-line equivalents are `Capsule.exe --connect-codex` and `Capsule.exe --disconnect-codex`.
 
+| Approve a Codex / Work command | Type a question answer |
+|:---:|:---:|
+| <img src="docs/images/card-codex-approval.png" width="328" alt="Codex command card with the command, reason, working folder, Allow, Deny and native fallback"> | <img src="docs/images/card-codex-question.png" width="328" alt="Local Work question card with a typed answer, Send and native fallback"> |
+
 This needs a host with command hooks. It covers local orchestration and local execution. Cloud Work,
 ordinary ChatGPT web chats, file edits, plans, wider permission grants, secret questions, and requests that
 cannot fit a complete preview stay in the host. See [OpenAI's hook documentation](https://learn.chatgpt.com/docs/hooks).
