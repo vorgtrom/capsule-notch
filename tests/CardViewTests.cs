@@ -21,6 +21,31 @@ namespace Capsule
             ShadowIsDrawnOutsideTheCard();
             BarsFollowTheirActualWidth();
             AnOpenCardResizesWhenItsContentChanges();
+            AQueueBadgeResizesAnOpenCard();
+        }
+
+        static void AQueueBadgeResizesAnOpenCard()
+        {
+            foreach (bool pointRight in new[] { true, false })
+            {
+                var view = new CardView();
+                var request = new PromptRequest { SessionId = "a", ToolName = "Bash" };
+                request.ToolInput["command"] = "npm test";
+                var held = new HeldPrompt { Id = 3, Request = request };
+                view.ShowPrompt(PromptCardModel.From(held, 1, 60000), pointRight);
+                ArrangeCard(view);
+                double before = view.DesiredSize.Height;
+                UIElement title = view.Prompt.Children[0];
+
+                view.ShowPrompt(PromptCardModel.From(held, 2, 59000), pointRight);
+                TestRunner.Check(ReferenceEquals(title, view.Prompt.Children[0]), "the queue badge changes without rebuilding the request");
+                CheckCardFits(view, "a queue badge wraps the title");
+                TestRunner.Check(view.DesiredSize.Height > before, "the wrapped title makes room for its extra line");
+
+                view.ShowPrompt(PromptCardModel.From(held, 1, 58000), pointRight);
+                CheckCardFits(view, "removing a queue badge unwraps the title");
+                TestRunner.Near(before, view.DesiredSize.Height, "the card shrinks when the queue badge leaves");
+            }
         }
 
         static void AnOpenCardResizesWhenItsContentChanges()
