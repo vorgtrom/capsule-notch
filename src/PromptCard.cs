@@ -17,7 +17,7 @@ namespace Capsule
     public sealed class PromptCardModel
     {
         public const string Approval = "approval", Plan = "plan", Question = "question", Asked = "asked";
-        public const int MaxFull = 4000, MaxTip = 300;
+        public const int MaxFull = PromptRequest.MaxCommand;
         public const string LineBreakMark = "⏎";   // a line break in a command, drawn so it can be seen
         public const int MaxWhat = 160;   // the card shows at most two lines of it; this keeps the text itself short too
         public const int MaxHeader = 40, MaxQuestion = 300, MaxLabel = 80, MaxDescription = 160;   // so a long question can't push the buttons off the card
@@ -63,13 +63,13 @@ namespace Capsule
                 bool cut;
                 m.What = Summary(r, out cut);
                 m.WhatCut = cut;
-                if (IsCommand(r)) m.WhatFull = Shorten(string.Join("\n", Lines(Text(r, "command"))), MaxFull);
+                if (IsCommand(r)) m.WhatFull = Shorten(Text(r, "command"), MaxFull);
                 m.CanAlwaysAllow = r.Rules.Count > 0;
                 if (m.CanAlwaysAllow)
                 {
                     bool edits = r.Rules.Contains(PromptRequest.AcceptEditsName);
                     if (edits) m.AlwaysAllowLabel = AllowAllEditsText;
-                    m.AlwaysAllowTip = Shorten(Safe(AlwaysAllowTipText(r, edits)), MaxTip);
+                    m.AlwaysAllowTip = Typed(AlwaysAllowTipText(r, edits));
                     List<string> directories = DirectoryTexts(r);
                     if (directories.Count > 0) m.AlwaysAllowAlso = Shorten(Safe("Also gives access to " + string.Join(", ", directories)), MaxWhat);
                 }
@@ -135,7 +135,7 @@ namespace Capsule
             var texts = new List<string>();
             foreach (string rule in r.Rules)
                 texts.Add(rule.StartsWith(PromptRequest.AccessPrefix, StringComparison.Ordinal)
-                    ? PromptRequest.AccessPrefix + Relative(Safe(rule.Substring(PromptRequest.AccessPrefix.Length)), r.Cwd) : rule);
+                    ? PromptRequest.AccessPrefix + Relative(Typed(rule.Substring(PromptRequest.AccessPrefix.Length)), r.Cwd) : rule);
             return texts;
         }
 

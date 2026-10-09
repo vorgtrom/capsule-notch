@@ -19,18 +19,18 @@ namespace Capsule
             ShortenNeverSplitsAnEmoji();
             ALongQuestionCantPushTheButtonsOff();
             RelativePathsNeverHideWhereAFileIs();
-            TheAlwaysAllowTipIsShortAndNamesDirectories();
+            TheAlwaysAllowTipIsCompleteAndNamesDirectories();
             AlwaysAllowSaysWhatItDoes();
             ALineBreakInACommandIsShownAsOne();
             TheWholeCommandIsKeptForTheTooltip();
         }
 
-        static void TheAlwaysAllowTipIsShortAndNamesDirectories()
+        static void TheAlwaysAllowTipIsCompleteAndNamesDirectories()
         {
             PromptRequest r = Request("Bash", "{\"command\":\"npm test\"}");
             r.Rules.Add(new string('x', 1000));
             PromptCardModel m = PromptCardModel.From(new HeldPrompt { Request = r }, 1, 45000);
-            TestRunner.Check(m.AlwaysAllowTip.Length <= 300 && m.AlwaysAllowTip.EndsWith("…", StringComparison.Ordinal), "a long tip is cut to 300 characters (" + m.AlwaysAllowTip.Length + ")");
+            TestRunner.Eq("Don't ask again: " + new string('x', 1000), m.AlwaysAllowTip, "the whole permission scope is kept for the scrollable tooltip");
             r.Rules.Clear();
             r.Rules.Add("Accept all edits");
             r.Rules.Add("Access to C:\\work\\confetti\\docs");
@@ -80,7 +80,7 @@ namespace Capsule
             TestRunner.Eq("Also gives access to C:\\xy", m.AlwaysAllowAlso, "a directory is cleaned of what a reader can't see");
             m = card(new[] { "Access to " + new string('d', 500) }, new[] { "session" });
             TestRunner.Check(m.AlwaysAllowAlso.Length == PromptCardModel.MaxWhat && m.AlwaysAllowAlso.EndsWith("…", StringComparison.Ordinal), "and is capped (" + m.AlwaysAllowAlso.Length + ")");
-            TestRunner.Check(m.AlwaysAllowTip.Length <= PromptCardModel.MaxTip, "as its tooltip is");
+            TestRunner.Check(m.AlwaysAllowTip.Contains(new string('d', 500)), "the tooltip keeps the entire directory");
 
             m = card(new string[0], null);
             TestRunner.Check(!m.CanAlwaysAllow && m.AlwaysAllowAlso == "", "no rules: no Always allow, no line");
@@ -104,8 +104,8 @@ namespace Capsule
             TestRunner.Check(m.WhatCut && m.What.EndsWith("…", StringComparison.Ordinal) && m.WhatFull == new string('a', 100) + "\n" + new string('b', 100), "a cut one says so, and keeps the whole of it");
             m = PromptCardModel.From(new HeldPrompt { Request = Request("Bash", "{\"command\":\"" + new string('x', 6000) + "\"}") }, 1, 60000);
             TestRunner.Check(m.WhatFull.Length == PromptCardModel.MaxFull && m.WhatFull.EndsWith("…", StringComparison.Ordinal), "the whole is itself capped at 4000 (" + m.WhatFull.Length + ")");
-            m = PromptCardModel.From(new HeldPrompt { Request = Request("Bash", "{\"command\":\"a\\u202Eb\"}") }, 1, 60000);
-            TestRunner.Eq("ab", m.WhatFull, "and it is cleaned of what a reader can't see, as the summary is");
+            m = PromptCardModel.From(new HeldPrompt { Request = Request("Bash", "{\"command\":\"echo 'a  b'\\n  echo c\"}") }, 1, 60000);
+            TestRunner.Eq("echo 'a  b'\n  echo c", m.WhatFull, "the tooltip preserves spaces that can change command meaning");
             m = PromptCardModel.From(new HeldPrompt { Request = Request("Read", "{\"file_path\":\"C:\\\\work\\\\confetti\\\\a.txt\"}") }, 1, 60000);
             TestRunner.Eq("", m.WhatFull, "only a command has one");
         }

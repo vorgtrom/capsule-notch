@@ -251,8 +251,8 @@ namespace Capsule
                     Margin = new Thickness(0, 0, 0, 8),
                     Child = summary,
                 };
-                // A summary that is cut, by its length or by the two lines it has, shows the whole command on hover.
-                if (m.WhatFull != "" && (m.WhatCut || overflows))
+                // Hover shows the exact command, including spaces and line breaks that the summary compresses.
+                if (m.WhatFull != "")
                 {
                     summary.ToolTip = WholeCommand(m.WhatFull);
                     what.ToolTip = WholeCommand(m.WhatFull);
@@ -285,7 +285,7 @@ namespace Capsule
                 if (m.CanAlwaysAllow)
                 {
                     Border always = Pill(m.AlwaysAllowLabel, PromptAction.AlwaysAllow);
-                    always.ToolTip = m.AlwaysAllowTip;
+                    always.ToolTip = WholeCommand(m.AlwaysAllowTip);
                     buttons.Children.Add(always);
                 }
                 buttons.Children.Add(Pill("Deny", PromptAction.Deny));
@@ -470,7 +470,8 @@ namespace Capsule
             TextBlock content = CardView.MakeText(text, 12, Palette.Text, FontWeights.Normal);
             content.TextWrapping = TextWrapping.Wrap;
             content.MaxWidth = WhatTipWidth;
-            return new ToolTip { Content = content };
+            return new ToolTip { Content = new ScrollViewer { Content = content, MaxHeight = 240,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
         }
     }
 }

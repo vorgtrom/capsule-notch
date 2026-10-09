@@ -52,12 +52,14 @@ to the Claude app. It's built to grow: each of these is a module, and more will 
 When Claude Code needs you while you're in another app, you don't have to switch back to the Claude app.
 Claude's ring pulses amber; **hover it**, and the card shows what Claude is asking:
 
-- **A permission prompt** ("Claude wants to run a command", "…to edit a file"): what it wants to do, and
+- **A command permission prompt** ("Claude wants to run a command"): what it wants to run, and
   **Allow**, **Always allow**, **Deny** or **Answer in Claude**. **Always allow** only appears when Claude
-  Code itself suggests a rule, and the card says exactly what it would allow.
+  Code itself suggests a rule that Capsule can show completely. Hover the command or **Always allow** to read
+  its full text in a scrollable tooltip. The command tooltip preserves spaces and line breaks.
 - **A question**: Claude's options as buttons (checkboxes when you can pick several), one question at a
   time, with **Other…** to type your own answer, then **Next** or **Send**.
-- **A plan**: **Approve plan** or **Keep planning**.
+- **File edits, plans, and other tools** stay in Claude's normal approval prompt until Capsule has a full preview.
+  Commands over 4,000 characters, or commands with hidden control characters, also stay in Claude.
 
 | Approve a command | Answer a question |
 |:---:|:---:|
@@ -381,7 +383,7 @@ anywhere else.
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only
   your Windows account can open, and waits up to 90 s for your answer.
-  - What Claude wants to run or edit, and its questions and your answers, are shown on the card only. They
+  - Complete supported commands, and its questions and your answers, are shown on the card only. They
     are held in memory, and never logged or saved.
   - **Always allow** applies exactly the rule Claude Code suggested, as the app's own button does. Capsule
     writes no permission rules itself.
