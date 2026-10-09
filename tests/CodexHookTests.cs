@@ -113,7 +113,7 @@ namespace Capsule
             TestRunner.Eq("keep me", Json.Str(Json.Get(root, "description")), "disconnect preserves unrelated settings");
             TestRunner.Check(Json.Get(root, "hooks", "Stop") != null && Json.Get(root, "hooks", "PreToolUse") == null, "disconnect removes only Capsule's hooks");
             TestRunner.Check(CodexHook.Command(@"C:\O'Brien\capsule-hook.exe").Contains("O'Brien"), "the launcher preserves apostrophes");
-            foreach (char special in new[] { '%', '$', '`', '\n' })
+            foreach (char special in new[] { '%', '$', '`', '\n', '&', '(', ')', '^', '|', '<', '>', '@' })
             {
                 bool rejected = false;
                 try { HookSetup.ConnectCodex(path, "C:\\" + special + "literal\\capsule-hook.exe", DateTime.Now); }

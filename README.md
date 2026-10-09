@@ -80,10 +80,15 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
 
 ### Codex and local ChatGPT Work
 
-1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder without `%`, `$` or backticks in its path.
+1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder whose path has none of
+   `` % $ ` " & < > ( ) @ ^ | ``. Windows' `cmd` launches the hook and would misread them. A second unzip into
+   `Capsule (1)` is the usual culprit: rename the folder, or Connect says so.
 2. Right-click Capsule and choose **Connect to Codex / Work**.
 3. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Capsule does not grant trust.
 4. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.
+
+Codex only asks when its permission mode lets it. On **Full access** it runs commands without asking, so nothing
+reaches the capsule; choose **Auto** (or another mode that asks) next to the message box if you want approvals.
 
 The command card shows the full command, working folder and reason. Choose **Allow**, **Deny**, or
 **Answer in Codex / Work**. There is no persistent **Always allow** for this connection. Questions support
@@ -437,6 +442,9 @@ anywhere else.
     are held in memory, and never logged or saved.
   - **Always allow** applies exactly the rule Claude Code suggested, as the app's own button does. Capsule
     writes no permission rules itself.
+- Connected to Codex / Work, Capsule changes `~/.codex/hooks.json` only when you choose Connect or Disconnect.
+  Codex's command approvals and questions reach Capsule over the same local pipe and are treated the same way:
+  shown on the card only, held in memory, never logged or saved. Capsule never sends Codex an **Always allow**.
 - For each session, the hook records:
   - its id and state, and when that state began;
   - the name of the last event, and when it happened;
@@ -466,10 +474,12 @@ anywhere else.
 2. Menu → untick **Start with Windows**, then **Quit Capsule**.
 3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it) and
    `%USERPROFILE%\.capsule\`.
-4. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings:
-   `~/.claude/settings.json.capsule-bak-*`. Older ones may be named `usage-notch-bak-*`.
-5. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
-6. If you connected Google Calendar:
+4. Menu → **Disconnect from Codex / Work**, if you connected it.
+5. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings,
+   `~/.claude/settings.json.capsule-bak-*` (older ones may be named `usage-notch-bak-*`), and next to Codex's,
+   `~/.codex/hooks.json.capsule-bak-*`.
+6. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
+7. If you connected Google Calendar:
    - With the link: **Remove link** in the settings. Optionally, **Reset** the secret address in Google Calendar's
      **Integrate calendar**, so the old link stops working.
    - Signed in: choose **Sign out** in the settings first, which revokes Capsule's access.
