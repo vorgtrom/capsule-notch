@@ -22,7 +22,7 @@ namespace Capsule
         const string ClientSecretSavedHint = "Secret saved. Paste a new one to replace it.";
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
         const string ClientSecretPendingHint = "Secret kept for the next sign-in. Paste a new one to replace it.";
-        const string LinkHint = "In Google Calendar on the web: ⚙ Settings → your calendar → Integrate calendar → Secret address in iCal format. Capsule only reads it.";
+        const string LinkHint = "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format.";
         // A small tile's inside: half the board less the gap, its padding and its 1-px border.
         public const double SmallInner = (PanelWidth - 2 * Pad - Gap) / 2 - 2 * TilePad - 2;
 
@@ -606,7 +606,7 @@ namespace Capsule
             // asked for.
             calendarLinkBlock.Visibility = google.SignedIn ? Visibility.Collapsed : Visibility.Visible;
             calendarLinkHint.Text = !google.LinkSaved ? LinkHint
-                : "Link saved" + (google.LinkName != "" ? ": showing " + google.LinkName : "") + ". Paste a new one to replace it.";
+                : "Link saved" + (google.LinkName != "" ? ": showing " + google.LinkName : "") + ". Read-only events, no Google Tasks. Paste a new one to replace it.";
             calendarLinkButtons.Children.Clear();
             calendarLinkButtons.Children.Add(PillButton("Save link", delegate { if (GoogleLinkSaved != null) GoogleLinkSaved(calendarLinkBox.Password); }));
             if (google.LinkSaved)

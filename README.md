@@ -169,8 +169,8 @@ Only exclusions survive updates and rebuilds. All the source is in this repo, so
 
 ## Use
 
-Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. The first time, it
-adds itself to Start with Windows. You can turn that off in the menu.
+Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. On first run, Capsule
+asks whether to start with Windows. **No** is the default. You can change the choice in the tray menu.
 
 - **Hover** a ring to see the details.
 - **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile
@@ -209,6 +209,7 @@ There are two ways to connect. The quick one takes about a minute and only reads
 
 The capsule then gets a third cell, and the panel a Calendar tile.
 - The link shows one calendar, your main one. Its events and the ones you're invited to are in it.
+- The link is read-only. It does not show Google Tasks or let Capsule add, edit, or delete events.
 - Capsule reads it every 15 minutes, because Google itself only refreshes the link's file every so often. A change
   you make in Google Calendar can take a while to show.
 - Some work and school accounts have the secret address turned off by their admin. Use your own client (below) then.

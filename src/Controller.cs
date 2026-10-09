@@ -58,8 +58,12 @@ namespace Capsule
             config = Config.Load(Paths.ConfigFile);
             if (!config.FirstRunDone)
             {
-                try { Autostart.Set(true, ExePath()); }
-                catch (Exception e) { Log.Error("start with Windows", e); }
+                if (MessageBox.Show("Start Capsule automatically when you sign in to Windows? You can change this later in the tray menu.",
+                    "Capsule", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+                {
+                    try { Autostart.Set(true, ExePath()); }
+                    catch (Exception e) { Log.Error("start with Windows", e); }
+                }
                 config.FirstRunDone = true;
                 config.Save(Paths.ConfigFile);
             }
