@@ -76,6 +76,9 @@ namespace Capsule
         // Moves the pointer so its tip sits y DIPs below the card's top, and redraws the glass around it.
         public void SetPointer(double y)
         {
+            // Child changes queue parent measurement later; the window needs the new size now.
+            panel.InvalidateMeasure();
+            InvalidateMeasure();
             Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double height = Math.Max(DesiredSize.Height - 2 * ShadowMargin, 2 * Radius);
             glass.Apply(MakeOutline(height, pointRight, y), null, ShadowMargin);
