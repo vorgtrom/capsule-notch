@@ -318,8 +318,7 @@ namespace Capsule
             return args.CommandCancelled;
         }
 
-        // Pasting the client ID, then clicking away to copy the secret, closes the panel: what was typed is handed over
-        // first. The downloaded client file, pasted whole, fills both.
+        // Explicitly leaving settings keeps the client draft. A downloaded client file fills both fields.
         static void SettingsKeepTheClientWhenClosed()
         {
             var view = new PanelView();
@@ -334,6 +333,7 @@ namespace Capsule
                 draftId = id;
                 draftSecret = secret;
             };
+            Lay(view);
             Click(Holder(view, "Use your own Google client instead"));
             view.ClientIdBox.Text = "cid-typed";
             view.ShowBoard();

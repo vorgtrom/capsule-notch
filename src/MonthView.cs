@@ -22,6 +22,7 @@ namespace Capsule
         public const double CellHeight = 40;
 
         readonly DockPanel header = new DockPanel { LastChildFill = false };
+        readonly ScrollViewer scroll = PanelView.BodyScroll();
         readonly UniformGrid weekdays = new UniformGrid { Columns = 7, Rows = 1 };
         readonly UniformGrid grid = new UniformGrid { Columns = 7, Rows = CalendarMonth.Weeks };
         readonly StackPanel day = new StackPanel();
@@ -72,8 +73,15 @@ namespace Capsule
             form.Margin = new Thickness(0, 8, 0, 0);
             form.Visibility = Visibility.Collapsed;
             body.Children.Add(form);
-            Children.Add(body);
+            scroll.Content = body;
+            Children.Add(scroll);
             BuildForm();
+        }
+
+        public void ConstrainHeight(double height)
+        {
+            header.Measure(new Size(PanelView.PanelWidth, double.PositiveInfinity));
+            scroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height - PanelView.Pad);
         }
 
         public bool FormOpen { get { return formKind != null; } }

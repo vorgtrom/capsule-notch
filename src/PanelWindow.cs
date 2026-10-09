@@ -40,7 +40,6 @@ namespace Capsule
             view.Resized += delegate
             {
                 if (!IsOpen) return;
-                view.Relayout();
                 Place();
             };
             Content = view;
@@ -61,7 +60,7 @@ namespace Capsule
                 e.Handled = true;
                 Dismiss();
             };
-            Deactivated += delegate { Dismiss(); };
+            Deactivated += delegate { if (!view.KeepOpenOnDeactivate) Dismiss(); };
             // Alt+F4, or any other close request, only dismisses: a WPF window that has been closed can never be shown again.
             // WPF ignores Cancel when Windows is shutting down or the session is ending, so the app still exits then; but a
             // panel.Close() of our own on the way out would be cancelled here without a word.
@@ -181,8 +180,9 @@ namespace Capsule
         void Place()
         {
             if (monitor == null || hwnd == IntPtr.Zero) return;
-            view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double scale = monitor.Scale;
+            view.ConstrainHeight(monitor.Work.Height / scale);
+            view.Relayout();
             int width = (int)Math.Ceiling((view.DesiredSize.Width - 2 * PanelView.ShadowMargin) * scale);
             int height = (int)Math.Ceiling((view.DesiredSize.Height - 2 * PanelView.ShadowMargin) * scale);
             RECT body = Layout.PanelRect(capsule, leftEdge, monitor.Work, width, height, (int)Math.Round(8 * scale));
