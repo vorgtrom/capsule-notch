@@ -241,7 +241,9 @@ namespace Capsule
             UpdateLayout();   // a change deep in the page (a rebuilt list) reaches this panel's size only once laid out
             Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double height = Math.Max(DesiredSize.Height - 2 * ShadowMargin, 2 * Radius);
-            glass.Apply(new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius), null, ShadowMargin);
+            var outline = new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius);
+            board.Clip = settings.Clip = month.Clip = outline;
+            glass.Apply(outline, null, ShadowMargin);
         }
 
         internal static ScrollViewer BodyScroll()

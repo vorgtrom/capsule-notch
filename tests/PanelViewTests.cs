@@ -57,6 +57,9 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(view.DesiredSize.Height <= height + 2 * PanelView.ShadowMargin + 0.5, "the page fits the monitor's work area");
             TestRunner.Near(view.DesiredSize.Height - 2 * PanelView.ShadowMargin, view.Outline.Bounds.Height, "glass fits the viewport, not the hidden content");
+            foreach (UIElement page in view.Children)
+                if (!(page is GlassSurface) && page.Visibility == Visibility.Visible)
+                    TestRunner.Check(page.Clip != null && !page.Clip.FillContains(new Point(PanelView.PanelWidth - 1, view.Outline.Bounds.Height - 1)), "content and scrollbars stay inside the rounded glass corners");
             ScrollViewer scroll = ScrollOf(view);
             TestRunner.Check(scroll != null && scroll.ScrollableHeight > 0, "the overflowing page scrolls");
             TextBlock header = FindText(view, title);
