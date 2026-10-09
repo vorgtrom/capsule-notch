@@ -23,9 +23,6 @@ namespace Capsule
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
         const string ClientSecretPendingHint = "Secret kept for the next sign-in. Paste a new one to replace it.";
         const string LinkHint = "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format.";
-        // A small tile's inside: half the board less the gap, its padding and its 1-px border.
-        public const double SmallInner = (PanelWidth - 2 * Pad - Gap) / 2 - 2 * TilePad - 2;
-
         readonly GlassSurface glass = new GlassSurface();
         readonly StackPanel board = new StackPanel();
         readonly ScrollViewer boardScroll = BodyScroll();
@@ -770,7 +767,7 @@ namespace Capsule
                 if (t.Dimmed) percent.Opacity = 0.45;
                 box.Children.Add(percent);
                 if (t.WindowLabel != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal)));
-                if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color, SmallInner));
+                if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color));
                 if (t.ResetText != "") box.Children.Add(CardView.MakeText(t.ResetText, 11.5, Palette.Secondary, FontWeights.Normal));
                 if (t.Freshness != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Freshness, 10.5, Palette.Secondary, FontWeights.Normal)));
             }

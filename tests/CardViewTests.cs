@@ -19,6 +19,19 @@ namespace Capsule
             LongTextStaysInsideTheSessionRow();
             OutlineHoldsTheCardAndItsPointer();
             ShadowIsDrawnOutsideTheCard();
+            BarsFollowTheirActualWidth();
+        }
+
+        static void BarsFollowTheirActualWidth()
+        {
+            Grid bar = CardView.Bar(50, Palette.Green);
+            foreach (double width in new[] { 120.0, 80.0 })
+            {
+                bar.Measure(new Size(width, 17));
+                bar.Arrange(new Rect(0, 0, width, 17));
+                bar.UpdateLayout();
+                TestRunner.Near(width / 2, ((Border)bar.Children[1]).ActualWidth, "50% stays half the visible track when scrolling reduces the tile width");
+            }
         }
 
         static Reading ClaudeReading()
