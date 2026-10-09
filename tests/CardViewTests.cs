@@ -31,13 +31,14 @@ namespace Capsule
                 var view = new CardView();
                 var request = new PromptRequest { SessionId = "a", ToolName = "Bash" };
                 request.ToolInput["command"] = "npm test";
-                var held = new HeldPrompt { Id = 3, Request = request };
+                var held = new HeldPrompt { Id = 1, Request = request };
                 view.ShowPrompt(PromptCardModel.From(held, 1, 60000), pointRight);
                 ArrangeCard(view);
                 double before = view.DesiredSize.Height;
                 UIElement title = view.Prompt.Children[0];
 
                 view.ShowPrompt(PromptCardModel.From(held, 2, 59000), pointRight);
+                TestRunner.Eq("1 of 2", view.Prompt.Model.Position, "approval #1 shows its new queue badge");
                 TestRunner.Check(ReferenceEquals(title, view.Prompt.Children[0]), "the queue badge changes without rebuilding the request");
                 CheckCardFits(view, "a queue badge wraps the title");
                 TestRunner.Check(view.DesiredSize.Height > before, "the wrapped title makes room for its extra line");
