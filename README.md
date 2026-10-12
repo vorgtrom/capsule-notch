@@ -4,6 +4,8 @@
 
 A little glass capsule that sits on the edge of your Windows screen.
 
+https://github.com/user-attachments/assets/9a57d928-1af3-47c3-803b-26c9e8deb953
+
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
 session is **working** or **waiting on you**. With **Google Calendar** connected, it also shows when your next
 event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: your usage, your sessions, today's
