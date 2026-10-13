@@ -16,6 +16,7 @@ namespace Capsule
         public static void Run()
         {
             SelectionAndSources();
+            TheCellHidesWhenNothingPlays();
             ModelsAndViews();
             CommandsStayWithTheirPlayer();
         }
@@ -31,6 +32,21 @@ namespace Capsule
                 return 0;
             }
             catch (Exception e) { Console.WriteLine("Windows music reader failed: " + e); return 1; }
+        }
+
+        static void TheCellHidesWhenNothingPlays()
+        {
+            const long now = 1000000000;
+            var none = new MusicSnapshot();
+            TestRunner.Check(!MusicSelection.ShowCell(none, now, now), "no player: no Music cell");
+            var playing = new MusicSnapshot { Tracks = Tracks(), SelectedKey = "spotify" };
+            playing.Tracks[1].Playing = true;
+            TestRunner.Check(MusicSelection.ShowCell(playing, now, 0), "something playing: the Music cell shows");
+            var paused = new MusicSnapshot { Tracks = Tracks(), SelectedKey = "spotify" };
+            paused.Tracks.ForEach(t => t.Playing = false);
+            TestRunner.Check(MusicSelection.ShowCell(paused, now, now - 60 * 1000), "paused a minute ago: still shown, so Play is in reach");
+            TestRunner.Check(!MusicSelection.ShowCell(paused, now, now - MusicSelection.LingerMs), "paused 2 minutes ago: hidden");
+            TestRunner.Check(!MusicSelection.ShowCell(paused, now, 0), "paused since before Capsule started: hidden");
         }
 
         static List<MusicTrack> Tracks()

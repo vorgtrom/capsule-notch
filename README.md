@@ -72,6 +72,8 @@ the same music controls. No extra sign-in or API key is needed.
 |:---:|:---:|
 | <img src="docs/images/notch-music.png" width="116" alt="The capsule with a Claude ring, a Codex ring and a Music cell showing the album art, its ring filling in Spotify green, marked Playing"> | <img src="docs/images/card-music.png" width="328" alt="The music card: Spotify, the artwork, the track and artist, progress 1:24 of 3:48, Source: Spotify, and Previous, Pause and Next"> |
 
+- The Music cell appears while something plays and stays for 2 minutes after you pause, so Play is still in
+  reach; then the capsule goes back to its other cells. The panel's music tile is always there.
 - Spotify's desktop app and players that expose Windows media controls are detected automatically.
 - YouTube Music in Chrome, Edge, Firefox, and other supported browsers appears under the **browser's name**.
   Windows supplies the player and track metadata, not the tab URL, so other media tabs can appear too.

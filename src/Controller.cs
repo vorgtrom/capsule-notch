@@ -55,7 +55,8 @@ namespace Capsule
         bool disposed;    // on the way out: nothing is drawn any more
         int hoverCell = -1, cardCell = -1;
         int calendarCell = -1;   // the calendar's cell on the capsule, under the usage cells; -1 while signed out
-        int musicCell = -1;
+        int musicCell = -1;      // the music's cell on the capsule; -1 while nothing plays
+        long musicPlayedMs;      // the last time any player was playing
         int monthYear, monthMonth;   // the month page's month, while it shows
         DateTime monthDay;           // and its selected day
 
@@ -400,8 +401,12 @@ namespace Capsule
                 calendarCell = cells.Count;
                 cells.Add(calendar.Cell(now, CultureInfo.CurrentCulture));
             }
-            musicCell = cells.Count;
-            cells.Add(music.Current.Cell());
+            musicCell = -1;
+            if (MusicShown(now))
+            {
+                musicCell = cells.Count;
+                cells.Add(music.Current.Cell());
+            }
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
             notchCells = cells;
             notch.SetCells(cells);
@@ -415,11 +420,20 @@ namespace Capsule
         // The one-second music update changes only its faces; the rest of the board keeps its controls and focus.
         void RenderMusic()
         {
-            if (disposed || notchCells == null || musicCell < 0 || musicCell >= notchCells.Count) return;
+            if (disposed || notchCells == null) return;
+            // Music started, or stopped long enough ago: the cell comes or goes, and the capsule is laid out again.
+            if (MusicShown(Clock.NowMs()) != (musicCell >= 0)) { Render(); return; }
+            if (panel.IsOpen) panel.RefreshMusic(music.Current);
+            if (musicCell < 0 || musicCell >= notchCells.Count) return;
             notchCells[musicCell] = music.Current.Cell();
             notch.SetCells(notchCells);
             if (card.IsOpen && cardCell == musicCell) ShowCard(musicCell);
-            if (panel.IsOpen) panel.RefreshMusic(music.Current);
+        }
+
+        bool MusicShown(long now)
+        {
+            if (music.Current.Tracks.Exists(t => t.Playing)) musicPlayedMs = now;
+            return MusicSelection.ShowCell(music.Current, now, musicPlayedMs);
         }
 
         // The capsule back above the panel and the card. Their shadow room reaches over its inner edge, and a window that
