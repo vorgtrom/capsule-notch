@@ -46,6 +46,17 @@ namespace Capsule
 
     public static class MusicSelection
     {
+        public const long LingerMs = 2 * 60 * 1000;
+
+        // The Music cell shows while something plays, and for 2 minutes after the last player stopped, so Play stays in
+        // reach after a pause. Otherwise the capsule keeps to its other cells.
+        public static bool ShowCell(MusicSnapshot s, long now, long lastPlayingMs)
+        {
+            if (s == null || s.Selected == null) return false;
+            if (s.Tracks.Any(t => t.Playing)) return true;
+            return lastPlayingMs > 0 && now - lastPlayingMs < LingerMs;
+        }
+
         // Windows gives browsers' app IDs, not their tab URLs. Do not claim every Chrome session is YouTube Music.
         public static string SourceName(string id)
         {
