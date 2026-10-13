@@ -127,6 +127,26 @@ Windows, so nothing is downloaded and nothing unsigned from the internet runs.
 You need Windows 10 or 11 (64-bit) with .NET Framework 4.8 or later, which Windows 11 and an up-to-date Windows 10
 have already.
 
+**With Scoop** ([scoop.sh](https://scoop.sh)), in PowerShell:
+
+```pwsh
+scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule
+scoop install capsule/capsule
+```
+
+Then start **Capsule** from the Start menu (Scoop Apps → Capsule). `scoop update capsule` updates it; the bucket picks
+up each new release within a few hours.
+
+**With winget** (once Microsoft has accepted the package):
+
+```pwsh
+winget install vorgtrom.Capsule
+```
+
+Then start it with `capsule-notch` in a terminal. `winget upgrade vorgtrom.Capsule` updates it.
+
+Installed either way, ignore Capsule's own "is available" notice and update with the command above instead.
+
 **Download it (no building):**
 1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
 2. Unzip it into a folder that stays, such as `Documents\Capsule`. Start with Windows and Connect to Claude Code point
@@ -474,7 +494,8 @@ anywhere else.
 
 1. Menu → **Disconnect from Claude Code**, if you connected it.
 2. Menu → untick **Start with Windows**, then **Quit Capsule**.
-3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it) and
+3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it), or run
+   `scoop uninstall capsule` or `winget uninstall vorgtrom.Capsule` if you installed it that way. Then delete
    `%USERPROFILE%\.capsule\`.
 4. Menu → **Disconnect from Codex / Work**, if you connected it.
 5. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings,
