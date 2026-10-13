@@ -26,6 +26,7 @@ namespace Capsule
         SessionsModule sessions;
         IdeasModule ideas;
         CalendarModule calendar;
+        MusicModule music;
         UpdateCheck updates;   // a release build's once-a-day look for a newer release
         CodexActivity codexActivity;
         UsageHistory history;        // token use per day and model, from the Claude Code and Codex logs
@@ -42,8 +43,9 @@ namespace Capsule
         PromptBroker prompts;        // the requests held, and their rules
         PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
-        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick;
+        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick;
         List<UsageModule> shown = new List<UsageModule>();
+        List<CellModel> notchCells;
         string lastActivity;
         bool fullscreen, signInOpen, menuOpen;
         bool codexWorking, codexChecking;   // a Codex turn is running; a check of Codex's logs is under way
@@ -53,6 +55,7 @@ namespace Capsule
         bool disposed;    // on the way out: nothing is drawn any more
         int hoverCell = -1, cardCell = -1;
         int calendarCell = -1;   // the calendar's cell on the capsule, under the usage cells; -1 while signed out
+        int musicCell = -1;
         int monthYear, monthMonth;   // the month page's month, while it shows
         DateTime monthDay;           // and its selected day
 
@@ -97,7 +100,9 @@ namespace Capsule
             history = new UsageHistory(Paths.UsageHistoryFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
             history.Changed += delegate { Guard("usage", ShowUsageIfOpen); };
             samples = SampleStore.Load(Paths.UsageSamplesFile);
-            modules = new List<IModule> { sessions, claude, codex, calendar, ideas, history };
+            music = new MusicModule(new WindowsMusicSource(), TaskScheduler.FromCurrentSynchronizationContext());
+            music.Changed += delegate { Guard("music render", RenderMusic); };
+            modules = new List<IModule> { sessions, claude, codex, calendar, ideas, history, music };
             updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
             updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
             codexActivity = new CodexActivity(Paths.CodexHome);
@@ -113,6 +118,7 @@ namespace Capsule
             screenCheck = NewTimer(2000, CheckScreen);
             codexCheck = NewTimer(2000, CheckCodex);
             promptTick = NewTimer(250, delegate { Guard("prompts", PromptTick); });   // runs only while a request is held
+            musicTick = NewTimer(1000, delegate { music.Tick(Clock.NowMs()); });
 
             // Capsule steps aside while the Claude app's window is in front, and while the capsule is hidden (turned off,
             // or under a fullscreen app): the card can't be seen then, and holding would only delay the app's own prompt.
@@ -126,6 +132,8 @@ namespace Capsule
             tray.LeftClick += delegate { Guard("tray click", ToggleNotch); };
             tray.RightClick += delegate { Guard("tray menu", ShowMenu); };
             card = new HoverCard();
+            card.View.Music.Commanded += OnMusicCommand;
+            card.View.Music.SourceSelected += delegate(string key) { music.Select(key); };
             card.MouseEnter += delegate
             {
                 closeCard.Stop();
@@ -140,6 +148,8 @@ namespace Capsule
             notch.RightClicked += ShowMenu;
             notch.Moved += OnMoved;
             panel = new PanelWindow();
+            panel.View.Music.Commanded += OnMusicCommand;
+            panel.View.Music.SourceSelected += delegate(string key) { music.Select(key); };
             panel.View.RefreshAllClicked += delegate { Guard("refresh", RefreshAll); };
             panel.View.RefreshClicked += delegate(string provider) { (provider == "codex" ? codex : claude).Refresh(); };
             panel.View.SignInClicked += SignIn;
@@ -205,6 +215,7 @@ namespace Capsule
             tick.Start();
             screenCheck.Start();
             codexCheck.Start();
+            musicTick.Start();
             Tick();
             promptServer = new PromptServer(PromptPipe.Name, OnPromptArrived);
             Log.Info(promptServer.Start() ? "prompts: listening" : "prompts: not listening; Claude asks in the app as usual");
@@ -389,13 +400,26 @@ namespace Capsule
                 calendarCell = cells.Count;
                 cells.Add(calendar.Cell(now, CultureInfo.CurrentCulture));
             }
+            musicCell = cells.Count;
+            cells.Add(music.Current.Cell());
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
+            notchCells = cells;
             notch.SetCells(cells);
             LimitWindow headline = claude.Current.DisplayWindow;
             tray.Update(headline != null ? (double?)headline.Used : null, TrayText());
             // Not while it folds: that would turn it round. Nor while it shows a request: OnPromptsChanged redraws that.
             if (card.IsOpen && cardCell >= 0 && !card.View.ShowingPrompt) ShowCard(cardCell);
             if (panel.IsOpen) panel.Refresh(PanelNow());
+        }
+
+        // The one-second music update changes only its faces; the rest of the board keeps its controls and focus.
+        void RenderMusic()
+        {
+            if (disposed || notchCells == null || musicCell < 0 || musicCell >= notchCells.Count) return;
+            notchCells[musicCell] = music.Current.Cell();
+            notch.SetCells(notchCells);
+            if (card.IsOpen && cardCell == musicCell) ShowCard(musicCell);
+            if (panel.IsOpen) panel.RefreshMusic(music.Current);
         }
 
         // The capsule back above the panel and the card. Their shadow room reaches over its inner edge, and a window that
@@ -415,6 +439,7 @@ namespace Capsule
                 Codex = codex.Tile(now, CultureInfo.CurrentCulture),
                 Sessions = sessions.Tile(now),
                 Calendar = calendar.Tile(now, CultureInfo.CurrentCulture),
+                Music = music.Current,
                 Ideas = ideas.Tile(),
             };
         }
@@ -821,6 +846,13 @@ namespace Capsule
         {
             if (!notch.IsVisible) return;
             long now = Clock.NowMs();
+            if (cell >= 0 && cell == musicCell)
+            {
+                cardCell = cell;
+                card.ShowMusicBeside(music.Current, notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                NotchOnTop();
+                return;
+            }
             if (cell >= 0 && cell == calendarCell)
             {
                 cardCell = cell;
@@ -828,7 +860,7 @@ namespace Capsule
                 NotchOnTop();
                 return;
             }
-            if (cell >= shown.Count) return;
+            if (cell < 0 || cell >= shown.Count) return;
             cardCell = cell;
             PromptBroker broker = shown[cell] == codex ? codexPrompts : prompts;
             if (broker.Current != null)
@@ -836,6 +868,11 @@ namespace Capsule
             else
                 card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Provider, w)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             NotchOnTop();
+        }
+
+        void OnMusicCommand(string key, MusicCommand command)
+        {
+            Guard("music control", delegate { music.Command(key, command); });
         }
 
         // At once, without folding: the panel opens, the capsule moves or hides, its menu opens.
@@ -1126,7 +1163,8 @@ namespace Capsule
         {
             if (disposed) return;
             disposed = true;
-            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick }) if (timer != null) timer.Stop();
+            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick }) if (timer != null) timer.Stop();
+            if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening
             // Every request held goes to the app. A reply still being written when the process ends reaches the hook as a
             // closed pipe, which it takes as a pass too.

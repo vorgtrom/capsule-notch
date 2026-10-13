@@ -10,6 +10,7 @@ namespace Capsule
         public UsageTile Codex;
         public SessionsTile Sessions;
         public CalendarTile Calendar;   // null: no Calendar tile
+        public MusicSnapshot Music;
         public IdeasTile Ideas;
     }
 

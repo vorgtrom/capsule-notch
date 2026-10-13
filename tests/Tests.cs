@@ -15,6 +15,7 @@ namespace Capsule
         {
             // A copy of this exe renamed Capsule.exe, started by the hook tests as a stand-in Capsule (see PromptHookTests).
             if (args.Length == 3 && args[0] == "--fake-capsule") return PromptHookTests.FakeCapsule(args[1], args[2]);
+            if (args.Length == 1 && args[0] == "--music-smoke") return MusicTests.Smoke();
             groups = (args.Length == 1 && args[0] == "--groups") || Environment.GetEnvironmentVariable("CI") == "true";
             // The hook's client only talks to a server that is Capsule.exe: for the tests, that is this process.
             PipePeer.ExpectedImageForTests = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
@@ -38,6 +39,7 @@ namespace Capsule
             Run("Theme", ThemeTests.Run);
             Run("Tray", TrayTests.Run);
             Run("Modules", ModulesTests.Run);
+            Run("Music", MusicTests.Run);
             Run("Notion", NotionTests.Run);
             Run("Ideas", IdeasTests.Run);
             Run("PanelView", PanelViewTests.Run);
