@@ -103,9 +103,9 @@ namespace Capsule
 
         public CellModel Cell(string activity, long now) { return NotchView.CellFor(Current, activity, now); }
 
-        public CardModel Card(SessionsModule sessions, long now, CultureInfo culture)
+        public CardModel Card(SessionsModule sessions, long now, CultureInfo culture, Func<LimitWindow, Forecast> pace = null)
         {
-            return CardModel.From(Current, sessions.All, sessions.HooksConnected, now, culture);
+            return CardModel.From(Current, sessions.All, sessions.HooksConnected, now, culture, pace);
         }
 
         public UsageTile Tile(long now, CultureInfo culture) { return UsageTile.From(Current, now, culture); }

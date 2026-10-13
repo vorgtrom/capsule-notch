@@ -3,6 +3,15 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## Unreleased
+
+- **Usage history.** Click the Claude or Codex tile for tokens per day by model, for a week, a month or a year, read
+  from the logs Claude Code and Codex already write on your PC. Cache reads are shown apart, in Details.
+- **Pace.** The hover card and the Usage page say when a limit will be full at the current pace, or about how full
+  it'll be at its reset.
+- **Limit alerts** at 80% and 95%, and when you're on pace to run out before the reset. Untick **Limit alerts** in
+  the menu to turn them off.
+
 ## v1.4.1
 
 - **Connect to Codex / Work** now refuses an install folder whose path holds `&`, `<`, `>`, `(`, `)`, `@`, `^` or `|`,

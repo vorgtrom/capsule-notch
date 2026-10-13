@@ -68,6 +68,25 @@ namespace Capsule
             return (minutes / 60) + "h " + (minutes % 60) + "m";
         }
 
+        // Token counts: 950, 9.9K, 12K, 640K, 1.7M, 2.3B. One decimal under 10, none from 10.
+        public static string Tokens(long n)
+        {
+            if (n < 1000) return Math.Max(0, n).ToString(CultureInfo.InvariantCulture);
+            string[] units = { "K", "M", "B", "T" };
+            double v = n;
+            int u = -1;
+            while (v >= 1000 && u < units.Length - 1) { v /= 1000; u++; }
+            if (v < 10)
+            {
+                double r = Math.Round(v, 1, MidpointRounding.AwayFromZero);
+                if (r < 10) return r.ToString("0.#", CultureInfo.InvariantCulture) + units[u];
+                v = r;
+            }
+            double whole = Math.Round(v, MidpointRounding.AwayFromZero);
+            if (whole >= 1000 && u < units.Length - 1) return "1" + units[u + 1];
+            return whole.ToString("0", CultureInfo.InvariantCulture) + units[u];
+        }
+
         public static string PlanName(string plan)
         {
             if (string.IsNullOrEmpty(plan)) return "";

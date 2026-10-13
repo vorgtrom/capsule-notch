@@ -44,6 +44,7 @@ namespace Capsule
             SavePanel(dir, "panel-settings.png", SamplePanel(claude, codex, now, en), true);
             SaveCalendar(dir, "", claude, codex, now, en);
             SaveMonth(dir, "", now, en);
+            SaveUsage(dir, "", en);
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
@@ -51,6 +52,7 @@ namespace Capsule
             SavePanel(dir, "panel-light.png", SamplePanel(claude, codex, now, en), false);
             SaveCalendar(dir, "-light", claude, codex, now, en);
             SaveMonth(dir, "-light", now, en);
+            SaveUsage(dir, "-light", en);
             Theme.Use(Theme.For(false, false));
         }
 
@@ -59,6 +61,37 @@ namespace Capsule
         {
             cells.Add(CalendarDay.Cell(SampleCalendar(now), now, TimeZoneInfo.Local, en));
             return cells;
+        }
+
+        // The Usage page (usage history spec §3): a made-up week of Claude and Codex use, seen from its Saturday.
+        static void SaveUsage(string dir, string suffix, CultureInfo en)
+        {
+            DateTime saturday = DateTime.Today.AddDays(6 - (int)DateTime.Today.DayOfWeek);
+            var store = new UsageStore { BackfillDone = true };
+            long[][] week =
+            {
+                new long[] { 60000, 40000, 20000, 15000 },   // Sun: Opus, Sonnet, GPT-5 Codex, Haiku
+                new long[] { 210000, 90000, 60000, 30000 },
+                new long[] { 240000, 110000, 70000, 35000 },
+                new long[] { 300000, 140000, 80000, 40000 },
+                new long[] { 230000, 120000, 70000, 30000 },
+                new long[] { 160000, 70000, 50000, 25000 },
+                new long[] { 90000, 50000, 40000, 20000 },
+            };
+            string[] models = { "claude-opus-4-1-20250805", "claude-sonnet-4-5-20250929", "gpt-5-codex", "claude-haiku-4-5-20251001" };
+            for (int d = 0; d < 7; d++)
+                for (int i = 0; i < models.Length; i++)
+                    store.Add(saturday.AddDays(d - 6).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[i], week[d][i], week[d][i] * 30);
+            store.Add(saturday.AddDays(-40).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[0], 1000, 0);
+            UsageModel m = UsageModel.Build(store, UsagePeriod.Week, 0, saturday, en, !Theme.Current.Light);
+            m.Pace.Add(new PaceLine { Text = "Claude · 5-hour · 73% · full at 4:10 PM", Warn = true });
+            m.Pace.Add(new PaceLine { Text = "Codex · 5-hour · 21% · about 40% at reset" });
+            var view = new PanelView();
+            view.ShowUsage(m);
+            view.Relayout();
+            var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+            host.Children.Add(view);
+            SavePng(host, Path.Combine(dir, "usage" + suffix + ".png"));
         }
 
         // The month page (month spec §2): the month with today picked, then with + Add event's form open, then with a

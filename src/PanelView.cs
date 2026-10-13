@@ -42,6 +42,7 @@ namespace Capsule
         readonly StackPanel settingsBody = new StackPanel();
         readonly ScrollViewer settingsScroll = BodyScroll();
         readonly MonthView month = new MonthView();   // the month page (month spec §2), in the tiles' place like the settings
+        readonly UsageView usage = new UsageView();   // the Usage page (usage history spec §3), likewise
         readonly PasswordBox secretBox = new PasswordBox();
         readonly TextBox linkBox = new TextBox();
         readonly TextBlock secretHint = new TextBlock();
@@ -130,6 +131,17 @@ namespace Capsule
             month.BackClicked += ShowBoard;
             month.Resized += RaiseResized;
             Children.Add(month);
+            usage.Visibility = Visibility.Collapsed;
+            usage.BackClicked += ShowBoard;
+            usage.Resized += RaiseResized;
+            Children.Add(usage);
+            foreach (Border tile in new[] { claudeTile, codexTile })
+            {
+                string provider = tile == claudeTile ? "claude" : "codex";
+                tile.Cursor = Cursors.Hand;
+                tile.ToolTip = "Usage history";
+                tile.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e) { e.Handled = true; if (UsageClicked != null) UsageClicked(provider); };
+            }
             Restyle();
         }
 
@@ -146,6 +158,22 @@ namespace Capsule
         public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
         public bool KeepOpenOnDeactivate { get { return ShowingSettings || (ShowingMonth && month.FormOpen); } }
         public MonthView Month { get { return month; } }
+        public UsageView Usage { get { return usage; } }
+        public bool ShowingUsage { get { return usage.Visibility == Visibility.Visible; } }
+        public event Action<string> UsageClicked;      // the Claude or Codex tile: the Controller calls ShowUsage
+        public event Action UsageClosed;
+
+        // The Usage page in the tiles' place, or redrawn in place when it already shows.
+        public void ShowUsage(UsageModel m)
+        {
+            usage.Update(m);
+            board.Visibility = Visibility.Collapsed;
+            settings.Visibility = Visibility.Collapsed;
+            month.Visibility = Visibility.Collapsed;
+            usage.Visibility = Visibility.Visible;
+            Relayout();
+            RaiseResized();
+        }
         public event Action MonthClicked;      // the Calendar tile's month button: the Controller calls ShowMonth
         public event Action MonthClosed;       // the month page gave way to the tiles (←, or the panel closing)
 
@@ -155,6 +183,7 @@ namespace Capsule
             month.Update(m);
             board.Visibility = Visibility.Collapsed;
             settings.Visibility = Visibility.Collapsed;
+            usage.Visibility = Visibility.Collapsed;
             month.Visibility = Visibility.Visible;
             // Redrawn in place, the page can grow or shrink too (the day's list, its Add buttons once read): the glass and
             // the window follow it every time.
@@ -170,6 +199,7 @@ namespace Capsule
         {
             Theme theme = Theme.Current;
             month.Restyle();
+            usage.Restyle();
             foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, ideasTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
@@ -242,7 +272,7 @@ namespace Capsule
             Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double height = Math.Max(DesiredSize.Height - 2 * ShadowMargin, 2 * Radius);
             var outline = new RectangleGeometry(new Rect(0, 0, PanelWidth, height), Radius, Radius);
-            board.Clip = settings.Clip = month.Clip = outline;
+            board.Clip = settings.Clip = month.Clip = usage.Clip = outline;
             glass.Apply(outline, null, ShadowMargin);
         }
 
@@ -259,6 +289,7 @@ namespace Capsule
             boardScroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height);
             settingsScroll.MaxHeight = Math.Max(1, height - settingsHeader.DesiredSize.Height - Pad);
             month.ConstrainHeight(height);
+            usage.ConstrainHeight(height);
         }
 
         public void FocusIdeas()
@@ -408,6 +439,11 @@ namespace Capsule
                 month.Visibility = Visibility.Collapsed;
                 if (MonthClosed != null) MonthClosed();
             }
+            if (ShowingUsage)
+            {
+                usage.Visibility = Visibility.Collapsed;
+                if (UsageClosed != null) UsageClosed();
+            }
             board.Visibility = Visibility.Collapsed;
             settings.Visibility = Visibility.Visible;
             RaiseResized();
@@ -427,6 +463,14 @@ namespace Capsule
                 month.Visibility = Visibility.Collapsed;
                 board.Visibility = Visibility.Visible;
                 if (MonthClosed != null) MonthClosed();
+                RaiseResized();
+                return;
+            }
+            if (ShowingUsage)
+            {
+                usage.Visibility = Visibility.Collapsed;
+                board.Visibility = Visibility.Visible;
+                if (UsageClosed != null) UsageClosed();
                 RaiseResized();
                 return;
             }

@@ -63,6 +63,12 @@ namespace Capsule
             Run("CalendarView", CalendarViewTests.Run);
             Run("Updates", UpdatesTests.Run);
             Run("Log", LogTests.Run);
+            Run("UsageLogs", UsageLogsTests.Run);
+            Run("UsageHistory", UsageHistoryTests.Run);
+            Run("Pace", PaceTests.Run);
+            Run("LimitAlerts", LimitAlertsTests.Run);
+            Run("UsageModel", UsageModelTests.Run);
+            Run("UsageView", UsageViewTests.Run);
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
         }

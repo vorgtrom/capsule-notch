@@ -24,7 +24,8 @@ to the Claude app. You can also connect Codex and local ChatGPT Work for command
 
 - **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
-- **Hover a ring** for every limit, when each resets, and your live Claude Code sessions.
+- **Hover a ring** for every limit, when each resets, and your live Claude Code sessions. Under each limit, its pace:
+  "At this pace: full at 4:10 PM" (amber, before the reset) or "about 64% at reset".
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
   When Capsule holds a Codex / Work request, the Codex ring pulses amber.
 - **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses
@@ -42,6 +43,9 @@ to the Claude app. You can also connect Codex and local ChatGPT Work for command
   Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
   after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
+- **Your token use**: click the Claude or Codex tile for the [Usage page](#usage-history-and-limit-alerts): tokens per
+  day by model, for a week, a month or a year.
+- **Limit alerts**: a notification at 80% and 95% of a limit, and when you're on pace to run out before it resets.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add, edit or delete one.
 
@@ -52,6 +56,36 @@ to the Claude app. You can also connect Codex and local ChatGPT Work for command
 | Working | Waiting on you |
 |:---:|:---:|
 | <img src="docs/images/notch-working.png" width="116" alt="A white arc spinning inside the Claude ring and another inside the Codex ring, above the calendar ring"> | <img src="docs/images/notch-waiting.png" width="116" alt="The whole Claude ring pulsing amber, above the Codex and calendar rings"> |
+
+## Usage history and limit alerts
+
+Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
+
+<img src="docs/images/usage.png" width="340" alt="The Usage page: Week picked, two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 2.5M tokens, stacked bars for Sunday to Saturday coloured by model, and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
+
+- **Week, Month or Year**, with ‹ › to look back. Each bar is a day (a month in Year), split by model. Hover a bar
+  for its numbers.
+- **Tokens without cache reads**: input, output and cache writes. Claude re-reads its cached context on every turn,
+  which would bury everything else; **Details** shows the cache reads apart, with the busiest day and the daily
+  average.
+- **The legend** totals each model for the period, biggest first. Claude and Codex share one chart.
+- **Pace lines** at the top: how each ring's limit is going, for example "Claude · 5-hour · 73% · full at 4:10 PM".
+- **Where the numbers come from**: the logs Claude Code and Codex already write on this PC. Capsule reads only the
+  token counts, the model and the time, and keeps daily totals in `%USERPROFILE%\.capsule\usage-history.json`.
+  Claude Code deletes its logs after 30 days, so the first launch counts the last 30 days or so; from then on Capsule
+  keeps its own history. Claude Code running inside the Claude desktop app keeps its logs where Capsule can't see
+  them, so those sessions aren't counted.
+
+**Pace.** Capsule remembers each usage check (`usage-samples.json`) and works out how fast each limit is rising:
+over the last hour for 5-hour limits, the last day for weekly ones. It needs 15 minutes (2 hours for weekly limits)
+and a visible rise before it forecasts anything.
+
+**Alerts** come as Windows notifications from Capsule's tray icon, each once per limit window:
+- "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)
+- "At this pace you'll hit Claude's 5-hour limit at 4:10 PM, 41 min before it resets." (from 30% used, once two
+  checks in a row agree)
+
+To turn them off, untick **Limit alerts** in Capsule's menu.
 
 ## Approve and answer Claude from the capsule
 
@@ -436,6 +470,9 @@ anywhere else.
 - It reads the end of Codex's recent session logs every couple of seconds, only to find where a turn starts
   and ends, and scans Codex's day folders every 15 seconds for logs written recently. Nothing from those
   files is kept, shown or logged.
+- **Usage history** reads Claude Code's logs (`~/.claude/projects`) and Codex's session logs every 5 minutes, only
+  what's new since last time. From each reply it keeps the model, the time and the token counts. Prompts, replies,
+  file paths and project names are never kept, shown or logged; `usage-history.json` names each log only by a hash.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only
