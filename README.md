@@ -67,6 +67,8 @@ The **Music** cell shows your local playback. Start a song in Spotify or YouTube
 the artwork, title, artist, playback progress, and **Previous**, **Play / Pause**, and **Next**. The full panel has
 the same music controls. No extra sign-in or API key is needed.
 
+- The Music cell appears while something plays and stays for 2 minutes after you pause, so Play is still in
+  reach; then the capsule goes back to its other cells. The panel's music tile is always there.
 - Spotify's desktop app and players that expose Windows media controls are detected automatically.
 - YouTube Music in Chrome, Edge, Firefox, and other supported browsers appears under the **browser's name**.
   Windows supplies the player and track metadata, not the tab URL, so other media tabs can appear too.
