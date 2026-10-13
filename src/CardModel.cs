@@ -11,6 +11,8 @@ namespace Capsule
         public string UsedText = "";
         public string Color = Palette.Green;
         public double Used;
+        public string Pace = "";   // "At this pace: full at 4:10 PM", or ""
+        public bool PaceWarn;       // full before the reset: amber
     }
 
     public sealed class SessionRow
@@ -48,7 +50,8 @@ namespace Capsule
         public string SessionsHint = "";
         public string Footer = "";
 
-        public static CardModel From(Reading r, IList<SessionStatus> sessions, bool hooksConnected, long now, CultureInfo culture)
+        // pace: the forecast for a window (usage history spec §2), or null for none.
+        public static CardModel From(Reading r, IList<SessionStatus> sessions, bool hooksConnected, long now, CultureInfo culture, Func<LimitWindow, Forecast> pace = null)
         {
             var m = new CardModel();
             m.Provider = r.Provider;
@@ -62,6 +65,12 @@ namespace Capsule
                 row.Used = w.Used;
                 row.UsedText = Format.Percent(w) + " used";
                 row.Color = Palette.ForUsed(w.Used);
+                Forecast f = pace != null ? pace(w) : null;
+                if (f != null)
+                {
+                    row.Pace = Capsule.Pace.CardLine(f, culture) ?? "";
+                    row.PaceWarn = f.Kind == ForecastKind.Full;
+                }
                 m.Rows.Add(row);
             }
             if (r.Provider == "claude")

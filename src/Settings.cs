@@ -15,6 +15,7 @@ namespace Capsule
         public string NotionDatabase = "";   // the ideas database's id (32 hex digits); "" = not set up
         public string Hotkey = HotkeyText.Default;   // the global shortcut that opens the panel on the Ideas box
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
+        public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
         public string GoogleClientId = "";   // the user's own OAuth client (Desktop app); "" = not set up. Its secret is in google-client-secret.bin
         // Calendars whose box the user changed: calendar id -> shown. The others follow Google's own "selected". Ids
         // only, never names.
@@ -36,6 +37,7 @@ namespace Capsule
             uint modifiers, key;
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "hotkey")), out modifiers, out key)) c.Hotkey = HotkeyText.Format(modifiers, key);
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
+            c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
             c.GoogleClientId = (Json.Str(Json.Get(o, "google_client_id")) ?? "").Trim();
             Dictionary<string, object> choices = Json.Obj(Json.Get(o, "google_calendars"));
             if (choices != null)
@@ -56,6 +58,7 @@ namespace Capsule
             d["notion_database"] = NotionDatabase;
             d["hotkey"] = Hotkey;
             d["check_updates"] = CheckUpdates;
+            d["limit_alerts"] = LimitAlerts;
             d["google_client_id"] = GoogleClientId;
             var choices = new Dictionary<string, object>();
             foreach (KeyValuePair<string, bool> choice in CalendarChoices) choices[choice.Key] = choice.Value;

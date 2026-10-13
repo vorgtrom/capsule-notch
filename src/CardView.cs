@@ -234,6 +234,7 @@ namespace Capsule
             box.Children.Add(top);
             box.Children.Add(Bar(row.Used, row.Color));
             box.Children.Add(MakeText(row.UsedText, 12, Palette.Text, FontWeights.Normal));
+            if (row.Pace != "") box.Children.Add(MakeText(row.Pace, 11.5, row.PaceWarn ? Palette.Amber : Palette.Secondary, row.PaceWarn ? FontWeights.SemiBold : FontWeights.Normal));
             return box;
         }
 

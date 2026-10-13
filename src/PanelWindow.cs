@@ -58,7 +58,8 @@ namespace Capsule
                 }
                 if (e.Key != Key.Escape) return;
                 e.Handled = true;
-                Dismiss();
+                if (view.ShowingUsage) view.ShowBoard();   // Esc on the Usage page goes back to the tiles
+                else Dismiss();
             };
             Deactivated += delegate { if (!view.KeepOpenOnDeactivate) Dismiss(); };
             // Alt+F4, or any other close request, only dismisses: a WPF window that has been closed can never be shown again.

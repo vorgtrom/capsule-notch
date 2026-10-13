@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10;
 
         readonly Application app;
         Config config;
@@ -28,6 +28,10 @@ namespace Capsule
         CalendarModule calendar;
         UpdateCheck updates;   // a release build's once-a-day look for a newer release
         CodexActivity codexActivity;
+        UsageHistory history;        // token use per day and model, from the Claude Code and Codex logs
+        SampleStore samples;         // the limit readings behind the pace forecast, and the alerts already shown
+        UsagePeriod usagePeriod = UsagePeriod.Week;
+        int usageOffset;             // the Usage page's period: 0 now, -1 the one before
         List<IModule> modules;
         NotchWindow notch;
         HoverCard card;
@@ -90,7 +94,10 @@ namespace Capsule
             calendar.SignedOutByGoogle += delegate { tray.Balloon("Capsule", "Google ended Capsule's access to your calendar. Sign in again in Capsule's settings (⚙ in the panel)."); };
             calendar.SignedInWith += OnGoogleSignedIn;
             calendar.ClientIdChosen += OnGoogleClientIdChosen;
-            modules = new List<IModule> { sessions, claude, codex, calendar, ideas };
+            history = new UsageHistory(Paths.UsageHistoryFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
+            history.Changed += delegate { Guard("usage", ShowUsageIfOpen); };
+            samples = SampleStore.Load(Paths.UsageSamplesFile);
+            modules = new List<IModule> { sessions, claude, codex, calendar, ideas, history };
             updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
             updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
             codexActivity = new CodexActivity(Paths.CodexHome);
@@ -155,6 +162,10 @@ namespace Capsule
             panel.View.GoogleSignOutClicked += delegate { Guard("calendar sign-out", calendar.SignOut); };
             panel.View.CalendarToggled += OnCalendarToggled;
             panel.View.MonthClicked += delegate { Guard("month", OpenMonth); };
+            panel.View.UsageClicked += delegate { Guard("usage", OpenUsage); };
+            panel.View.Usage.PeriodChosen += delegate(UsagePeriod p) { Guard("usage", delegate { usagePeriod = p; usageOffset = 0; ShowUsage(); }); };
+            panel.View.Usage.PreviousClicked += delegate { Guard("usage", delegate { usageOffset--; ShowUsage(); }); };
+            panel.View.Usage.NextClicked += delegate { Guard("usage", delegate { if (usageOffset < 0) usageOffset++; ShowUsage(); }); };
             panel.View.MonthClosed += delegate { calendar.CloseMonth(); };
             MonthView page = panel.View.Month;
             page.PreviousClicked += delegate { Guard("month", delegate { MoveMonth(-1); }); };
@@ -228,6 +239,7 @@ namespace Capsule
         void OnUsageChecked()
         {
             SaveReadings();
+            Guard("limits", CheckLimits);
             Guard("render", Render);
         }
 
@@ -554,6 +566,72 @@ namespace Capsule
             panel.View.ShowMonth(calendar.Month(monthYear, monthMonth, monthDay, Clock.NowMs(), CultureInfo.CurrentCulture));
         }
 
+        // A fresh reading becomes a pace sample, and may bring a limit alert (usage history spec §2).
+        void CheckLimits()
+        {
+            long now = Clock.NowMs();
+            bool changed = false;
+            foreach (UsageModule m in new[] { claude, codex })
+            {
+                Reading r = m.Current;
+                if (!samples.Record(r, now)) continue;
+                changed = true;
+                foreach (string text in LimitAlerts.Check(samples, r, config.LimitAlerts, now, CultureInfo.CurrentCulture))
+                {
+                    Log.Info("limits: alert shown");
+                    tray.Balloon("Capsule", text);
+                }
+            }
+            if (changed) samples.Save(Paths.UsageSamplesFile);
+            ShowUsageIfOpen();
+        }
+
+        Forecast PaceFor(string provider, LimitWindow w) { return Pace.For(samples, provider, w, Clock.NowMs()); }
+
+        void OpenUsage()
+        {
+            usageOffset = 0;
+            history.Refresh();
+            ShowUsage();
+        }
+
+        void ShowUsage()
+        {
+            UsageModel m = UsageModel.Build(history.Snapshot, usagePeriod, usageOffset, DateTime.Today, CultureInfo.CurrentCulture, !Theme.Current.Light);
+            long now = Clock.NowMs();
+            foreach (UsageModule u in new[] { claude, codex })
+            {
+                Reading r = u.Current;
+                LimitWindow w = r.DisplayWindow;
+                if (r.Status != "ok" || w == null) continue;
+                m.Pace.Add(PaceLineFor(r.Provider, w, PaceFor(r.Provider, w), now, CultureInfo.CurrentCulture));
+            }
+            panel.View.ShowUsage(m);
+        }
+
+        // "Claude · 5-hour · 73% · full at 4:10 PM".
+        internal static PaceLine PaceLineFor(string provider, LimitWindow w, Forecast f, long now, CultureInfo culture)
+        {
+            string name = LimitAlerts.Name(provider, w);
+            if (name.EndsWith(" limit", StringComparison.Ordinal)) name = name.Substring(0, name.Length - " limit".Length);
+            string head = (provider == "codex" ? "Codex" : "Claude") + " · " + name + " · " + Format.Percent(w) + " · ";
+            bool day = f.LengthMs > Pace.Day;
+            switch (f.Kind)
+            {
+                case ForecastKind.Full: return new PaceLine { Text = head + "full " + (day ? "" : "at ") + Pace.When(f.FullAtMs, day, culture), Warn = true };
+                case ForecastKind.AtReset: return new PaceLine { Text = head + "about " + f.AtResetPercent + "% at reset" };
+                case ForecastKind.Reached: return new PaceLine { Text = head + "limit reached", Warn = true };
+                default:
+                    string reset = Format.ResetText(w.ResetsAtMs, now, culture);
+                    return new PaceLine { Text = head + (reset == "" ? "no forecast yet" : char.ToLowerInvariant(reset[0]) + reset.Substring(1)) };
+            }
+        }
+
+        void ShowUsageIfOpen()
+        {
+            if (!disposed && panel.IsOpen && panel.View.ShowingUsage) ShowUsage();
+        }
+
         void ShowMonthIfOpen()
         {
             if (!disposed && panel.IsOpen && panel.View.ShowingMonth) ShowMonth();
@@ -756,7 +834,7 @@ namespace Capsule
             if (broker.Current != null)
                 card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             else
-                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Provider, w)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             NotchOnTop();
         }
 
@@ -826,6 +904,7 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdAutostart, Text = "Start with Windows", Checked = autostart },
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
             });
+            items.Add(new MenuItemSpec { Id = CmdLimitAlerts, Text = "Limit alerts", Checked = config.LimitAlerts });
             if (updates.CanCheck) items.Add(new MenuItemSpec { Id = CmdCheckUpdates, Text = "Check for updates", Checked = config.CheckUpdates });   // a release build only
             items.Add(new MenuItemSpec { Separator = true });
             items.Add(new MenuItemSpec { Id = CmdQuit, Text = "Quit Capsule" });
@@ -862,6 +941,10 @@ namespace Capsule
                     config.CheckUpdates = !config.CheckUpdates;
                     config.Save(Paths.ConfigFile);
                     updates.Enabled = config.CheckUpdates;
+                    break;
+                case CmdLimitAlerts:
+                    config.LimitAlerts = !config.LimitAlerts;
+                    config.Save(Paths.ConfigFile);
                     break;
                 case CmdQuit:
                     app.Shutdown();
