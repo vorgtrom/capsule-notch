@@ -57,6 +57,24 @@ to the Claude app. You can also connect Codex and local ChatGPT Work for command
 |:---:|:---:|
 | <img src="docs/images/notch-working.png" width="116" alt="A white arc spinning inside the Claude ring and another inside the Codex ring, above the calendar ring"> | <img src="docs/images/notch-waiting.png" width="116" alt="The whole Claude ring pulsing amber, above the Codex and calendar rings"> |
 
+## Spotify and YouTube Music
+
+The **Music** cell shows your local playback. Start a song in Spotify or YouTube Music, then hover the cell for
+the artwork, title, artist, playback progress, and **Previous**, **Play / Pause**, and **Next**. The full panel has
+the same music controls. No extra sign-in or API key is needed.
+
+- Spotify's desktop app and players that expose Windows media controls are detected automatically.
+- YouTube Music in Chrome, Edge, Firefox, and other supported browsers appears under the **browser's name**.
+  Windows supplies the player and track metadata, not the tab URL, so other media tabs can appear too.
+- When several players or tabs are available, click **Source** to cycle through them. The tooltip names the next
+  source and track. Your selection stays chosen while it is paused, until that session closes or Capsule restarts.
+- Keep the music app or browser tab open. Play a song once if the player has not appeared yet. A player that does
+  not publish Windows media information cannot be shown; controls the player does not support are disabled.
+- This controls playback **on this PC**. It does not browse your library, control Spotify on another device, or
+  seek within a track. YouTube Music desktop wrappers work when they publish Windows media sessions.
+- Music needs Windows 10 version 1809 or later. Track metadata and artwork stay in memory; Capsule does not save
+  listening history or contact Spotify or YouTube itself.
+
 ## Usage history and limit alerts
 
 Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
@@ -456,6 +474,7 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
+| Music | local Windows media sessions from Spotify, YouTube Music desktop apps, and supported browsers: track metadata, artwork, playback state, available controls and timeline | no internet connection; playback commands go only to the selected local Windows media session |
 | Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
 

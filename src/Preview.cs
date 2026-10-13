@@ -45,6 +45,7 @@ namespace Capsule
             SaveCalendar(dir, "", claude, codex, now, en);
             SaveMonth(dir, "", now, en);
             SaveUsage(dir, "", en);
+            SaveMusic(dir, "", claude, codex, now, en);
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
@@ -53,7 +54,38 @@ namespace Capsule
             SaveCalendar(dir, "-light", claude, codex, now, en);
             SaveMonth(dir, "-light", now, en);
             SaveUsage(dir, "-light", en);
+            SaveMusic(dir, "-light", claude, codex, now, en);
             Theme.Use(Theme.For(false, false));
+        }
+
+        static void SaveMusic(string dir, string suffix, Reading claude, Reading codex, long now, CultureInfo en)
+        {
+            var drawing = new DrawingGroup();
+            using (DrawingContext c = drawing.Open())
+            {
+                c.DrawRectangle(new SolidColorBrush(Color.FromRgb(40, 81, 80)), null, new Rect(0, 0, 160, 160));
+                c.DrawEllipse(new SolidColorBrush(Color.FromRgb(224, 168, 99)), null, new Point(110, 50), 28, 28);
+                c.DrawRectangle(new SolidColorBrush(Color.FromRgb(24, 52, 63)), null, new Rect(0, 106, 160, 54));
+                c.DrawEllipse(new SolidColorBrush(Color.FromRgb(96, 143, 127)), null, new Point(22, 153), 90, 67);
+            }
+            drawing.Freeze();
+            var art = new DrawingImage(drawing);
+            art.Freeze();
+            var m = new MusicSnapshot { SelectedKey = "spotify" };
+            m.Tracks.Add(new MusicTrack { Key = "spotify", Source = "Spotify", Title = "Evening Light", Artist = "The Paper Kites", Artwork = art,
+                Playing = true, CanToggle = true, CanPrevious = true, CanNext = true, PositionSeconds = 84, DurationSeconds = 228 });
+            m.Tracks.Add(new MusicTrack { Key = "chrome", Source = "Chrome", Title = "YouTube Music", CanToggle = true });
+            List<CellModel> cells = Cells(now, null, claude, codex);
+            cells.Add(m.Cell());
+            SaveNotch(dir, "notch-music" + suffix + ".png", cells, false);
+            var view = new CardView();
+            view.ShowMusic(m, true);
+            var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+            host.Children.Add(view);
+            SavePng(host, Path.Combine(dir, "card-music" + suffix + ".png"));
+            PanelModel panel = SamplePanel(claude, codex, now, en);
+            panel.Music = m;
+            SavePanel(dir, "panel-music" + suffix + ".png", panel, false);
         }
 
         // The capsule's cells with the calendar's under them, during the made-up meeting.
