@@ -162,6 +162,13 @@ namespace Capsule
             Place();
         }
 
+        public void RefreshMusic(MusicSnapshot model)
+        {
+            if (!IsOpen) return;
+            view.UpdateMusic(model);
+            Place();
+        }
+
         // The theme changed: recolour, and redraw if open.
         public void Restyle(PanelModel model)
         {

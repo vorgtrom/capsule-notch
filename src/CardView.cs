@@ -20,6 +20,7 @@ namespace Capsule
         readonly Border panel = new Border();
         readonly StackPanel content = new StackPanel();
         readonly PromptView prompt = new PromptView();
+        readonly MusicView music = new MusicView();
         bool pointRight = true;
 
         public CardView()
@@ -38,6 +39,7 @@ namespace Capsule
         public Geometry Outline { get { return glass.Outline; } }
 
         public PromptView Prompt { get { return prompt; } }
+        public MusicView Music { get { return music; } }
         public bool ShowingPrompt { get { return panel.Child == prompt; } }
 
         // pointRight: the notch is to the card's right (a right-edge notch), so the pointer goes on the right.
@@ -55,6 +57,15 @@ namespace Capsule
             prompt.Clear();
             BuildCalendar(model);
             panel.Child = content;
+            Point(pointRight);
+        }
+
+        public void ShowMusic(MusicSnapshot model, bool pointRight)
+        {
+            prompt.Clear();
+            music.Restyle();
+            music.Update(model);
+            panel.Child = music;
             Point(pointRight);
         }
 

@@ -5,6 +5,9 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Music on the notch.** Show Spotify and YouTube Music playback through Windows media sessions, with artwork,
+  track details, progress, previous/play/pause/next, and a source switcher on the hover card and full panel.
+  Browser players use their browser's name. No extra sign-in, API key, or saved listening history.
 - **Usage history.** Click the Claude or Codex tile for tokens per day by model, for a week, a month or a year, read
   from the logs Claude Code and Codex already write on your PC. Cache reads are shown apart, in Details.
 - **Pace.** The hover card and the Usage page say when a limit will be full at the current pace, or about how full

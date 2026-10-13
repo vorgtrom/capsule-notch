@@ -135,6 +135,12 @@ namespace Capsule
             Present(delegate(bool pointRight) { view.ShowCalendar(model, pointRight); }, cell, leftEdge, monitor);
         }
 
+        public void ShowMusicBeside(MusicSnapshot model, RECT cell, bool leftEdge, MonitorInfo monitor)
+        {
+            GiveUpFocus();
+            Present(delegate(bool pointRight) { view.ShowMusic(model, pointRight); }, cell, leftEdge, monitor);
+        }
+
         // A held request in place of the usage (act-from-notch spec §3), shown the same way. The card keeps the keyboard
         // only while the Other… box is open, and gets the caret back into it after a redraw.
         public void ShowPromptBeside(PromptCardModel model, RECT cell, bool leftEdge, MonitorInfo monitor)

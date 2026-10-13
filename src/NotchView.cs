@@ -14,6 +14,7 @@ namespace Capsule
     {
         public string Provider = "";
         public string Glyph;              // an icon-font glyph in place of the provider's mark (the calendar's), or null
+        public ImageSource Artwork;       // local music artwork, already frozen on the reader's thread
         public string Text = "–";         // "73%", "–", "Sign in"; the calendar's "2:30", "now" or "—"
         public bool ShowArc;
         public double Used;               // percent; sets the arc length
@@ -167,6 +168,7 @@ namespace Capsule
             readonly WPath arc = new WPath();
             readonly WPath spinner = new WPath();
             readonly WPath logo = new WPath();
+            readonly Image artwork = new Image { Stretch = Stretch.UniformToFill, IsHitTestVisible = false };
             readonly Border glyphBox = new Border();       // holds the glyph of a cell that has one (the calendar's), centred in the ring
             readonly TextBlock glyph = new TextBlock();
             readonly TextBlock text = new TextBlock();
@@ -211,6 +213,8 @@ namespace Capsule
                 glyphBox.Child = glyph;
                 glyphBox.Visibility = Visibility.Collapsed;
                 Place(glyphBox, c, Ring);
+                Place(artwork, c, Ring - 12);
+                artwork.Clip = new EllipseGeometry(new Point((Ring - 12) / 2, (Ring - 12) / 2), (Ring - 12) / 2, (Ring - 12) / 2);
                 text.Width = PillWidth;
                 text.TextAlignment = TextAlignment.Center;
                 text.Foreground = Brush(Palette.Text);
@@ -229,6 +233,7 @@ namespace Capsule
                 yield return spinner;
                 yield return logo;
                 yield return glyphBox;
+                yield return artwork;
                 yield return text;
             }
 
@@ -248,8 +253,10 @@ namespace Capsule
             public void Apply(CellModel m, bool animate)
             {
                 bool hasGlyph = m.Glyph != null;
-                logo.Visibility = hasGlyph ? Visibility.Collapsed : Visibility.Visible;
-                glyphBox.Visibility = hasGlyph ? Visibility.Visible : Visibility.Collapsed;
+                logo.Visibility = hasGlyph || m.Artwork != null ? Visibility.Collapsed : Visibility.Visible;
+                glyphBox.Visibility = hasGlyph && m.Artwork == null ? Visibility.Visible : Visibility.Collapsed;
+                artwork.Source = m.Artwork;
+                artwork.Visibility = m.Artwork != null ? Visibility.Visible : Visibility.Collapsed;
                 if (hasGlyph) glyph.Text = m.Glyph;
                 else logo.Data = Logos.For(m.Provider);
                 bool showArc = m.ShowArc && m.Used >= 0.5;

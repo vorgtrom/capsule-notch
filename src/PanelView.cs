@@ -30,6 +30,8 @@ namespace Capsule
         readonly Grid tiles = new Grid();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
         readonly StackPanel ideasContent = new StackPanel();
+        readonly Border musicTile = new Border();
+        readonly MusicView music = new MusicView();
         readonly DockPanel ideasHeader = new DockPanel { LastChildFill = false };
         readonly StackPanel ideasRows = new StackPanel();
         readonly StackPanel ideasFooter = new StackPanel();
@@ -85,12 +87,16 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 7; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 9; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
             Place(sessionsTile, 2, 0, 3);
             Place(calendarTile, 4, 0, 3);   // below Sessions, above Ideas (calendar spec §2); only while there is a model for it
-            Place(ideasTile, 6, 0, 3);
+            Place(musicTile, 6, 0, 3);
+            musicTile.Child = music;
+            musicTile.Visibility = Visibility.Collapsed;
+            tiles.RowDefinitions[7].Height = new GridLength(0);
+            Place(ideasTile, 8, 0, 3);
             calendarTile.Visibility = Visibility.Collapsed;
             tiles.RowDefinitions[5].Height = new GridLength(0);
             boardScroll.Content = tiles;
@@ -154,6 +160,7 @@ namespace Capsule
         }
 
         public TextBox IdeaBox { get { return ideaBox; } }
+        public MusicView Music { get { return music; } }
         public bool ShowingSettings { get { return settings.Visibility == Visibility.Visible; } }
         public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
         public bool KeepOpenOnDeactivate { get { return ShowingSettings || (ShowingMonth && month.FormOpen); } }
@@ -200,7 +207,8 @@ namespace Capsule
             Theme theme = Theme.Current;
             month.Restyle();
             usage.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, ideasTile })
+            music.Restyle();
+            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, ideasTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -262,6 +270,14 @@ namespace Capsule
             tiles.RowDefinitions[5].Height = new GridLength(calendar ? Gap : 0);   // no gap left behind a hidden tile
             calendarTile.Child = calendar ? CalendarContent(m.Calendar) : null;
             BuildIdeas(m.Ideas);
+            UpdateMusic(m.Music);
+        }
+
+        public void UpdateMusic(MusicSnapshot model)
+        {
+            musicTile.Visibility = model != null ? Visibility.Visible : Visibility.Collapsed;
+            tiles.RowDefinitions[7].Height = new GridLength(model != null ? Gap : 0);
+            music.Update(model);
             Relayout();
         }
 
