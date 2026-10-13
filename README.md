@@ -4,7 +4,7 @@
 
 A little glass capsule that sits on the edge of your Windows screen.
 
-https://github.com/user-attachments/assets/0b59d1d1-d33e-4aec-b436-ddce2e1dd8e6
+https://github.com/user-attachments/assets/a06d9093-e438-45f3-80eb-665846a6d5f4
 
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
 session is **working** or **waiting on you**. It keeps a **history of your tokens** by day and model, forecasts
@@ -13,7 +13,8 @@ event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: yo
 and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
 idea that lands in **Notion**. And when Claude asks for
 permission or asks you a question, you can **approve it or answer it right on the capsule**, without switching
-to the Claude app. You can also connect Codex and local ChatGPT Work for command approvals and answers.
+to the Claude app. You can also connect Codex and local ChatGPT Work for command approvals and answers. And it shows
+what's playing in **Spotify** or **YouTube Music**, with pause, skip and a player switch.
 
 Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
@@ -66,6 +67,10 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 The **Music** cell shows your local playback. Start a song in Spotify or YouTube Music, then hover the cell for
 the artwork, title, artist, playback progress, and **Previous**, **Play / Pause**, and **Next**. The full panel has
 the same music controls. No extra sign-in or API key is needed.
+
+| The Music cell | Hover it |
+|:---:|:---:|
+| <img src="docs/images/notch-music.png" width="116" alt="The capsule with a Claude ring, a Codex ring and a Music cell showing the album art, its ring filling in Spotify green, marked Playing"> | <img src="docs/images/card-music.png" width="328" alt="The music card: Spotify, the artwork, the track and artist, progress 1:24 of 3:48, Source: Spotify, and Previous, Pause and Next"> |
 
 - The Music cell appears while something plays and stays for 2 minutes after you pause, so Play is still in
   reach; then the capsule goes back to its other cells. The panel's music tile is always there.
