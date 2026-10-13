@@ -4,15 +4,19 @@
 
 A little glass capsule that sits on the edge of your Windows screen.
 
-https://github.com/user-attachments/assets/9a57d928-1af3-47c3-803b-26c9e8deb953
+https://github.com/user-attachments/assets/0b59d1d1-d33e-4aec-b436-ddce2e1dd8e6
 
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
-session is **working** or **waiting on you**. With **Google Calendar** connected, it also shows when your next
+session is **working** or **waiting on you**. It keeps a **history of your tokens** by day and model, forecasts
+when each limit will run out at your current **pace**, and **warns you** before it does. With **Google Calendar** connected, it also shows when your next
 event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: your usage, your sessions, today's
 and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
 idea that lands in **Notion**. And when Claude asks for
 permission or asks you a question, you can **approve it or answer it right on the capsule**, without switching
 to the Claude app. You can also connect Codex and local ChatGPT Work for command approvals and answers.
+
+Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
+[Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
