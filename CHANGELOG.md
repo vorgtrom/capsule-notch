@@ -5,6 +5,8 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+## v1.5.0
+
 - **Music on the notch.** Show Spotify and YouTube Music playback through Windows media sessions, with artwork,
   track details, progress, previous/play/pause/next, and a source switcher on the hover card and full panel.
   Browser players use their browser's name. No extra sign-in, API key, or saved listening history. The Music cell
@@ -15,6 +17,8 @@ download for each one. A release takes its notes from its section here.
   it'll be at its reset.
 - **Limit alerts** at 80% and 95%, and when you're on pace to run out before the reset. Untick **Limit alerts** in
   the menu to turn them off.
+- **Install with Scoop**: `scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule`, then
+  `scoop install capsule/capsule`. It picks up each new release by itself.
 
 ## v1.4.1
 
