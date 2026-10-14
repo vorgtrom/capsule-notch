@@ -7,9 +7,9 @@ download for each one. A release takes its notes from its section here.
 
 - **The Codex ring pulses amber again** while Capsule holds a Codex / Work request. It had stopped since requests came
   to the capsule.
-- **Usage history counts more carefully.** A forked or resumed Codex chat's copied turns count once; archived Codex
-  chats are counted; archiving a chat no longer counts it twice; and a log that is busy during the first count is read
-  once it frees up instead of losing its older days.
+- **Usage history counts more carefully.** A forked Codex chat's copied turns count once, while separate chats with
+  turns of the same size each count; archived Codex chats are counted; archiving a chat no longer counts it twice; and a
+  log that is busy during the first count keeps its older days, however long it stays busy.
 - **Forecasts hide when the numbers are stale.** After a failed usage check, the hover card and the Usage page show no
   "full at" forecast until fresh numbers arrive.
 
