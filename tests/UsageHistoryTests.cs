@@ -84,6 +84,7 @@ namespace Capsule
             StoresNoNamesOrText();
             PrunesSeenReplies();
             CountsAForkedCodexChatOnce();
+            CountsSeparateCodexChatsOfTheSameSize();
             WaitsForALockedLog();
             CountsArchivedCodexChats();
             KeepsCountsFromVersion150();
@@ -222,16 +223,28 @@ namespace Capsule
             return dir;
         }
 
+        static string Meta(string at, string id, string root, string forkedFrom)
+        {
+            return "{\"timestamp\":\"" + at + "\",\"type\":\"session_meta\",\"payload\":{\"id\":\"" + id + "\"" + (root != null ? ",\"session_id\":\"" + root + "\"" : "") + (forkedFrom != null ? ",\"forked_from_id\":\"" + forkedFrom + "\"" : "") + ",\"cwd\":\"/work\",\"originator\":\"codex_cli_rs\",\"cli_version\":\"0.50.0\"}}";
+        }
+
+        static string Context(string at, string model)
+        {
+            return "{\"timestamp\":\"" + at + "\",\"type\":\"turn_context\",\"payload\":{\"model\":\"" + model + "\"}}";
+        }
+
         static void CountsAForkedCodexChatOnce()
         {
             Setup s = Make();
             File.Delete(s.CodexLog);
             string day = Path.GetDirectoryName(s.CodexLog);
             string parent = Path.Combine(day, "rollout-2026-10-12T10-00-00-parent.jsonl");
-            File.WriteAllText(parent, "{\"timestamp\":\"2026-10-12T10:00:00Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}\n" + CodexTurn("2026-10-12T10:00:05Z", 100, 50) + "\n");
-            // The fork copies the parent's history (written again, so with a new time), then has a turn of its own.
+            File.WriteAllText(parent, Meta("2026-10-12T10:00:00Z", "p1", "p1", null) + "\n" + Context("2026-10-12T10:00:01Z", "gpt-5-codex") + "\n" + CodexTurn("2026-10-12T10:00:05Z", 100, 50) + "\n");
+            // The fork: its own session_meta (same root, forked from p1), a copy of the parent's history written again with
+            // new times (the parent's session_meta included), then a turn of its own.
             string child = Path.Combine(day, "rollout-2026-10-12T11-00-00-child.jsonl");
-            File.WriteAllText(child, "{\"timestamp\":\"2026-10-12T11:00:00Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}\n" + CodexTurn("2026-10-12T11:00:00Z", 100, 50) + "\n" + CodexTurn("2026-10-12T11:00:09Z", 300, 70) + "\n");
+            File.WriteAllText(child, Meta("2026-10-12T11:00:00Z", "c1", "p1", "p1") + "\n" + Meta("2026-10-12T11:00:00Z", "p1", "p1", null) + "\n" + Context("2026-10-12T11:00:00Z", "gpt-5-codex") + "\n"
+                + CodexTurn("2026-10-12T11:00:00Z", 100, 50) + "\n" + CodexTurn("2026-10-12T11:00:09Z", 300, 70) + "\n");
             var store = new UsageStore();
             UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
             TestRunner.Eq(150L + 370, store.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "a forked chat's copied turn counts once; its own turn counts (150 + 370, not 670)");
@@ -239,6 +252,33 @@ namespace Capsule
             UsageScanner.Scan(later, s.Logs().Where(l => !l.Path.Contains("child")).ToList(), Now, UsageScanner.BudgetBytes);
             UsageScanner.Scan(later, s.Logs(), Now + 60000, UsageScanner.BudgetBytes);
             TestRunner.Eq(520L, later.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "also when the fork appears after the parent was counted");
+
+            // An older fork without session_id still finds its family through forked_from_id.
+            File.WriteAllText(child, Meta("2026-10-12T11:00:00Z", "c1", null, "p1") + "\n" + Context("2026-10-12T11:00:00Z", "gpt-5-codex") + "\n"
+                + CodexTurn("2026-10-12T11:00:00Z", 100, 50) + "\n" + CodexTurn("2026-10-12T11:00:09Z", 300, 70) + "\n");
+            File.WriteAllText(parent, Meta("2026-10-12T10:00:00Z", "p1", null, null) + "\n" + Context("2026-10-12T10:00:01Z", "gpt-5-codex") + "\n" + CodexTurn("2026-10-12T10:00:05Z", 100, 50) + "\n");
+            var legacy = new UsageStore();
+            UsageScanner.Scan(legacy, s.Logs(), Now, UsageScanner.BudgetBytes);
+            TestRunner.Eq(520L, legacy.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "a fork named only by forked_from_id counts its copy once too");
+        }
+
+        static void CountsSeparateCodexChatsOfTheSameSize()
+        {
+            Setup s = Make();
+            File.Delete(s.CodexLog);
+            string day = Path.GetDirectoryName(s.CodexLog);
+            File.WriteAllText(Path.Combine(day, "rollout-2026-10-12T10-00-00-a.jsonl"), Meta("2026-10-12T10:00:00Z", "a1", "a1", null) + "\n" + Context("2026-10-12T10:00:01Z", "gpt-5-codex") + "\n" + CodexTurn("2026-10-12T10:00:05Z", 100, 50) + "\n");
+            File.WriteAllText(Path.Combine(day, "rollout-2026-10-12T12-00-00-b.jsonl"), Meta("2026-10-12T12:00:00Z", "b1", "b1", null) + "\n" + Context("2026-10-12T12:00:01Z", "gpt-5-codex") + "\n" + CodexTurn("2026-10-12T12:00:05Z", 100, 50) + "\n");
+            // A third on another day, with another model, again 150 tokens.
+            string other = Path.Combine(s.Codex, "sessions", "2026", "10", "10");
+            Directory.CreateDirectory(other);
+            File.WriteAllText(Path.Combine(other, "rollout-2026-10-10T09-00-00-c.jsonl"), Meta("2026-10-10T09:00:00Z", "d1", "d1", null) + "\n" + Context("2026-10-10T09:00:01Z", "gpt-5") + "\n" + CodexTurn("2026-10-10T09:00:05Z", 100, 50) + "\n");
+            // And one with no session_meta at all: known by its own log.
+            File.WriteAllText(Path.Combine(day, "rollout-2026-10-12T13-00-00-e.jsonl"), Context("2026-10-12T13:00:01Z", "gpt-5-codex") + "\n" + CodexTurn("2026-10-12T13:00:05Z", 100, 50) + "\n");
+            var store = new UsageStore();
+            UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
+            TestRunner.Eq(450L, store.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "separate chats with equal-sized turns each count (3 × 150, not 150)");
+            TestRunner.Eq(150L, store.Get(UsageScanner.Day(UsageLogs.Time("2026-10-10T09:00:05Z")), "gpt-5")[0], "and on another day, with another model");
         }
 
         static void WaitsForALockedLog()
@@ -247,15 +287,20 @@ namespace Capsule
             var store = new UsageStore();
             using (new FileStream(s.ClaudeLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
-            TestRunner.Check(!store.BackfillDone, "a log that couldn't be read keeps the backfill pending");
             UsageScanner.Scan(store, s.Logs(), Now + 3L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
-            TestRunner.Eq(1515L, store.Get(Day, "claude-opus-4-1-20250805")[0], "once it can be read, its older replies still count");
-            TestRunner.Check(store.BackfillDone, "and the backfill finishes");
+            TestRunner.Eq(1515L, store.Get(Day, "claude-opus-4-1-20250805")[0], "a log locked during the first count still counts its older replies once it frees up");
 
+            // Locked for a long time: the rest of the backfill finishes, and the log's history still counts when it frees up.
+            Setup t = Make();
             var stuck = new UsageStore();
-            using (new FileStream(s.ClaudeLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                for (int i = 0; i < UsageScanner.GiveUpAfterFails; i++) UsageScanner.Scan(stuck, s.Logs(), Now + i, UsageScanner.BudgetBytes);
-            TestRunner.Check(stuck.BackfillDone, "a log that stays unreadable stops holding the backfill back after " + UsageScanner.GiveUpAfterFails + " scans");
+            using (new FileStream(t.ClaudeLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                for (int i = 0; i < 25; i++) UsageScanner.Scan(stuck, t.Logs(), Now + i * 5000L, UsageScanner.BudgetBytes);
+            TestRunner.Check(stuck.BackfillDone, "the rest of the backfill doesn't wait for a locked log");
+            TestRunner.Eq(700L, stuck.Get(CodexDay, "gpt-5-codex")[0], "the other logs are counted meanwhile");
+            UsageScanner.Scan(stuck, t.Logs(), Now + 14L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(1515L, stuck.Get(Day, "claude-opus-4-1-20250805")[0], "unlocked two weeks later, its older replies still count");
+            UsageScanner.Scan(stuck, t.Logs(), Now + 15L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(1515L, stuck.Get(Day, "claude-opus-4-1-20250805")[0], "and only once");
         }
 
         static void CountsArchivedCodexChats()

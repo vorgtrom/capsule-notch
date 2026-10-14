@@ -13,10 +13,10 @@ namespace Capsule
     public sealed class FileMark
     {
         public long Offset, Length, MtimeMs;
-        public int Fails;   // scans in a row that couldn't read it
+        public bool Initial;   // there before the first count finished, and not yet read to its end: its old replies still count
         public CodexFileState Codex = new CodexFileState();
 
-        public FileMark Clone() { return new FileMark { Offset = Offset, Length = Length, MtimeMs = MtimeMs, Fails = Fails, Codex = Codex.Clone() }; }
+        public FileMark Clone() { return new FileMark { Offset = Offset, Length = Length, MtimeMs = MtimeMs, Initial = Initial, Codex = Codex.Clone() }; }
     }
 
     // A Claude reply already counted: where it went and the numbers it was counted at.
@@ -92,7 +92,8 @@ namespace Capsule
                 m["offset"] = f.Value.Offset;
                 m["length"] = f.Value.Length;
                 m["mtime"] = f.Value.MtimeMs;
-                if (f.Value.Fails > 0) m["fails"] = f.Value.Fails;
+                if (f.Value.Initial) m["initial"] = true;
+                if (f.Value.Codex.Lineage != "") m["lineage"] = f.Value.Codex.Lineage;
                 if (f.Value.Codex.Model != "") m["model"] = f.Value.Codex.Model;
                 if (f.Value.Codex.Totals != null) m["totals"] = f.Value.Codex.Totals;
                 files[f.Key] = m;
@@ -122,8 +123,9 @@ namespace Capsule
                     }
                 foreach (var f in Json.Obj(Json.Get(o, "files")) ?? new Dictionary<string, object>())
                 {
-                    var m = new FileMark { Offset = L(Json.Get(f.Value, "offset")), Length = L(Json.Get(f.Value, "length")), MtimeMs = L(Json.Get(f.Value, "mtime")), Fails = (int)L(Json.Get(f.Value, "fails")) };
+                    var m = new FileMark { Offset = L(Json.Get(f.Value, "offset")), Length = L(Json.Get(f.Value, "length")), MtimeMs = L(Json.Get(f.Value, "mtime")), Initial = Json.Get(f.Value, "initial") as bool? ?? false };
                     m.Codex.Model = Json.Str(Json.Get(f.Value, "model")) ?? "";
+                    m.Codex.Lineage = Json.Str(Json.Get(f.Value, "lineage")) ?? "";
                     object[] totals = Json.Arr(Json.Get(f.Value, "totals"));
                     if (totals != null && totals.Length == 3) m.Codex.Totals = totals.Select(L).ToArray();
                     s.Files[f.Key] = m;
@@ -174,7 +176,6 @@ namespace Capsule
         public const long ResumeGraceMs = 48L * 3600 * 1000;   // after the backfill, older replies are copies from a resume
         public const long SeenKeepMs = 3L * 24 * 3600 * 1000;
         public const long CodexSeenKeepMs = 35L * 24 * 3600 * 1000;   // a chat can be forked weeks later
-        public const int GiveUpAfterFails = 20;                        // a log unreadable for this many scans stops holding the backfill
         const int Block = 1024 * 1024;
 
         // Every Claude Code transcript and Codex rollout on this PC. Never throws.
@@ -230,7 +231,7 @@ namespace Capsule
             long previousStart = store.LastScanStartMs;
             long ignoreBefore = store.BackfillDone && previousStart > 0 ? previousStart - ResumeGraceMs : long.MinValue;
             var present = new HashSet<string>();
-            bool budgetHit = false, unread = false;
+            bool budgetHit = false;
             foreach (LogFile log in logs)
             {
                 string key = Key(log);
@@ -241,7 +242,7 @@ namespace Capsule
                     // A Codex log counted by Capsule 1.5.0, which knew logs by their path.
                     string legacy = Hash(log.Path);
                     if (log.Codex && store.Files.TryGetValue(legacy, out mark)) store.Files.Remove(legacy);
-                    else mark = new FileMark();
+                    else mark = new FileMark { Initial = !store.BackfillDone };
                     store.Files[key] = mark;
                     changed = true;
                 }
@@ -253,41 +254,38 @@ namespace Capsule
                     length = info.Length;
                     mtime = Clock.ToMs(info.LastWriteTimeUtc);
                 }
-                catch (Exception) { if (Failed(mark)) unread = true; changed = true; continue; }
+                catch (Exception) { continue; }   // can't be looked at now: try again next time
                 if (length < mark.Offset) { mark.Offset = 0; mark.Codex = new CodexFileState(); }
                 if (mark.Length != length || mark.MtimeMs != mtime) { mark.Length = length; mark.MtimeMs = mtime; changed = true; }
                 if (mark.Offset >= length) continue;
                 if (budget <= 0) { budgetHit = true; continue; }
                 List<string> lines;
                 long consumed = ReadLines(log.Path, mark.Offset, budget, out lines);
-                if (consumed < 0) { if (Failed(mark)) unread = true; changed = true; continue; }   // couldn't be read now: try again next time
-                mark.Fails = 0;
+                if (consumed < 0) continue;   // couldn't be read now: try again next time; an Initial log keeps its old replies
                 budget -= consumed;
                 if (consumed > 0) { mark.Offset += consumed; changed = true; }
                 if (budget <= 0 && mark.Offset < length) budgetHit = true;   // stopped for the budget, not at the end
+                mark.Codex.Fallback = key;
+                // A log that was there for the first count is still reading its own history, not a resume's copies: the
+                // age cutoff waits until it has been read to the end once.
+                long cutoff = mark.Initial ? long.MinValue : ignoreBefore;
                 foreach (string line in lines)
                 {
                     UsageEntry e = log.Codex ? UsageLogs.ParseCodex(line, mark.Codex) : UsageLogs.ParseClaude(line);
-                    if (e == null || e.AtMs < ignoreBefore) continue;
+                    if (e == null || e.AtMs < cutoff) continue;
                     Count(store, e);
                 }
+                if (mark.Initial && mark.Offset >= length) { mark.Initial = false; changed = true; }
             }
             foreach (string gone in store.Files.Keys.Where(k => !present.Contains(k)).ToList()) { store.Files.Remove(gone); changed = true; }
-            // Not done while a log couldn't be read: once done, older replies count as copies, and its history would be lost.
-            if (!budgetHit && !unread && !store.BackfillDone) { store.BackfillDone = true; changed = true; }
+            // A log that couldn't be read doesn't hold this back: it stays Initial, so its history still counts later.
+            if (!budgetHit && !store.BackfillDone) { store.BackfillDone = true; changed = true; }
             // Kept whole through the backfill, so a resumed session's copies read in a later piece still match.
             if (store.BackfillDone)
                 foreach (string old in store.Seen.Where(p => p.Value.AtMs < now - (p.Key.StartsWith(UsageLogs.CodexKeyPrefix, StringComparison.Ordinal) ? CodexSeenKeepMs : SeenKeepMs)).Select(p => p.Key).ToList())
                     store.Seen.Remove(old);
             store.LastScanStartMs = now;
             return changed;
-        }
-
-        // One more failed read of a log. True while it should still hold the backfill back.
-        static bool Failed(FileMark mark)
-        {
-            mark.Fails++;
-            return mark.Fails < GiveUpAfterFails;
         }
 
         // A repeated Claude reply tops up to its largest numbers; a Codex turn already counted (a fork's copy) adds nothing;

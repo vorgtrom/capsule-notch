@@ -15,16 +15,18 @@ namespace Capsule
         public long CacheRead;
     }
 
-    // What a Codex log has told us so far: the model of the current turn and the last running total, so a repeated
-    // total isn't counted twice. Kept per file between scans.
+    // What a Codex log has told us so far: the model of the current turn, the last running total (so a repeated total
+    // isn't counted twice), and the chat family it belongs to. Kept per file between scans.
     public sealed class CodexFileState
     {
         public string Model = "";
         public long[] Totals;     // input, cached input, output; null before the first count
+        public string Lineage = "";   // the root chat's id from the log's own session_meta: shared by a chat and its forks
+        public string Fallback = "";  // set by the scanner: this log's own key, for a log without session_meta
 
         public CodexFileState Clone()
         {
-            return new CodexFileState { Model = Model, Totals = Totals == null ? null : (long[])Totals.Clone() };
+            return new CodexFileState { Model = Model, Totals = Totals == null ? null : (long[])Totals.Clone(), Lineage = Lineage, Fallback = Fallback };
         }
     }
 
@@ -58,15 +60,27 @@ namespace Capsule
             };
         }
 
-        // A Codex rollout line. A turn_context line updates the file's model and returns null; a token_count line with
-        // a new running total returns the turn's use. Everything else returns null.
+        // A Codex rollout line. A session_meta line names the log's chat family; a turn_context line updates the file's
+        // model; both return null. A token_count line with a new running total returns the turn's use. Everything else
+        // returns null.
         public static UsageEntry ParseCodex(string line, CodexFileState state)
         {
             if (string.IsNullOrEmpty(line)) return null;
             bool context = line.IndexOf("\"turn_context\"", StringComparison.Ordinal) >= 0;
-            if (!context && line.IndexOf("\"token_count\"", StringComparison.Ordinal) < 0) return null;
+            bool meta = line.IndexOf("\"session_meta\"", StringComparison.Ordinal) >= 0;
+            if (!context && !meta && line.IndexOf("\"token_count\"", StringComparison.Ordinal) < 0) return null;
             object o = Json.TryParse(line);
             string type = Json.Str(Json.Get(o, "type"));
+            if (type == "session_meta")
+            {
+                // Only the log's own, first session_meta: a fork can carry a copy of its parent's further down. Codex's
+                // session_id is the root chat's id, the same in every fork; older logs without it fall back to the fork's
+                // parent, then to the chat's own id.
+                if (state.Lineage != "") return null;
+                object p = Json.Get(o, "payload");
+                state.Lineage = Json.Str(Json.Get(p, "session_id")) ?? Json.Str(Json.Get(p, "forked_from_id")) ?? Json.Str(Json.Get(p, "id")) ?? "";
+                return null;
+            }
             if (type == "turn_context")
             {
                 string model = Json.Str(Json.Get(o, "payload", "model"));
@@ -86,8 +100,9 @@ namespace Capsule
             long cached = N(last, "cached_input_tokens");
             return new UsageEntry
             {
-                // The running total names the turn: a forked or resumed chat's copy of it, in another log, has the same one.
-                Key = CodexKeyPrefix + totals[0] + "." + totals[1] + "." + totals[2] + "." + reasoning + "." + all,
+                // The chat family and the running total name the turn: a fork's copy of it, in another log, has the same
+                // both. Separate chats never share a family, so equal-sized turns of theirs both count.
+                Key = CodexKeyPrefix + (state.Lineage != "" ? state.Lineage : state.Fallback) + ":" + totals[0] + "." + totals[1] + "." + totals[2] + "." + reasoning + "." + all,
                 AtMs = at,
                 Model = state.Model == "" ? "codex" : state.Model,
                 Tokens = Math.Max(0, N(last, "input_tokens") - cached) + N(last, "output_tokens"),
