@@ -158,6 +158,14 @@ namespace Capsule
             return f;
         }
 
+        // The forecast to show for a reading's window: none while its numbers are stale (a failed check, an old log
+        // snapshot), since the pace behind it may no longer hold.
+        public static Forecast Shown(SampleStore store, Reading r, LimitWindow w, long now)
+        {
+            if (!SampleStore.IsFresh(r, now)) return new Forecast { Kind = ForecastKind.None, ResetMs = w.ResetsAtMs, LengthMs = LengthMs(r.Provider, w) };
+            return For(store, r.Provider, w, now);
+        }
+
         public static Forecast For(SampleStore store, string provider, LimitWindow w, long now)
         {
             long length = LengthMs(provider, w);

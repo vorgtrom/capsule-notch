@@ -5,6 +5,14 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **The Codex ring pulses amber again** while Capsule holds a Codex / Work request. It had stopped since requests came
+  to the capsule.
+- **Usage history counts more carefully.** A forked or resumed Codex chat's copied turns count once; archived Codex
+  chats are counted; archiving a chat no longer counts it twice; and a log that is busy during the first count is read
+  once it frees up instead of losing its older days.
+- **Forecasts hide when the numbers are stale.** After a failed usage check, the hover card and the Usage page show no
+  "full at" forecast until fresh numbers arrive.
+
 ## v1.5.0
 
 - **Music on the notch.** Show Spotify and YouTube Music playback through Windows media sessions, with artwork,

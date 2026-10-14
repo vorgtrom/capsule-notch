@@ -49,7 +49,8 @@ namespace Capsule
             TestRunner.Eq(2500L, e[1].CacheRead, "cached input kept apart");
             TestRunner.Eq("gpt-5", e[2].Model, "a model switch mid-file");
             TestRunner.Eq(550L, e[2].Tokens, "600 − 100 + 50");
-            TestRunner.Check(e.All(x => x.Key == null), "Codex entries have no reply key");
+            TestRunner.Check(e.All(x => x.Key.StartsWith(UsageLogs.CodexKeyPrefix)), "a Codex entry is keyed by its running total");
+            TestRunner.Check(e[1].Key != e[2].Key, "different turns, different keys");
             TestRunner.Eq(4600L, state.Totals[0], "the running total is remembered for the next scan");
         }
 
@@ -82,6 +83,10 @@ namespace Capsule
             RenamesADamagedFile();
             StoresNoNamesOrText();
             PrunesSeenReplies();
+            CountsAForkedCodexChatOnce();
+            WaitsForALockedLog();
+            CountsArchivedCodexChats();
+            KeepsCountsFromVersion150();
         }
 
         sealed class Setup
@@ -205,6 +210,87 @@ namespace Capsule
             TestRunner.Check(!single.BackfillDone, "the budget running out inside the last log doesn't finish the backfill");
         }
 
+        static string CodexTurn(string at, int input, int output)
+        {
+            return "{\"timestamp\":\"" + at + "\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":" + input + ",\"cached_input_tokens\":0,\"output_tokens\":" + output + ",\"reasoning_output_tokens\":0,\"total_tokens\":" + (input + output) + "},\"last_token_usage\":{\"input_tokens\":" + input + ",\"cached_input_tokens\":0,\"output_tokens\":" + output + ",\"reasoning_output_tokens\":0,\"total_tokens\":" + (input + output) + "}}}}";
+        }
+
+        static string CodexDir(Setup s, string name)
+        {
+            string dir = Path.Combine(s.Codex, name);
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        static void CountsAForkedCodexChatOnce()
+        {
+            Setup s = Make();
+            File.Delete(s.CodexLog);
+            string day = Path.GetDirectoryName(s.CodexLog);
+            string parent = Path.Combine(day, "rollout-2026-10-12T10-00-00-parent.jsonl");
+            File.WriteAllText(parent, "{\"timestamp\":\"2026-10-12T10:00:00Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}\n" + CodexTurn("2026-10-12T10:00:05Z", 100, 50) + "\n");
+            // The fork copies the parent's history (written again, so with a new time), then has a turn of its own.
+            string child = Path.Combine(day, "rollout-2026-10-12T11-00-00-child.jsonl");
+            File.WriteAllText(child, "{\"timestamp\":\"2026-10-12T11:00:00Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}\n" + CodexTurn("2026-10-12T11:00:00Z", 100, 50) + "\n" + CodexTurn("2026-10-12T11:00:09Z", 300, 70) + "\n");
+            var store = new UsageStore();
+            UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
+            TestRunner.Eq(150L + 370, store.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "a forked chat's copied turn counts once; its own turn counts (150 + 370, not 670)");
+            var later = new UsageStore();
+            UsageScanner.Scan(later, s.Logs().Where(l => !l.Path.Contains("child")).ToList(), Now, UsageScanner.BudgetBytes);
+            UsageScanner.Scan(later, s.Logs(), Now + 60000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(520L, later.Get(UsageScanner.Day(UsageLogs.Time("2026-10-12T10:00:05Z")), "gpt-5-codex")[0], "also when the fork appears after the parent was counted");
+        }
+
+        static void WaitsForALockedLog()
+        {
+            Setup s = Make();
+            var store = new UsageStore();
+            using (new FileStream(s.ClaudeLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
+            TestRunner.Check(!store.BackfillDone, "a log that couldn't be read keeps the backfill pending");
+            UsageScanner.Scan(store, s.Logs(), Now + 3L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(1515L, store.Get(Day, "claude-opus-4-1-20250805")[0], "once it can be read, its older replies still count");
+            TestRunner.Check(store.BackfillDone, "and the backfill finishes");
+
+            var stuck = new UsageStore();
+            using (new FileStream(s.ClaudeLog, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                for (int i = 0; i < UsageScanner.GiveUpAfterFails; i++) UsageScanner.Scan(stuck, s.Logs(), Now + i, UsageScanner.BudgetBytes);
+            TestRunner.Check(stuck.BackfillDone, "a log that stays unreadable stops holding the backfill back after " + UsageScanner.GiveUpAfterFails + " scans");
+        }
+
+        static void CountsArchivedCodexChats()
+        {
+            Setup s = Make();
+            string archived = CodexDir(s, "archived_sessions");
+            File.Move(s.CodexLog, Path.Combine(archived, Path.GetFileName(s.CodexLog)));
+            var store = new UsageStore();
+            UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
+            TestRunner.Eq(700L, store.Get(CodexDay, "gpt-5-codex")[0], "a chat archived before Capsule counted it still counts");
+
+            Setup t = Make();
+            var moved = new UsageStore();
+            UsageScanner.Scan(moved, t.Logs(), Now, UsageScanner.BudgetBytes);
+            File.Move(t.CodexLog, Path.Combine(CodexDir(t, "archived_sessions"), Path.GetFileName(t.CodexLog)));
+            UsageScanner.Scan(moved, t.Logs(), Now + 60000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(700L, moved.Get(CodexDay, "gpt-5-codex")[0], "archiving a counted chat doesn't count it again");
+            TestRunner.Eq(2, moved.Files.Count, "and it stays one log in the index");
+        }
+
+        static void KeepsCountsFromVersion150()
+        {
+            Setup s = Make();
+            var store = new UsageStore();
+            UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
+            // As Capsule 1.5.0 left it: Codex logs known by their path, and no Codex turn keys.
+            var log = s.Logs().First(l => l.Codex);
+            FileMark mark = store.Files[UsageScanner.Key(log)];
+            store.Files.Remove(UsageScanner.Key(log));
+            store.Files[UsageScanner.Hash(log.Path)] = mark;
+            foreach (string k in store.Seen.Keys.Where(k => k.StartsWith(UsageLogs.CodexKeyPrefix)).ToList()) store.Seen.Remove(k);
+            UsageScanner.Scan(store, s.Logs(), Now + 60000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(700L, store.Get(CodexDay, "gpt-5-codex")[0], "a Codex log counted by 1.5.0 isn't counted again after the update");
+        }
+
         static void ForgetsDeletedLogs()
         {
             Setup s = Make();
@@ -225,7 +311,7 @@ namespace Capsule
             TestRunner.Check(back != null, "the saved store reads back");
             TestRunner.Eq(1515L, back.Get(Day, "claude-opus-4-1-20250805")[0], "day totals survive");
             TestRunner.Eq(store.Files.Count, back.Files.Count, "the file index survives");
-            TestRunner.Eq("gpt-5", back.Files[UsageScanner.Hash(s.CodexLog)].Codex.Model, "a Codex log's model survives");
+            TestRunner.Eq("gpt-5", back.Files[UsageScanner.Key(new LogFile { Path = s.CodexLog, Codex = true })].Codex.Model, "a Codex log's model survives");
             TestRunner.Check(back.Seen.ContainsKey("msg_b:req_b") && back.BackfillDone, "seen replies and the backfill flag survive");
             File.AppendAllText(s.CodexLog, "{\"timestamp\":\"2026-10-12T11:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":4600,\"cached_input_tokens\":2600,\"output_tokens\":300},\"last_token_usage\":{\"input_tokens\":600,\"cached_input_tokens\":100,\"output_tokens\":50}}}}\n");
             UsageScanner.Scan(back, s.Logs(), Now + 1000, UsageScanner.BudgetBytes);
@@ -257,9 +343,13 @@ namespace Capsule
             Setup s = Make();
             var store = new UsageStore();
             UsageScanner.Scan(store, s.Logs(), Now, UsageScanner.BudgetBytes);
-            TestRunner.Check(store.Seen.Count == 3, "seen replies are kept while recent");
+            Func<int> claude = () => store.Seen.Keys.Count(k => !k.StartsWith(UsageLogs.CodexKeyPrefix));
+            Func<int> codex = () => store.Seen.Keys.Count(k => k.StartsWith(UsageLogs.CodexKeyPrefix));
+            TestRunner.Check(claude() == 3 && codex() == 3, "seen replies and Codex turns are kept while recent");
             UsageScanner.Scan(store, s.Logs(), Now + 4L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
-            TestRunner.Eq(0, store.Seen.Count, "and dropped after 3 days");
+            TestRunner.Check(claude() == 0 && codex() == 3, "Claude replies are dropped after 3 days; Codex turns stay, a fork can come later");
+            UsageScanner.Scan(store, s.Logs(), Now + 36L * 24 * 3600 * 1000, UsageScanner.BudgetBytes);
+            TestRunner.Eq(0, codex(), "and go after 35 days");
         }
     }
 
@@ -371,6 +461,15 @@ namespace Capsule
             CardModel m = CardModel.From(r, null, true, Now, En, w => new Forecast { Kind = ForecastKind.Full, FullAtMs = at, LengthMs = 5 * Hour });
             TestRunner.Check(m.Rows[0].Pace == "At this pace: full at 4:10 PM" && m.Rows[0].PaceWarn, "the hover card's row carries the pace line");
             TestRunner.Eq("", CardModel.From(r, null, true, Now, En).Rows[0].Pace, "without a forecast the row has none");
+
+            var store = new SampleStore();
+            store.Samples.AddRange(S(Now + 2 * Hour, 60, 30, 0, 60));
+            var fresh = new Reading { Provider = "claude", Status = "ok", DataAtMs = Now };
+            fresh.Windows.Add(W(60, Now + 2 * Hour));
+            TestRunner.Eq(ForecastKind.Full, Pace.Shown(store, fresh, fresh.Windows[0], Now).Kind, "fresh numbers: the forecast shows");
+            Reading failed = fresh.Clone();
+            failed.LastCheckFailed = true;
+            TestRunner.Eq(ForecastKind.None, Pace.Shown(store, failed, failed.Windows[0], Now + 11 * Min).Kind, "after a failed check, no forecast from the old numbers");
         }
     }
 

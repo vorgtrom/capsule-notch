@@ -99,7 +99,8 @@ Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or E
   average.
 - **The legend** totals each model for the period, biggest first. Claude and Codex share one chart.
 - **Pace lines** at the top: how each ring's limit is going, for example "Claude · 5-hour · 73% · full at 4:10 PM".
-- **Where the numbers come from**: the logs Claude Code and Codex already write on this PC. Capsule reads only the
+- **Where the numbers come from**: the logs Claude Code and Codex already write on this PC, archived Codex chats
+  included. A turn copied into a forked or resumed chat counts once. Capsule reads only the
   token counts, the model and the time, and keeps daily totals in `%USERPROFILE%\.capsule\usage-history.json`.
   Claude Code deletes its logs after 30 days, so the first launch counts the last 30 days or so; from then on Capsule
   keeps its own history. Claude Code running inside the Claude desktop app keeps its logs where Capsule can't see
