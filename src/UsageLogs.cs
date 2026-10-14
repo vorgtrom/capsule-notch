@@ -8,7 +8,7 @@ namespace Capsule
     // apart in CacheRead.
     public sealed class UsageEntry
     {
-        public string Key;        // Claude's reply key (message id + request id); null for Codex
+        public string Key;        // Claude's reply key (message id + request id); for Codex, "cx:" and the running total
         public long AtMs;
         public string Model = "";
         public long Tokens;
@@ -32,6 +32,8 @@ namespace Capsule
     // text from a line except the model name and the reply key.
     public static class UsageLogs
     {
+        public const string CodexKeyPrefix = "cx:";
+
         // A Claude Code transcript line: an assistant reply with usage, or null.
         public static UsageEntry ParseClaude(string line)
         {
@@ -78,11 +80,14 @@ namespace Capsule
             var totals = new[] { N(total, "input_tokens"), N(total, "cached_input_tokens"), N(total, "output_tokens") };
             if (state.Totals != null && totals[0] == state.Totals[0] && totals[1] == state.Totals[1] && totals[2] == state.Totals[2]) return null;
             state.Totals = totals;
+            long reasoning = N(total, "reasoning_output_tokens"), all = N(total, "total_tokens");
             long at = Time(Json.Str(Json.Get(o, "timestamp")));
             if (at <= 0) return null;
             long cached = N(last, "cached_input_tokens");
             return new UsageEntry
             {
+                // The running total names the turn: a forked or resumed chat's copy of it, in another log, has the same one.
+                Key = CodexKeyPrefix + totals[0] + "." + totals[1] + "." + totals[2] + "." + reasoning + "." + all,
                 AtMs = at,
                 Model = state.Model == "" ? "codex" : state.Model,
                 Tokens = Math.Max(0, N(last, "input_tokens") - cached) + N(last, "output_tokens"),

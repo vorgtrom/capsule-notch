@@ -13,9 +13,10 @@ namespace Capsule
     public sealed class FileMark
     {
         public long Offset, Length, MtimeMs;
+        public int Fails;   // scans in a row that couldn't read it
         public CodexFileState Codex = new CodexFileState();
 
-        public FileMark Clone() { return new FileMark { Offset = Offset, Length = Length, MtimeMs = MtimeMs, Codex = Codex.Clone() }; }
+        public FileMark Clone() { return new FileMark { Offset = Offset, Length = Length, MtimeMs = MtimeMs, Fails = Fails, Codex = Codex.Clone() }; }
     }
 
     // A Claude reply already counted: where it went and the numbers it was counted at.
@@ -91,6 +92,7 @@ namespace Capsule
                 m["offset"] = f.Value.Offset;
                 m["length"] = f.Value.Length;
                 m["mtime"] = f.Value.MtimeMs;
+                if (f.Value.Fails > 0) m["fails"] = f.Value.Fails;
                 if (f.Value.Codex.Model != "") m["model"] = f.Value.Codex.Model;
                 if (f.Value.Codex.Totals != null) m["totals"] = f.Value.Codex.Totals;
                 files[f.Key] = m;
@@ -120,7 +122,7 @@ namespace Capsule
                     }
                 foreach (var f in Json.Obj(Json.Get(o, "files")) ?? new Dictionary<string, object>())
                 {
-                    var m = new FileMark { Offset = L(Json.Get(f.Value, "offset")), Length = L(Json.Get(f.Value, "length")), MtimeMs = L(Json.Get(f.Value, "mtime")) };
+                    var m = new FileMark { Offset = L(Json.Get(f.Value, "offset")), Length = L(Json.Get(f.Value, "length")), MtimeMs = L(Json.Get(f.Value, "mtime")), Fails = (int)L(Json.Get(f.Value, "fails")) };
                     m.Codex.Model = Json.Str(Json.Get(f.Value, "model")) ?? "";
                     object[] totals = Json.Arr(Json.Get(f.Value, "totals"));
                     if (totals != null && totals.Length == 3) m.Codex.Totals = totals.Select(L).ToArray();
@@ -171,6 +173,8 @@ namespace Capsule
         public const long BudgetBytes = 20L * 1024 * 1024;
         public const long ResumeGraceMs = 48L * 3600 * 1000;   // after the backfill, older replies are copies from a resume
         public const long SeenKeepMs = 3L * 24 * 3600 * 1000;
+        public const long CodexSeenKeepMs = 35L * 24 * 3600 * 1000;   // a chat can be forked weeks later
+        public const int GiveUpAfterFails = 20;                        // a log unreadable for this many scans stops holding the backfill
         const int Block = 1024 * 1024;
 
         // Every Claude Code transcript and Codex rollout on this PC. Never throws.
@@ -185,7 +189,27 @@ namespace Capsule
             }
             foreach (string day in CodexLogs.AllDayDirs(codexHome))
                 foreach (string f in CodexLogs.Rollouts(day)) list.Add(new LogFile { Path = f, Codex = true });
+            // Archived chats: Codex moves their logs here.
+            string archived = string.IsNullOrEmpty(codexHome) ? null : SafeCombine(codexHome, "archived_sessions");
+            if (archived != null && Directory.Exists(archived))
+            {
+                try { foreach (string f in Directory.EnumerateFiles(archived, CodexLogs.RolloutPattern, SearchOption.AllDirectories)) list.Add(new LogFile { Path = f, Codex = true }); }
+                catch (Exception) { }
+            }
             return list;
+        }
+
+        static string SafeCombine(string a, string b)
+        {
+            try { return System.IO.Path.Combine(a, b); }
+            catch (Exception) { return null; }
+        }
+
+        // A Codex log is known by its file name, which Codex keeps when it archives the chat; a Claude transcript by its
+        // path.
+        public static string Key(LogFile log)
+        {
+            return log.Codex ? Hash("codex:" + System.IO.Path.GetFileName(log.Path)) : Hash(log.Path);
         }
 
         public static string Hash(string path)
@@ -206,11 +230,21 @@ namespace Capsule
             long previousStart = store.LastScanStartMs;
             long ignoreBefore = store.BackfillDone && previousStart > 0 ? previousStart - ResumeGraceMs : long.MinValue;
             var present = new HashSet<string>();
-            bool budgetHit = false;
+            bool budgetHit = false, unread = false;
             foreach (LogFile log in logs)
             {
-                string key = Hash(log.Path);
-                present.Add(key);
+                string key = Key(log);
+                if (!present.Add(key)) continue;   // the same Codex chat seen twice (mid-archive): read once
+                FileMark mark;
+                if (!store.Files.TryGetValue(key, out mark))
+                {
+                    // A Codex log counted by Capsule 1.5.0, which knew logs by their path.
+                    string legacy = Hash(log.Path);
+                    if (log.Codex && store.Files.TryGetValue(legacy, out mark)) store.Files.Remove(legacy);
+                    else mark = new FileMark();
+                    store.Files[key] = mark;
+                    changed = true;
+                }
                 FileInfo info;
                 long length, mtime;
                 try
@@ -219,16 +253,15 @@ namespace Capsule
                     length = info.Length;
                     mtime = Clock.ToMs(info.LastWriteTimeUtc);
                 }
-                catch (Exception) { continue; }
-                FileMark mark;
-                if (!store.Files.TryGetValue(key, out mark)) { store.Files[key] = mark = new FileMark(); changed = true; }
+                catch (Exception) { if (Failed(mark)) unread = true; changed = true; continue; }
                 if (length < mark.Offset) { mark.Offset = 0; mark.Codex = new CodexFileState(); }
                 if (mark.Length != length || mark.MtimeMs != mtime) { mark.Length = length; mark.MtimeMs = mtime; changed = true; }
                 if (mark.Offset >= length) continue;
                 if (budget <= 0) { budgetHit = true; continue; }
                 List<string> lines;
                 long consumed = ReadLines(log.Path, mark.Offset, budget, out lines);
-                if (consumed < 0) continue;   // couldn't be read now: try again next time
+                if (consumed < 0) { if (Failed(mark)) unread = true; changed = true; continue; }   // couldn't be read now: try again next time
+                mark.Fails = 0;
                 budget -= consumed;
                 if (consumed > 0) { mark.Offset += consumed; changed = true; }
                 if (budget <= 0 && mark.Offset < length) budgetHit = true;   // stopped for the budget, not at the end
@@ -240,20 +273,31 @@ namespace Capsule
                 }
             }
             foreach (string gone in store.Files.Keys.Where(k => !present.Contains(k)).ToList()) { store.Files.Remove(gone); changed = true; }
-            if (!budgetHit && !store.BackfillDone) { store.BackfillDone = true; changed = true; }
+            // Not done while a log couldn't be read: once done, older replies count as copies, and its history would be lost.
+            if (!budgetHit && !unread && !store.BackfillDone) { store.BackfillDone = true; changed = true; }
             // Kept whole through the backfill, so a resumed session's copies read in a later piece still match.
             if (store.BackfillDone)
-                foreach (string old in store.Seen.Where(p => p.Value.AtMs < now - SeenKeepMs).Select(p => p.Key).ToList()) store.Seen.Remove(old);
+                foreach (string old in store.Seen.Where(p => p.Value.AtMs < now - (p.Key.StartsWith(UsageLogs.CodexKeyPrefix, StringComparison.Ordinal) ? CodexSeenKeepMs : SeenKeepMs)).Select(p => p.Key).ToList())
+                    store.Seen.Remove(old);
             store.LastScanStartMs = now;
             return changed;
         }
 
-        // A repeated Claude reply tops up to its largest numbers; everything else is added once.
+        // One more failed read of a log. True while it should still hold the backfill back.
+        static bool Failed(FileMark mark)
+        {
+            mark.Fails++;
+            return mark.Fails < GiveUpAfterFails;
+        }
+
+        // A repeated Claude reply tops up to its largest numbers; a Codex turn already counted (a fork's copy) adds nothing;
+        // everything else is added once.
         static void Count(UsageStore store, UsageEntry e)
         {
             if (e.Key == null) { store.Add(Day(e.AtMs), e.Model, e.Tokens, e.CacheRead); return; }
             SeenReply seen;
-            if (store.Seen.TryGetValue(e.Key, out seen))
+            if (store.Seen.TryGetValue(e.Key, out seen) && e.Key.StartsWith(UsageLogs.CodexKeyPrefix, StringComparison.Ordinal)) return;
+            if (seen != null)
             {
                 long dt = Math.Max(0, e.Tokens - seen.Tokens), dc = Math.Max(0, e.CacheRead - seen.CacheRead);
                 if (dt == 0 && dc == 0) return;

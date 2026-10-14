@@ -76,7 +76,7 @@ namespace Capsule
             Reading codex = r.Clone();
             codex.Provider = "codex";
             TestRunner.Eq(States.Working, NotchView.CellFor(codex, States.Working, now).Activity, "Codex's ring spins while Codex works");
-            TestRunner.Eq(null, NotchView.CellFor(codex, States.Waiting, now).Activity, "but never pulses: Codex's logs say nothing of waiting on you");
+            TestRunner.Eq(States.Waiting, NotchView.CellFor(codex, States.Waiting, now).Activity, "and pulses while Capsule holds a Codex request");
             CellModel signIn = NotchView.CellFor(new Reading { Provider = "claude", Status = "signin" }, null, now);
             TestRunner.Check(signIn.SignIn && signIn.Text == "Sign in" && !signIn.ShowArc, "sign in");
             r.Windows[0].Used = 21;

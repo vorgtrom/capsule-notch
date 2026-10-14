@@ -625,7 +625,7 @@ namespace Capsule
             ShowUsageIfOpen();
         }
 
-        Forecast PaceFor(string provider, LimitWindow w) { return Pace.For(samples, provider, w, Clock.NowMs()); }
+        Forecast PaceFor(Reading r, LimitWindow w) { return Pace.Shown(samples, r, w, Clock.NowMs()); }
 
         void OpenUsage()
         {
@@ -643,7 +643,7 @@ namespace Capsule
                 Reading r = u.Current;
                 LimitWindow w = r.DisplayWindow;
                 if (r.Status != "ok" || w == null) continue;
-                m.Pace.Add(PaceLineFor(r.Provider, w, PaceFor(r.Provider, w), now, CultureInfo.CurrentCulture));
+                m.Pace.Add(PaceLineFor(r.Provider, w, PaceFor(r, w), now, CultureInfo.CurrentCulture));
             }
             panel.View.ShowUsage(m);
         }
@@ -880,7 +880,7 @@ namespace Capsule
             if (broker.Current != null)
                 card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             else
-                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Provider, w)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             NotchOnTop();
         }
 

@@ -53,9 +53,9 @@ namespace Capsule
         {
             var c = new CellModel();
             c.Provider = r.Provider;
-            // Claude's ring spins or pulses with its sessions. Codex's only spins, while a Codex turn runs: Codex writes no
-            // "waiting on you" into its logs (polish spec §3), so its ring never pulses.
-            c.Activity = r.Provider == "codex" && activity == States.Waiting ? null : activity;
+            // Claude's ring spins or pulses with its sessions. Codex's spins while a Codex turn runs, and pulses while Capsule
+            // holds a Codex / Work request: the Controller passes Waiting for Codex only then.
+            c.Activity = activity;
             if (r.Status == "signin")
             {
                 c.SignIn = true;
