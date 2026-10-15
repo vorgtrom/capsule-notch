@@ -5,6 +5,12 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **How long you'll be locked out.** When a limit will fill before it resets, the hover card says for how long:
+  "At this pace: full at 4:10 PM · locked 41 min".
+- **Even pace while there's no forecast yet.** Before Capsule has seen enough of a limit rise to forecast it, the
+  hover card compares your use with spreading the limit evenly over its window: "81% of the window gone · 1.1× even
+  pace". Above 1.0×, keeping up the same average would use it up before the reset.
+
 ## v1.6.0
 
 - **Review edits and plans from the capsule.** A file edit shows its change line by line, red for what's taken out and

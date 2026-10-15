@@ -33,7 +33,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions: each with the start of your
   last prompt and what Claude did last ("“fix the auth bug…” · Edited middleware.ts"). Under each limit, its pace:
-  "At this pace: full at 4:10 PM" (amber, before the reset) or "about 64% at reset".
+  "At this pace: full at 4:10 PM · locked 41 min" (amber, before the reset) or "about 64% at reset". Until there's a
+  pace to go on, how your use compares with an even spread: "81% of the window gone · 1.1× even pace".
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
   When Capsule holds a Codex / Work request, the Codex ring pulses amber.
 - **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses
@@ -111,7 +112,9 @@ Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or E
 
 **Pace.** Capsule remembers each usage check (`usage-samples.json`) and works out how fast each limit is rising:
 over the last hour for 5-hour limits, the last day for weekly ones. It needs 15 minutes (2 hours for weekly limits)
-and a visible rise before it forecasts anything.
+and a visible rise before it forecasts anything. Until then, the hover card shows the even-pace comparison instead:
+percent used divided by percent of the window gone, so 1.0× uses the limit exactly as fast as the window runs out. It
+stays blank for an unused limit and in the first 5% of a window.
 
 **Alerts** come as Windows notifications from Capsule's tray icon, each once per limit window:
 - "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)

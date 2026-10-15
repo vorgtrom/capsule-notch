@@ -414,6 +414,7 @@ namespace Capsule
             PicksTheReference();
             KnowsWindowLengths();
             WritesTheCardLine();
+            ComparesWithAnEvenPace();
         }
 
         static List<UsageSample> S(long reset, params double[] pairs)   // minutes before Now, used; ...
@@ -500,6 +501,10 @@ namespace Capsule
             TestRunner.Eq("At this pace: full Mon 4:10 PM", Pace.CardLine(new Forecast { Kind = ForecastKind.Full, FullAtMs = at, LengthMs = 7 * DayMs }, En), "a weekly limit names the day");
             TestRunner.Eq("At this pace: about 64% at reset", Pace.CardLine(new Forecast { Kind = ForecastKind.AtReset, AtResetPercent = 64 }, En), "about, at reset");
             TestRunner.Eq(null, Pace.CardLine(new Forecast(), En), "no forecast, no line");
+            TestRunner.Eq("At this pace: full at 4:10 PM · locked 41 min", Pace.CardLine(new Forecast { Kind = ForecastKind.Full, FullAtMs = at, ResetMs = at + 41 * Min, LengthMs = 5 * Hour }, En), "full early: how long it stays locked");
+            TestRunner.Eq("At this pace: full Mon 4:10 PM · locked 2 days", Pace.CardLine(new Forecast { Kind = ForecastKind.Full, FullAtMs = at, ResetMs = at + 2 * DayMs, LengthMs = 7 * DayMs }, En), "a weekly lockout in days");
+            TestRunner.Eq("81% of the window gone · 1.1× even pace", Pace.CardLine(new Forecast { Kind = ForecastKind.Even, GonePercent = 81, EvenRatio = 90 / 81.0 }, En), "even pace, one decimal");
+            TestRunner.Eq("81% of the window gone · 1.0× even pace", Pace.CardLine(new Forecast { Kind = ForecastKind.Even, GonePercent = 81, EvenRatio = 85 / 81.0 }, En), "just over even rounds to 1.0");
 
             var r = new Reading { Provider = "claude", Status = "ok", DataAtMs = Now };
             r.Windows.Add(new LimitWindow { Id = "five_hour", Label = "Current session", Used = 60, ResetsAtMs = Now + 2 * Hour });
@@ -515,6 +520,35 @@ namespace Capsule
             Reading failed = fresh.Clone();
             failed.LastCheckFailed = true;
             TestRunner.Eq(ForecastKind.None, Pace.Shown(store, failed, failed.Windows[0], Now + 11 * Min).Kind, "after a failed check, no forecast from the old numbers");
+        }
+
+        static void ComparesWithAnEvenPace()
+        {
+            // A 5-hour window resetting in 1 hour is 80% gone; 40% used is half the even pace.
+            var r = new Reading { Provider = "claude", Status = "ok", DataAtMs = Now };
+            r.Windows.Add(W(40, Now + Hour));
+            Forecast f = Pace.Shown(new SampleStore(), r, r.Windows[0], Now);
+            TestRunner.Eq(ForecastKind.Even, f.Kind, "no samples yet: the even-pace comparison shows");
+            TestRunner.Eq(80, f.GonePercent, "80% of the window gone");
+            TestRunner.Check(Math.Abs(f.EvenRatio - 0.5) < 1e-9, "40% used in 80% of the window is 0.5x");
+
+            var store = new SampleStore();
+            store.Samples.AddRange(S(Now + 2 * Hour, 60, 30, 0, 60));
+            var paced = new Reading { Provider = "claude", Status = "ok", DataAtMs = Now };
+            paced.Windows.Add(W(60, Now + 2 * Hour));
+            TestRunner.Eq(ForecastKind.Full, Pace.Shown(store, paced, paced.Windows[0], Now).Kind, "a real pace wins over the even comparison");
+
+            Func<double, long, ForecastKind> kind = (used, resetIn) =>
+            {
+                var x = new Reading { Provider = "claude", Status = "ok", DataAtMs = Now };
+                x.Windows.Add(W(used, Now + resetIn));
+                return Pace.Shown(new SampleStore(), x, x.Windows[0], Now).Kind;
+            };
+            TestRunner.Eq(ForecastKind.None, kind(0, Hour), "an unused limit: nothing");
+            TestRunner.Eq(ForecastKind.None, kind(10, 5 * Hour - 10 * Min), "in the first 5% of the window: nothing");
+            var odd = new Reading { Provider = "codex", Status = "ok", DataAtMs = Now };
+            odd.Windows.Add(new LimitWindow { Id = "primary", Label = "Odd limit", Used = 40, ResetsAtMs = Now + Hour });
+            TestRunner.Eq(ForecastKind.None, Pace.Shown(new SampleStore(), odd, odd.Windows[0], Now).Kind, "an unknown window length: nothing");
         }
     }
 
