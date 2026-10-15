@@ -38,6 +38,18 @@ namespace Capsule
 
         public bool IsQuestion { get { return Request.ToolName == ToolNames.AskUserQuestion; } }
         public bool IsPlan { get { return Request.ToolName == ToolNames.ExitPlanMode; } }
+        public bool FeedbackOpen;      // a plan's "Give feedback…" box is open
+        public string Feedback = "";   // and what is typed in it, sent to Claude with Keep planning
+
+        public const int MaxFeedback = 900;
+
+        // What Keep planning tells Claude: the typed feedback, or that it wasn't approved.
+        public string KeepPlanningMessage()
+        {
+            string typed = PromptCardModel.Typed(Feedback).Trim();
+            if (typed == "") return HookReply.KeepPlanningMessage;
+            return "Keep planning. Feedback from the capsule: " + PromptCardModel.Shorten(typed, MaxFeedback);
+        }
     }
 
     // The rules for held requests (spec §3), on the UI thread, with no window and no pipe of its own:
@@ -126,7 +138,7 @@ namespace Capsule
                     if (!held.IsQuestion && held.Request.Rules.Count > 0) Finish(held, PromptReply.AlwaysAllowing());
                     break;
                 case PromptAction.Deny:
-                    Finish(held, PromptReply.Denying(held.IsPlan ? HookReply.KeepPlanningMessage : HookReply.DeniedMessage));
+                    Finish(held, PromptReply.Denying(held.IsPlan ? held.KeepPlanningMessage() : HookReply.DeniedMessage));
                     break;
                 case PromptAction.InClaude:
                     Finish(held, PromptReply.Passing());
@@ -137,12 +149,19 @@ namespace Capsule
                     Raise();
                     break;
                 case PromptAction.Other:
+                    if (held.IsPlan)
+                    {
+                        held.FeedbackOpen = !held.FeedbackOpen;
+                        Raise();
+                        break;
+                    }
                     if (flow == null) break;
                     flow.ToggleOther();
                     Raise();
                     break;
                 case PromptAction.OtherText:
-                    if (flow != null) flow.SetOther(PromptCardModel.Typed(action.Text));   // as the card shows it; no redraw: the box keeps its caret
+                    if (held.IsPlan) held.Feedback = PromptCardModel.Typed(action.Text);
+                    else if (flow != null) flow.SetOther(PromptCardModel.Typed(action.Text));   // as the card shows it; no redraw: the box keeps its caret
                     break;
                 case PromptAction.Next:
                     if (flow != null && flow.Next()) Raise();

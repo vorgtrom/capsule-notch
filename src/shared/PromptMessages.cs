@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 
 namespace Capsule
@@ -27,6 +28,7 @@ namespace Capsule
         public const string AcceptEditsName = "Accept all edits";   // a setMode acceptEdits suggestion's name: the card's pill then says so
         public const string DestSession = "session", DestProject = "project", DestUser = "user";
         public const int MaxCommand = 4000, MaxText = 2000;   // the most of a command, or of any other text, the hook sends
+        public const int MaxReview = 20000;   // the most of an edit's text, a new file or a plan: more stays in Claude, as it can't all be shown
 
         // From the hook's input: null unless it is a PermissionRequest with a valid session id and a tool name.
         public static PromptRequest FromHookInput(Dictionary<string, object> root, long now)
@@ -41,6 +43,13 @@ namespace Capsule
             r.Project = HookEvents.ProjectName(r.Cwd);
             r.ToolUseId = Json.Str(Json.Get(root, "tool_use_id")) ?? "";
             r.ToolInput = ForTheCard(r.ToolName, Json.Obj(Json.Get(root, "tool_input")));
+            // A new file, or one whose whole content Write replaces: the card says which.
+            if (r.ToolName == ToolNames.Write)
+            {
+                bool exists = false;
+                try { exists = File.Exists(Json.Str(Json.Get(r.ToolInput, "file_path")) ?? ""); } catch (Exception) { }
+                r.ToolInput["exists"] = exists;
+            }
             // What "Always allow" would do, named. If any suggestion can't be named, none is: Always allow isn't offered.
             var names = new List<string>();
             var destinations = new List<string>();
@@ -67,14 +76,42 @@ namespace Capsule
             return r;
         }
 
-        // shortcut: only complete commands and questions have a full preview, add other tools when their full input is shown.
+        // Only what the card can show in full comes to the capsule: a command, a question, an edit (its old and new text, or
+        // a new file's content), a plan. Anything longer than the card shows, or with characters it can't show (hidden
+        // controls), stays in Claude's own prompt.
         internal static bool CanReview(string tool, Dictionary<string, object> input)
         {
             if (input == null) return false;
             if (tool == ToolNames.AskUserQuestion) return true;
+            if (tool == ToolNames.Edit)
+                return Shown(Json.Str(Json.Get(input, "file_path")), MaxText) && Shown(Json.Str(Json.Get(input, "old_string")), MaxReview)
+                    && Shown(Json.Str(Json.Get(input, "new_string")), MaxReview, true);
+            if (tool == ToolNames.Write)
+                return Shown(Json.Str(Json.Get(input, "file_path")), MaxText) && Shown(Json.Str(Json.Get(input, "content")), MaxReview, true);
+            if (tool == ToolNames.ExitPlanMode) return Shown(Json.Str(Json.Get(input, "plan")), MaxReview);
+            if (tool == ToolNames.MultiEdit)
+            {
+                object[] edits = Json.Arr(Json.Get(input, "edits"));
+                if (!Shown(Json.Str(Json.Get(input, "file_path")), MaxText) || edits == null || edits.Length == 0) return false;
+                int total = 0;
+                foreach (object e in edits)
+                {
+                    string oldText = Json.Str(Json.Get(e, "old_string")), newText = Json.Str(Json.Get(e, "new_string"));
+                    if (!Shown(oldText, MaxReview, true) || !Shown(newText, MaxReview, true)) return false;
+                    total += oldText.Length + newText.Length;
+                }
+                return total <= MaxReview;
+            }
             if (tool != ToolNames.Bash && tool != ToolNames.PowerShell) return false;
             string command = Json.Str(Json.Get(input, "command"));
             return !string.IsNullOrWhiteSpace(command) && command.Length <= MaxCommand && VisibleText(command, true);
+        }
+
+        // Text the card can show whole: present (or, when it may be empty, at least there), not too long, nothing hidden.
+        static bool Shown(string text, int max, bool mayBeEmpty = false)
+        {
+            if (text == null || (!mayBeEmpty && text.Trim() == "")) return false;
+            return text.Length <= max && VisibleText(text, true);
         }
 
         internal static bool VisibleText(string text, bool lineBreaks)
@@ -107,14 +144,35 @@ namespace Capsule
                 case ToolNames.AskUserQuestion:
                     return input;
                 case ToolNames.ExitPlanMode:
+                    Keep(input, sent, "plan", MaxReview);
+                    return sent;
+                case ToolNames.Edit:
+                    Keep(input, sent, "file_path", MaxText);
+                    Keep(input, sent, "old_string", MaxReview);
+                    Keep(input, sent, "new_string", MaxReview);
+                    if (Json.Get(input, "replace_all") as bool? == true) sent["replace_all"] = true;
+                    return sent;
+                case ToolNames.Write:
+                    Keep(input, sent, "file_path", MaxText);
+                    Keep(input, sent, "content", MaxReview);
+                    return sent;
+                case ToolNames.MultiEdit:
+                    Keep(input, sent, "file_path", MaxText);
+                    var edits = new List<object>();
+                    foreach (object e in Json.Arr(Json.Get(input, "edits")) ?? new object[0])
+                    {
+                        var one = new Dictionary<string, object>();
+                        Keep(Json.Obj(e) ?? new Dictionary<string, object>(), one, "old_string", MaxReview);
+                        Keep(Json.Obj(e) ?? new Dictionary<string, object>(), one, "new_string", MaxReview);
+                        if (Json.Get(e, "replace_all") as bool? == true) one["replace_all"] = true;
+                        edits.Add(one);
+                    }
+                    sent["edits"] = edits.ToArray();
                     return sent;
                 case ToolNames.Bash:
                 case ToolNames.PowerShell:
                     Keep(input, sent, "command", MaxCommand);
                     return sent;
-                case ToolNames.Edit:
-                case ToolNames.MultiEdit:
-                case ToolNames.Write:
                 case ToolNames.Read:
                     Keep(input, sent, "file_path", MaxText);
                     return sent;
@@ -336,7 +394,7 @@ namespace Capsule
     {
         public const string DeniedMessage = "Denied from the capsule";
         public const string KeepPlanningMessage = "Not approved from the capsule: keep planning";
-        public const int MaxMessage = 200, MaxAnswer = 2000, MaxQuestions = 4;
+        public const int MaxMessage = 1000, MaxAnswer = 2000, MaxQuestions = 4;   // a plan's typed feedback goes in a deny message
 
         // "" for pass, for no reply, and for any reply that doesn't fit the request.
         public static string Output(PromptReply reply, Dictionary<string, object> hookInput)

@@ -325,9 +325,9 @@ namespace Capsule
         {
             return new List<SessionStatus>
             {
-                new SessionStatus { SessionId = "a", State = States.Waiting, Project = "confetti", Reason = "needs permission: Bash", At = now - 20000, Since = now - 20000 },
+                new SessionStatus { SessionId = "a", State = States.Waiting, Project = "confetti", Reason = "needs permission: Bash", Prompt = "run the tests and fix what fails", At = now - 20000, Since = now - 20000 },
                 new SessionStatus { SessionId = "d", State = States.Waiting, Project = "a-really-long-project-folder-name", Reason = "Claude needs your permission to use mcp__github__create_pull_request", At = now - 60000, Since = now - 60000 },
-                new SessionStatus { SessionId = "b", State = States.Working, Project = "website", At = now - 5000, Since = now - 150000 },
+                new SessionStatus { SessionId = "b", State = States.Working, Project = "website", Prompt = "fix the auth bug in middleware", Activity = "Edited middleware.ts", At = now - 5000, Since = now - 150000 },
                 new SessionStatus { SessionId = "c", State = States.Done, Project = "capsule", At = now - 4 * 60000, Since = now - 4 * 60000 },
             };
         }
@@ -365,6 +365,15 @@ namespace Capsule
             bash.ToolInput["command"] = "npm test -- --watchAll=false --coverage --reporters=default --reporters=jest-junit && npm run build";
             bash.Rules.Add("Bash(npm test:*)");
             samples["approval"] = PromptCardModel.From(new HeldPrompt { Request = bash }, 3, 45000);
+            var edit = new PromptRequest { SessionId = "b", ToolName = "Edit", Project = "website", Cwd = @"C:\work\website" };
+            edit.ToolInput["file_path"] = @"C:\work\website\src\auth\middleware.ts";
+            edit.ToolInput["old_string"] = "const verify = (token) =>\n  jwt.verify(token);";
+            edit.ToolInput["new_string"] = "const verify = (token) => {\n  if (!token) throw new AuthError('missing');\n  return jwt.verify(token, { maxAge: '1h' });\n};";
+            edit.Rules.Add(PromptRequest.AcceptEditsName);
+            samples["edit"] = PromptCardModel.From(new HeldPrompt { Request = edit }, 1, 45000);
+            var plan = new PromptRequest { SessionId = "b", ToolName = "ExitPlanMode", Project = "website", Cwd = @"C:\work\website" };
+            plan.ToolInput["plan"] = "# Fix the auth bug\n\nThe middleware never checks whether a token has **expired**.\n\n## Steps\n- Reject a missing token with `AuthError`\n- Pass `maxAge` to `jwt.verify`\n- Add tests for an expired and a missing token\n\n```\nnpm test -- auth\n```";
+            samples["plan"] = PromptCardModel.From(new HeldPrompt { Request = plan }, 1, 45000);
             var codexCommand = new PromptRequest { Provider = "codex", SessionId = "codex", ToolName = "Bash", Project = "capsule",
                 Cwd = @"C:\work\capsule", Description = "Run the tests before publishing this change." };
             codexCommand.ToolInput["command"] = "dotnet test --configuration Release";
@@ -389,8 +398,6 @@ namespace Capsule
             more.ToggleOther();
             more.SetOther("A contact form");
             samples["question-other"] = PromptCardModel.From(new HeldPrompt { Request = ask, Flow = more }, 1, 60000);
-            var plan = new PromptRequest { SessionId = "c", ToolName = "ExitPlanMode", Project = "capsule" };
-            samples["plan"] = PromptCardModel.From(new HeldPrompt { Request = plan }, 1, 31000);
             var odd = new PromptRequest { SessionId = "d", ToolName = "AskUserQuestion", Project = "capsule" };
             samples["asked"] = PromptCardModel.From(new HeldPrompt { Request = odd }, 1, 60000);
             return samples;

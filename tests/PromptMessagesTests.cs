@@ -152,18 +152,18 @@ namespace Capsule
         // Capsule is sent what the card shows, not whole files (F8).
         static void TheHookSendsOnlyWhatTheCardShows()
         {
-            string wire = Json.Write(PromptRequest.ForTheCard("Write", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"content\":\"SECRET-CONTENT\"}")));
-            TestRunner.Check(!wire.Contains("SECRET-CONTENT") && wire.Contains("a.txt"), "a Write's content isn't sent, its file is");
+            string wire = Json.Write(PromptRequest.ForTheCard("Write", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"content\":\"NEW-CONTENT\",\"extra\":\"BULK\"}")));
+            TestRunner.Check(wire.Contains("NEW-CONTENT") && wire.Contains("a.txt") && !wire.Contains("BULK"), "a Write's file and content are sent, for the card to show; nothing else");
             Dictionary<string, object> edit = PromptRequest.ForTheCard("Edit", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\",\"replace_all\":true}"));
             string editWire = Json.Write(edit);
-            TestRunner.Check(!editWire.Contains("OLD-TEXT") && !editWire.Contains("NEW-TEXT") && editWire.Contains("a.txt"), "an Edit's old and new text aren't sent");
+            TestRunner.Check(editWire.Contains("OLD-TEXT") && editWire.Contains("NEW-TEXT") && editWire.Contains("a.txt") && Json.Get(edit, "replace_all") as bool? == true, "an Edit's old and new text are sent");
             string multi = Json.Write(PromptRequest.ForTheCard("MultiEdit", Input("{\"file_path\":\"C:\\\\work\\\\a.txt\",\"edits\":[{\"old_string\":\"OLD-TEXT\",\"new_string\":\"NEW-TEXT\"}]}")));
-            TestRunner.Check(!multi.Contains("OLD-TEXT") && !multi.Contains("NEW-TEXT") && !multi.Contains("edits"), "nor a MultiEdit's edits");
+            TestRunner.Check(multi.Contains("OLD-TEXT") && multi.Contains("NEW-TEXT"), "and a MultiEdit's edits");
             string notebook = Json.Write(PromptRequest.ForTheCard("NotebookEdit", Input("{\"notebook_path\":\"C:\\\\work\\\\n.ipynb\",\"new_source\":\"NEW-SOURCE\",\"cell_id\":\"c1\"}")));
             TestRunner.Check(!notebook.Contains("NEW-SOURCE") && notebook.Contains("n.ipynb"), "nor a notebook's new source");
             TestRunner.Eq("C:\\work\\a.txt", Json.Str(Json.Get(Json.Parse(editWire), "file_path")), "and the projection still has the file to name");
-            string plan = Json.Write(PromptRequest.ForTheCard("ExitPlanMode", Input("{\"plan\":\"SECRET-PLAN\"}")));
-            TestRunner.Check(!plan.Contains("SECRET-PLAN"), "a plan isn't sent: the card doesn't show it");
+            string plan = Json.Write(PromptRequest.ForTheCard("ExitPlanMode", Input("{\"plan\":\"THE-PLAN\"}")));
+            TestRunner.Check(plan.Contains("THE-PLAN"), "a plan is sent: the card shows it");
             Dictionary<string, object> unknown = PromptRequest.ForTheCard("mcp__x__y", Input("{\"title\":\"" + new string('t', 5000) + "\",\"count\":3,\"nested\":{\"deep\":\"BULK\"}}"));
             string title = Json.Str(Json.Get(unknown, "title"));
             TestRunner.Check(title != null && title.Length == 2000, "another tool's text is cut to 2000 characters (" + (title == null ? -1 : title.Length) + ")");
@@ -183,7 +183,26 @@ namespace Capsule
             bool same = updated != null && original != null;
             if (same) foreach (KeyValuePair<string, object> pair in original) if (Json.Write(updated.ContainsKey(pair.Key) ? updated[pair.Key] : null) != Json.Write(pair.Value)) same = false;
             TestRunner.Check(same && Json.Str(Json.Get(updated, "metadata", "source")) == "sample", "the reply's updatedInput still holds Claude Code's own whole input");
-            TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), Input(BigHook.Replace("TOOL", "Write").Replace("INPUT", "{\"file_path\":\"a\",\"content\":\"X\"}"))), "a filename-only Write preview cannot authorize Claude's full input");
+            TestRunner.Eq("", HookReply.Output(PromptReply.Allowing(), Input(BigHook.Replace("TOOL", "Write").Replace("INPUT", "{\"file_path\":\"a\",\"content\":\"" + new string('X', PromptRequest.MaxReview + 1) + "\"}"))), "a Write too big to show whole cannot be allowed from the capsule");
+            TestRunner.Check(HookReply.Output(PromptReply.Allowing(), Input(BigHook.Replace("TOOL", "Write").Replace("INPUT", "{\"file_path\":\"a\",\"content\":\"X\"}"))) != "", "one shown whole can");
+            ReviewsOnlyWhatCanBeShownWhole();
+        }
+
+        // Edits, new files and plans come to the capsule only when the card can show them whole.
+        static void ReviewsOnlyWhatCanBeShownWhole()
+        {
+            Func<string, string, bool> can = (tool, input) => PromptRequest.CanReview(tool, Input(input));
+            TestRunner.Check(can("Edit", "{\"file_path\":\"a.ts\",\"old_string\":\"x\",\"new_string\":\"\"}"), "an Edit that removes text");
+            TestRunner.Check(!can("Edit", "{\"file_path\":\"a.ts\",\"old_string\":\"\",\"new_string\":\"y\"}"), "not an Edit with nothing to find");
+            TestRunner.Check(!can("Edit", "{\"file_path\":\"a.ts\",\"old_string\":\"x\",\"new_string\":\"" + new string('y', PromptRequest.MaxReview + 1) + "\"}"), "not an Edit too long to show");
+            TestRunner.Check(!can("Edit", "{\"file_path\":\"a.ts\",\"old_string\":\"x\",\"new_string\":\"evil\\u202Eexe.txt\"}"), "not an Edit hiding a bidi control");
+            TestRunner.Check(can("Write", "{\"file_path\":\"a.ts\",\"content\":\"\"}"), "a Write of an empty file");
+            TestRunner.Check(!can("Write", "{\"content\":\"x\"}"), "not a Write without its file");
+            TestRunner.Check(can("ExitPlanMode", "{\"plan\":\"# Plan\\n- step\"}"), "a plan");
+            TestRunner.Check(!can("ExitPlanMode", "{\"plan\":\" \"}"), "not an empty plan");
+            TestRunner.Check(can("MultiEdit", "{\"file_path\":\"a.ts\",\"edits\":[{\"old_string\":\"a\",\"new_string\":\"b\"},{\"old_string\":\"c\",\"new_string\":\"d\"}]}"), "a MultiEdit");
+            TestRunner.Check(!can("MultiEdit", "{\"file_path\":\"a.ts\",\"edits\":[{\"old_string\":\"" + new string('a', 15000) + "\",\"new_string\":\"" + new string('b', 15000) + "\"}]}"), "not one whose edits are too long together");
+            TestRunner.Check(!can("NotebookEdit", "{\"notebook_path\":\"n.ipynb\",\"new_source\":\"x\"}"), "a notebook still stays in Claude");
         }
 
         static void IncompleteApprovalsPassEvenAfterAnAllowReply()
@@ -418,7 +437,7 @@ namespace Capsule
             d = Decision(HookReply.Output(PromptReply.Denying("Denied from the capsule"), Input(Bash)));
             TestRunner.Check(d != null && Json.Str(Json.Get(d, "behavior")) == "deny", "deny");
             TestRunner.Eq("Denied from the capsule", d == null ? null : Json.Str(Json.Get(d, "message")), "with its message");
-            d = Decision(HookReply.Output(PromptReply.Denying(new string('x', 500)), Input(Bash)));
+            d = Decision(HookReply.Output(PromptReply.Denying(new string('x', HookReply.MaxMessage + 1)), Input(Bash)));
             TestRunner.Eq(HookReply.DeniedMessage, d == null ? null : Json.Str(Json.Get(d, "message")), "a message that is too long becomes the usual one");
             d = Decision(HookReply.Output(PromptReply.Denying("line\nbreak"), Input(Bash)));
             TestRunner.Eq(HookReply.DeniedMessage, d == null ? null : Json.Str(Json.Get(d, "message")), "so does one with control characters");

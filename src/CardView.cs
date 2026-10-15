@@ -286,7 +286,12 @@ namespace Capsule
             Grid.SetColumn(status, 1);
             line.Children.Add(project);
             line.Children.Add(status);
-            return line;
+            if (s.Detail == "") return line;
+            var both = new StackPanel { Margin = new Thickness(0, 1, 0, 3) };
+            line.Margin = new Thickness(0);
+            both.Children.Add(line);
+            both.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
+            return both;
         }
 
         public static TextBlock MakeText(string text, double size, string color, FontWeight weight)

@@ -20,6 +20,7 @@ namespace Capsule
         public string Project = "";
         public string Status = "";
         public string Color = Palette.Secondary;
+        public string Detail = "";   // "“fix the auth bug…” · Edited middleware.ts", or 
 
         // The rows the card and the panel show: waiting first, then working, then recently done or idle, at most
         // Sessions.MaxRows of them. more: how many didn't fit.
@@ -32,9 +33,21 @@ namespace Capsule
                 line.Project = s.Project != "" ? s.Project : "Claude";
                 line.Status = Sessions.RowText(s, now);
                 line.Color = s.State == States.Waiting ? Palette.Amber : s.State == States.Working ? Palette.Text : Palette.Secondary;
+                line.Detail = DetailFor(s);
                 rows.Add(line);
             }
             return rows;
+        }
+
+        // Your last prompt, quoted, then what Claude did last, each when known.
+        public static string DetailFor(SessionStatus s)
+        {
+            var parts = new List<string>();
+            string prompt = PromptCardModel.Safe(s.Prompt);
+            if (prompt != "") parts.Add("\u201C" + PromptCardModel.Shorten(prompt, 60) + "\u201D");
+            string activity = PromptCardModel.Safe(s.Activity);
+            if (activity != "" && s.State != States.Waiting) parts.Add(activity);
+            return string.Join(" · ", parts);
         }
     }
 

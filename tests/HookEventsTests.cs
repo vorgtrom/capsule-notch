@@ -96,7 +96,14 @@ namespace Capsule
             SessionStatus s = SessionStatus.Read(file);
             TestRunner.Eq(States.Working, s.State, "state written");
             TestRunner.Eq("confetti", s.Project, "project written");
-            TestRunner.Check(!File.ReadAllText(file).Contains("secret"), "prompt text never stored");
+            TestRunner.Eq("secret prompt", s.Prompt, "the start of the last prompt is kept for the session row");
+            HookEvents.Handle(Event("PostToolUse", "h1", ",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"C:\\\\work\\\\src\\\\middleware.ts\",\"old_string\":\"OLD\",\"new_string\":\"NEW\"}"), false, 1500);
+            s = SessionStatus.Read(file);
+            TestRunner.Check(s.Activity == "Edited middleware.ts" && s.Prompt == "secret prompt", "what it did last, by file name only; the prompt stays");
+            TestRunner.Check(!File.ReadAllText(file).Contains("OLD") && !File.ReadAllText(file).Contains("src"), "never an edit's text or a file's folder");
+            HookEvents.Handle(Event("UserPromptSubmit", "h1", ",\"prompt\":\"" + new string('p', 300) + "\\nsecond line\""), false, 1600);
+            s = SessionStatus.Read(file);
+            TestRunner.Check(s.Prompt.Length <= HookEvents.MaxPrompt && !s.Prompt.Contains("\n") && s.Activity == "", "a new prompt: one line, cut short, and the last action cleared");
             TestRunner.Eq("deleted", HookEvents.Handle(Event("SessionEnd", "h1", ""), false, 2000), "session end");
             TestRunner.Check(!File.Exists(file), "file removed");
             TestRunner.Eq("unparsed", HookEvents.Handle("not json", false, 3000), "garbage ignored");

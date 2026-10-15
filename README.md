@@ -29,7 +29,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 
 - **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
-- **Hover a ring** for every limit, when each resets, and your live Claude Code sessions. Under each limit, its pace:
+- **Hover a ring** for every limit, when each resets, and your live Claude Code sessions: each with the start of your
+  last prompt and what Claude did last ("“fix the auth bug…” · Edited middleware.ts"). Under each limit, its pace:
   "At this pace: full at 4:10 PM" (amber, before the reset) or "about 64% at reset".
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
   When Capsule holds a Codex / Work request, the Codex ring pulses amber.
@@ -117,6 +118,10 @@ and a visible rise before it forecasts anything.
 
 To turn them off, untick **Limit alerts** in Capsule's menu.
 
+**Sounds.** A short chime when a Claude Code session starts waiting on you or a Codex request arrives, and a softer
+one when a Claude session or a Codex turn finishes. Capsule makes them itself; they play at Windows' volume, at most one
+every 1.5 s. Untick **Sounds** in Capsule's menu to silence them.
+
 ## Approve and answer Claude from the capsule
 
 When Claude Code needs you while you're in another app, you don't have to switch back to the Claude app.
@@ -128,12 +133,21 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
   its full text in a scrollable tooltip. The command tooltip preserves spaces and line breaks.
 - **A question**: Claude's options as buttons (checkboxes when you can pick several), one question at a
   time, with **Other…** to type your own answer, then **Next** or **Send**.
-- **File edits, plans, and other tools** stay in Claude's normal approval prompt until Capsule has a full preview.
-  Commands over 4,000 characters, or commands with hidden control characters, also stay in Claude.
+- **A file edit** ("Claude wants to edit a file"): the file, and the change itself, line by line: what's taken out on
+  red, what's put in on green. A new file shows all of its lines, and says whether it's new or replaces a whole file.
+  **Allow**, **Allow all edits** (when Claude Code offers it), **Deny** or **Answer in Claude**.
+- **A plan** ("Claude's plan is ready"): the plan itself, with its headings, lists and code. **Approve plan**, or
+  **Give feedback…** to type what to change, then **Keep planning** (Enter works too) to send it to Claude.
+- **Everything is shown whole, or not at all.** An edit, file or plan over 20,000 characters, a command over 4,000,
+  or anything with hidden control characters stays in Claude's own prompt, as do notebook edits and other tools.
 
 | Approve a command | Answer a question |
 |:---:|:---:|
 | <img src="docs/images/card-approval.png" width="328" alt="The card: Claude wants to run a command, Bash: npm test, with Allow, Always allow, Deny and Answer in Claude, and Goes to Claude in 45 s"> | <img src="docs/images/card-question.png" width="328" alt="The card: Claude asked you a question, Which layout should the landing page use?, with two options, Other…, Next and Answer in Claude"> |
+
+| Review an edit | Review a plan |
+|:---:|:---:|
+| <img src="docs/images/card-edit.png" width="328" alt="The card: Claude wants to edit a file, Edit: src\auth\middleware.ts, two lines taken out on red and four put in on green, with Allow, Allow all edits, Deny and Answer in Claude"> | <img src="docs/images/card-plan.png" width="328" alt="The card: Claude's plan is ready, the plan with its heading Fix the auth bug, a paragraph, Steps with three bullets and a line of code, then Give feedback…, Approve plan, Keep planning and Answer in Claude"> |
 
 - **Nothing gets stuck.** Untouched, a request goes to the Claude app after 60 s, as if Capsule weren't there.
   Using the card restarts that, but never past 80 s after the request arrived, because Claude Code's hook
@@ -528,8 +542,9 @@ anywhere else.
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only
   your Windows account can open, and waits up to 90 s for your answer.
-  - Complete supported commands, and its questions and your answers, are shown on the card only. They
-    are held in memory, and never logged or saved.
+  - Complete supported commands, file edits (their old and new text, or a new file's content) and plans, and
+    its questions and your answers, are shown on the card only. They are held in memory, and never logged or
+    saved. Your plan feedback goes only to Claude.
   - **Always allow** applies exactly the rule Claude Code suggested, as the app's own button does. Capsule
     writes no permission rules itself.
 - Connected to Codex / Work, Capsule changes `~/.codex/hooks.json` only when you choose Connect or Disconnect.
@@ -540,9 +555,13 @@ anywhere else.
   - the name of the last event, and when it happened;
   - the project folder's name;
   - while Claude waits on you, a short reason, such as "needs permission: Bash" or up to 80 characters of
-    Claude Code's own notification.
+    Claude Code's own notification;
+  - for the session row, the start of your last prompt (up to 120 characters, on one line) and what Claude did
+    last, named by a file's name only or a command's own short description ("Edited middleware.ts", "Run the
+    tests").
 
-  It never records your prompts or anything Claude reads or writes.
+  The file is deleted when the session ends. It never records a file's folder or contents, a command's text, or
+  anything Claude reads or writes, and nothing from it goes into Capsule's log.
 - When Claude's sign-in is about to expire, Capsule runs `claude -p` with no input. That renews it without
   starting a conversation.
 - Capsule's own files are in `%USERPROFILE%\.capsule\`:

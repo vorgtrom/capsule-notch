@@ -42,6 +42,8 @@ namespace Capsule
         public string Event = "";
         public string Project = "";
         public string Reason = "";
+        public string Prompt = "";     // the start of the last prompt you sent, on one line; shown on the card, never logged
+        public string Activity = "";   // what Claude did last: "Edited middleware.ts", "Ran the tests"
         public long Since;   // when the current state began (ms)
         public long At;      // time of the latest event (ms)
 
@@ -55,6 +57,8 @@ namespace Capsule
             s.Event = Json.Str(Json.Get(obj, "event")) ?? "";
             s.Project = Json.Str(Json.Get(obj, "project")) ?? "";
             s.Reason = Json.Str(Json.Get(obj, "reason")) ?? "";
+            s.Prompt = Json.Str(Json.Get(obj, "prompt")) ?? "";
+            s.Activity = Json.Str(Json.Get(obj, "activity")) ?? "";
             s.Since = (long)(Json.Num(Json.Get(obj, "since")) ?? 0);
             s.At = (long)(Json.Num(Json.Get(obj, "at")) ?? 0);
             return s;
@@ -70,6 +74,8 @@ namespace Capsule
             d["event"] = Event;
             d["project"] = Project;
             d["reason"] = Reason;
+            d["prompt"] = Prompt;
+            d["activity"] = Activity;
             return Json.Write(d);
         }
     }
@@ -177,7 +183,51 @@ namespace Capsule
             s.At = now;
             s.Project = !string.IsNullOrEmpty(project) ? project : (existing != null ? existing.Project : "");
             s.Since = existing != null && existing.State == outcome.State ? existing.Since : now;
+            s.Prompt = existing != null ? existing.Prompt : "";
+            s.Activity = existing != null ? existing.Activity : "";
             return s;
+        }
+
+        public const int MaxPrompt = 120, MaxActivity = 80;
+
+        // What the session row says it did last, from a PostToolUse: the tool's verb and, for a file, its name only (never
+        // its folder, contents or a command's text). A Bash command is named by the description Claude gives it.
+        public static string Activity(string tool, Dictionary<string, object> input)
+        {
+            string file = FileName(Json.Str(Json.Get(input, "file_path")) ?? Json.Str(Json.Get(input, "notebook_path")));
+            switch (tool ?? "")
+            {
+                case ToolNames.Read: return file != "" ? "Read " + file : "Read a file";
+                case ToolNames.Edit:
+                case ToolNames.MultiEdit:
+                case ToolNames.NotebookEdit: return file != "" ? "Edited " + file : "Edited a file";
+                case ToolNames.Write: return file != "" ? "Wrote " + file : "Wrote a file";
+                case ToolNames.Bash:
+                case ToolNames.PowerShell:
+                    string what = Cut(Json.Str(Json.Get(input, "description")), MaxActivity);
+                    return what != "" ? what : "Ran a command";
+                case "Grep":
+                case "Glob": return "Searched the code";
+                case ToolNames.WebFetch: return "Read a web page";
+                case ToolNames.WebSearch: return "Searched the web";
+                case "Task":
+                case "Agent": return "Ran a subagent";
+                case "TodoWrite": return "Updated its to-do list";
+                case ToolNames.AskUserQuestion: return "Asked you a question";
+                case ToolNames.ExitPlanMode: return "Finished a plan";
+                default:
+                    if (string.IsNullOrEmpty(tool)) return "";
+                    if (tool.StartsWith("mcp__", StringComparison.Ordinal)) return "Used a connector";
+                    return Cut("Used " + tool, MaxActivity);
+            }
+        }
+
+        static string FileName(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            string trimmed = path.TrimEnd('\\', '/');
+            int cut = Math.Max(trimmed.LastIndexOf('\\'), trimmed.LastIndexOf('/'));
+            return Cut(cut >= 0 ? trimmed.Substring(cut + 1) : trimmed, 60);
         }
 
         public static bool IsValidSessionId(string id)
@@ -228,6 +278,12 @@ namespace Capsule
             if (outcome.Ignore) return "ignored";
             SessionStatus next = Next(SessionStatus.Read(path), outcome, sessionId, eventName, ProjectName(Json.Str(Json.Get(root, "cwd"))), now);
             if (next == null) return "unchanged";
+            if (eventName == "UserPromptSubmit")
+            {
+                next.Prompt = Cut(Json.Str(Json.Get(root, "prompt")), MaxPrompt);
+                next.Activity = "";
+            }
+            else if (eventName == "PostToolUse") next.Activity = Activity(Json.Str(Json.Get(root, "tool_name")), Json.Obj(Json.Get(root, "tool_input")));
             return Files.WriteAtomic(path, next.ToJson()) ? next.State : "write-failed";
         }
 
