@@ -31,11 +31,11 @@ namespace Capsule
             CodexLauncherPreservesInputAndOutput();
         }
 
-        // A filename alone cannot describe a Write safely. Its content stays with Claude, which asks as usual.
+        // A Write too big for the card to show whole stays with Claude, which asks as usual: Capsule never sees it.
         static void AWritesContentNeverReachesCapsule()
         {
             string write = "{\"session_id\":\"ph-3\",\"hook_event_name\":\"PermissionRequest\",\"cwd\":\"C:\\\\work\\\\confetti\",\"tool_name\":\"Write\"," +
-                "\"tool_input\":{\"file_path\":\"C:\\\\work\\\\confetti\\\\a.txt\",\"content\":\"SECRET-CONTENT\"},\"tool_use_id\":\"toolu_3\"}";
+                "\"tool_input\":{\"file_path\":\"C:\\\\work\\\\confetti\\\\a.txt\",\"content\":\"" + new string('S', PromptRequest.MaxReview + 1) + "\"},\"tool_use_id\":\"toolu_3\"}";
             using (var capsule = new Answerer(PromptReply.Allowing()))
             {
                 string output = PromptClient.Handle(write, 1000, capsule.Name, 1000, 5000);

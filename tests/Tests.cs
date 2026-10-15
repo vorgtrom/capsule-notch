@@ -71,6 +71,9 @@ namespace Capsule
             Run("LimitAlerts", LimitAlertsTests.Run);
             Run("UsageModel", UsageModelTests.Run);
             Run("UsageView", UsageViewTests.Run);
+            Run("SessionRows", SessionRowsTests.Run);
+            Run("Sounds", SoundsTests.Run);
+            Run("ReviewCard", ReviewCardTests.Run);
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
         }

@@ -5,6 +5,14 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Review edits and plans from the capsule.** A file edit shows its change line by line, red for what's taken out and
+  green for what's put in; a new file shows all of its lines. A plan shows in full, with its headings, lists and code.
+  Allow or deny an edit, approve a plan, or type feedback and send Claude back to planning. Anything too long to show
+  whole still goes to Claude's own prompt.
+- **Richer session rows.** Each session shows the start of your last prompt and what Claude did last, such as
+  "Edited middleware.ts".
+- **Sounds.** A chime when a session needs you, a softer one when it finishes. Untick **Sounds** in the menu to turn
+  them off.
 - **The Codex ring pulses amber again** while Capsule holds a Codex / Work request. It had stopped since requests came
   to the capsule.
 - **Usage history counts more carefully.** A forked Codex chat's copied turns count once, while separate chats with

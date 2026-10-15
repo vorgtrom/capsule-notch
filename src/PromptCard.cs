@@ -5,6 +5,13 @@ using System.Text;
 
 namespace Capsule
 {
+    // One line of an edit's preview: '-' taken out, '+' put in, ' ' unchanged around them, '~' between two edits.
+    public sealed class DiffLine
+    {
+        public char Kind;
+        public string Text = "";
+    }
+
     public sealed class PromptOptionRow
     {
         public string Label = "";
@@ -49,6 +56,10 @@ namespace Capsule
         public string OtherText = "";
         public bool IsLast;
         public bool CanAdvance;
+        // An edit's preview, a file's note, a plan:
+        public List<DiffLine> Diff;       // null unless an edit or a new file is shown
+        public string FileNote = "";      // "New file", "Replaces the whole file", "Every match is replaced"
+        public List<string> PlanLines;    // a plan's text, line by line (Markdown), or null
 
         // The request shown (the oldest held), how many are held, and how long until it goes to the app.
         public static PromptCardModel From(HeldPrompt held, int count, long msLeft)
@@ -62,7 +73,14 @@ namespace Capsule
             m.DetailFull = r.Description;
             m.Position = PositionText(count);
             m.Countdown = CountdownText(msLeft, m.AppName);
-            if (held.IsPlan) m.Kind = Plan;
+            if (held.IsPlan)
+            {
+                m.Kind = Plan;
+                string plan = Text(r, "plan");
+                if (plan != "") m.PlanLines = CodeLines(plan);
+                m.OtherOpen = held.FeedbackOpen;
+                m.OtherText = Typed(held.Feedback);
+            }
             else if (held.IsQuestion) m.Kind = held.Flow != null ? Question : Asked;
             else
             {
@@ -70,6 +88,7 @@ namespace Capsule
                 m.What = Summary(r, out cut);
                 m.WhatCut = cut;
                 if (IsCommand(r)) m.WhatFull = Shorten(Text(r, "command"), MaxFull);
+                BuildPreview(m, r);
                 m.CanAlwaysAllow = r.Rules.Count > 0;
                 if (m.CanAlwaysAllow)
                 {
@@ -96,6 +115,86 @@ namespace Capsule
                 m.CanAdvance = flow.CanAdvance;
             }
             return m;
+        }
+
+        // What an edit will do, line by line: Edit and MultiEdit as the lines taken out and put in (with the unchanged lines
+        // they share around them), Write as the file's whole content.
+        static void BuildPreview(PromptCardModel m, PromptRequest r)
+        {
+            switch (r.ToolName)
+            {
+                case ToolNames.Edit:
+                    m.Diff = DiffOf(Text(r, "old_string"), Text(r, "new_string"));
+                    if (Json.Get(r.ToolInput, "replace_all") as bool? == true) m.FileNote = "Every match is replaced";
+                    break;
+                case ToolNames.MultiEdit:
+                    m.Diff = new List<DiffLine>();
+                    bool all = false;
+                    foreach (object e in Json.Arr(Json.Get(r.ToolInput, "edits")) ?? new object[0])
+                    {
+                        if (m.Diff.Count > 0) m.Diff.Add(new DiffLine { Kind = '~', Text = "\u22EF" });
+                        m.Diff.AddRange(DiffOf(Json.Str(Json.Get(e, "old_string")) ?? "", Json.Str(Json.Get(e, "new_string")) ?? ""));
+                        if (Json.Get(e, "replace_all") as bool? == true) all = true;
+                    }
+                    if (all) m.FileNote = "Every match is replaced";
+                    break;
+                case ToolNames.Write:
+                    m.Diff = new List<DiffLine>();
+                    foreach (string line in CodeLines(Text(r, "content"))) m.Diff.Add(new DiffLine { Kind = '+', Text = line });
+                    m.FileNote = Json.Get(r.ToolInput, "exists") as bool? == true ? "Replaces the whole file" : "New file";
+                    break;
+            }
+        }
+
+        // The old text's lines and the new text's: the lines they share at the start and the end stay as they are, the
+        // ones between are taken out and put in.
+        public static List<DiffLine> DiffOf(string oldText, string newText)
+        {
+            List<string> a = CodeLines(oldText), b = CodeLines(newText);
+            int start = 0;
+            while (start < a.Count && start < b.Count && a[start] == b[start]) start++;
+            int end = 0;
+            while (end < a.Count - start && end < b.Count - start && a[a.Count - 1 - end] == b[b.Count - 1 - end]) end++;
+            var lines = new List<DiffLine>();
+            for (int i = 0; i < start; i++) lines.Add(new DiffLine { Kind = ' ', Text = a[i] });
+            for (int i = start; i < a.Count - end; i++) lines.Add(new DiffLine { Kind = '-', Text = a[i] });
+            for (int i = start; i < b.Count - end; i++) lines.Add(new DiffLine { Kind = '+', Text = b[i] });
+            for (int i = a.Count - end; i < a.Count; i++) lines.Add(new DiffLine { Kind = ' ', Text = a[i] });
+            return lines;
+        }
+
+        // Code as the card shows it: its lines, each keeping its indentation (a tab as four spaces), with nothing a reader
+        // can't see (format characters such as bidi controls, other control characters, a lone surrogate).
+        public static List<string> CodeLines(string text)
+        {
+            var lines = new List<string>();
+            if (string.IsNullOrEmpty(text)) return lines;
+            string breaks = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            foreach (string part in breaks.Split('\n'))
+            {
+                var sb = new StringBuilder();
+                for (int i = 0; i < part.Length; i++)
+                {
+                    char c = part[i];
+                    if (c == '\t') { sb.Append("    "); continue; }
+                    if (char.IsHighSurrogate(c))
+                    {
+                        if (i + 1 < part.Length && char.IsLowSurrogate(part[i + 1]))
+                        {
+                            string pair = part.Substring(i, 2);
+                            int code = char.ConvertToUtf32(c, part[i + 1]);
+                            if (!(code >= 0xE0000 && code <= 0xE007F) && char.GetUnicodeCategory(pair, 0) != UnicodeCategory.Format) sb.Append(pair);
+                            i++;
+                        }
+                        continue;
+                    }
+                    if (char.IsLowSurrogate(c) || char.IsControl(c) || char.GetUnicodeCategory(c) == UnicodeCategory.Format) continue;
+                    sb.Append(c);
+                }
+                lines.Add(sb.ToString());
+            }
+            while (lines.Count > 0 && lines[lines.Count - 1].Trim() == "") lines.RemoveAt(lines.Count - 1);
+            return lines;
         }
 
         public static string TitleFor(string tool)

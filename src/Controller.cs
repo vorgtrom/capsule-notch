@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11;
 
         readonly Application app;
         Config config;
@@ -47,6 +47,7 @@ namespace Capsule
         List<UsageModule> shown = new List<UsageModule>();
         List<CellModel> notchCells;
         string lastActivity;
+        readonly SessionCues cues = new SessionCues();   // which sound a change in the sessions calls for
         bool fullscreen, signInOpen, menuOpen;
         bool codexWorking, codexChecking;   // a Codex turn is running; a check of Codex's logs is under way
         string codexFault;                  // the exception type the last logged fault of that check had: logged once, not every 2 s
@@ -245,7 +246,14 @@ namespace Capsule
             if (lastActivity == null && activity != null) claude.CheckBy(Clock.NowMs() + ClaudeActiveMs);
             lastActivity = activity;
             prompts.SessionsChanged(sessions.All);   // a session that moved on was answered in the app: Capsule lets go
+            PlayCue(cues.Next(sessions.HooksConnected ? sessions.All : new List<SessionStatus>()));
             Render();
+        }
+
+        // A sound for what needs you, unless Sounds is off. Claude's sessions count only while its hooks are connected.
+        void PlayCue(Cue cue)
+        {
+            if (config.Sounds) Sounds.Play(cue, Clock.NowMs());
         }
 
         void OnUsageChecked()
@@ -262,6 +270,7 @@ namespace Capsule
             Guard("updates", delegate { updates.Tick(now); });
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
+            PlayCue(cues.Next(sessions.HooksConnected ? sessions.All : new List<SessionStatus>()));
             Render();
         }
 
@@ -281,6 +290,7 @@ namespace Capsule
                     PromptBroker broker = request.Provider == "codex" ? codexPrompts : prompts;
                     HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply) { link.Send(reply); }, Clock.NowMs());
                     if (held == null) return;
+                    if (broker == codexPrompts) PlayCue(Capsule.Cue.Attention);   // Claude's waiting shows in its session's status, which cues its own sound
                     int id = held.Id;
                     link.WhenGone(delegate { app.Dispatcher.BeginInvoke(new Action(delegate { Guard("prompts", delegate { broker.Gone(id); }); })); });
                 }
@@ -365,6 +375,7 @@ namespace Capsule
                     return;   // the last answer stands
                 }
                 if (t.Result == codexWorking) return;
+                if (codexWorking && !t.Result) PlayCue(Capsule.Cue.Done);   // a Codex turn finished
                 codexWorking = t.Result;
                 Guard("render", Render);
             }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -956,6 +967,7 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
             });
             items.Add(new MenuItemSpec { Id = CmdLimitAlerts, Text = "Limit alerts", Checked = config.LimitAlerts });
+            items.Add(new MenuItemSpec { Id = CmdSounds, Text = "Sounds", Checked = config.Sounds });
             if (updates.CanCheck) items.Add(new MenuItemSpec { Id = CmdCheckUpdates, Text = "Check for updates", Checked = config.CheckUpdates });   // a release build only
             items.Add(new MenuItemSpec { Separator = true });
             items.Add(new MenuItemSpec { Id = CmdQuit, Text = "Quit Capsule" });
@@ -992,6 +1004,11 @@ namespace Capsule
                     config.CheckUpdates = !config.CheckUpdates;
                     config.Save(Paths.ConfigFile);
                     updates.Enabled = config.CheckUpdates;
+                    break;
+                case CmdSounds:
+                    config.Sounds = !config.Sounds;
+                    config.Save(Paths.ConfigFile);
+                    if (config.Sounds) Sounds.Play(Capsule.Cue.Attention, Clock.NowMs());   // so you hear what it sounds like
                     break;
                 case CmdLimitAlerts:
                     config.LimitAlerts = !config.LimitAlerts;

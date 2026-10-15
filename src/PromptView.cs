@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Automation;
@@ -121,12 +122,29 @@ namespace Capsule
             if (a.CanAlwaysAllow != b.CanAlwaysAllow || a.AlwaysAllowLabel != b.AlwaysAllowLabel || a.AlwaysAllowTip != b.AlwaysAllowTip || a.AlwaysAllowAlso != b.AlwaysAllowAlso) return false;
             if (a.Header != b.Header || a.QuestionText != b.QuestionText || a.MultiSelect != b.MultiSelect) return false;
             if (a.OtherOpen != b.OtherOpen || a.OtherText != b.OtherText || a.IsLast != b.IsLast || a.CanAdvance != b.CanAdvance) return false;
+            if (a.FileNote != b.FileNote || !SameLines(a.PlanLines, b.PlanLines) || !SameDiff(a.Diff, b.Diff)) return false;
             if (a.Options.Count != b.Options.Count) return false;
             for (int i = 0; i < a.Options.Count; i++)
             {
                 PromptOptionRow x = a.Options[i], y = b.Options[i];
                 if (x.Label != y.Label || x.Description != y.Description || x.Chosen != y.Chosen) return false;
             }
+            return true;
+        }
+
+        static bool SameLines(List<string> a, List<string> b)
+        {
+            if (a == null || b == null) return a == b;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        static bool SameDiff(List<DiffLine> a, List<DiffLine> b)
+        {
+            if (a == null || b == null) return a == b;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i].Kind != b[i].Kind || a[i].Text != b[i].Text) return false;
             return true;
         }
 
@@ -168,6 +186,11 @@ namespace Capsule
         // Enter in the Other… box is Next, or Send on the last question. False when there is no question to go on from.
         internal bool EnterPressed()
         {
+            if (model != null && model.Kind == PromptCardModel.Plan && model.OtherOpen)
+            {
+                Raise(Make(PromptAction.Deny));   // Keep planning, with what was typed
+                return true;
+            }
             if (model == null || model.Kind != PromptCardModel.Question) return false;
             Raise(Make(model.IsLast ? PromptAction.Send : PromptAction.Next));
             return true;
@@ -264,8 +287,30 @@ namespace Capsule
                     }
                 }
                 Children.Add(what);
+                if (m.FileNote != "")
+                {
+                    TextBlock note = CardView.MakeText(m.FileNote, 11.5, Palette.Secondary, FontWeights.SemiBold);
+                    note.Margin = new Thickness(0, -2, 0, 4);
+                    Children.Add(note);
+                }
+                if (m.Diff != null) Children.Add(DiffBox(m.Diff));
             }
             else if (m.Kind == PromptCardModel.Question) BuildQuestion(m);
+            else if (m.Kind == PromptCardModel.Plan && m.PlanLines != null)
+            {
+                Children.Add(PlanBox(m.PlanLines));
+                Border feedback = Choice("Give feedback\u2026", "", m.OtherOpen, false, delegate { Raise(Make(PromptAction.Other)); });
+                Children.Add(feedback);
+                if (m.OtherOpen)
+                {
+                    if (otherBox.Text != m.OtherText) otherBox.Text = m.OtherText;
+                    otherField.Background = NotchView.Brush(Palette.Track);
+                    otherBox.Foreground = NotchView.Brush(Palette.Text);
+                    otherBox.CaretBrush = NotchView.Brush(Palette.Text);
+                    AutomationProperties.SetName(otherBox, "Feedback for Claude");
+                    Children.Add(otherField);
+                }
+            }
             else
             {
                 string hint = m.Kind == PromptCardModel.Plan ? "Read it in the Claude app, or approve it here." : "Answer it in the Claude app.";
@@ -306,7 +351,7 @@ namespace Capsule
             else if (m.Kind == PromptCardModel.Plan)
             {
                 buttons.Children.Add(Pill("Approve plan", PromptAction.Allow));
-                buttons.Children.Add(Pill("Keep planning", PromptAction.Deny));
+                buttons.Children.Add(Pill(m.OtherOpen ? "Send feedback" : "Keep planning", PromptAction.Deny));
             }
             else if (m.Kind == PromptCardModel.Question)
             {
@@ -327,6 +372,135 @@ namespace Capsule
                 TextBlock also = CardView.Wrap(CardView.MakeText(m.AlwaysAllowAlso, 11.5, Palette.Secondary, FontWeights.Normal));
                 also.Margin = new Thickness(0, 0, 0, 2);
                 Children.Add(also);
+            }
+        }
+
+        public const double PreviewMaxHeight = 230;   // the diff or plan scrolls past this, so the buttons stay on the card
+
+        // An edit's lines in a code font: taken-out lines on red, put-in lines on green, each marked - or +, scrolling both
+        // ways. Every line is there: an edit too long to show whole never comes to the card.
+        static UIElement DiffBox(List<DiffLine> lines)
+        {
+            var rows = new StackPanel();
+            var mono = new FontFamily("Cascadia Mono, Consolas");
+            foreach (DiffLine l in lines)
+            {
+                Color tint = l.Kind == '-' ? Color.FromArgb(0x38, 0xFF, 0x45, 0x3A) : l.Kind == '+' ? Color.FromArgb(0x38, 0x30, 0xD1, 0x58) : Colors.Transparent;
+                string mark = l.Kind == '-' ? "-" : l.Kind == '+' ? "+" : " ";
+                var text = new TextBlock
+                {
+                    Text = l.Kind == '~' ? l.Text : mark + " " + l.Text,
+                    FontFamily = mono,
+                    FontSize = 11,
+                    Foreground = NotchView.Brush(l.Kind == ' ' || l.Kind == '~' ? Palette.Secondary : Palette.Text),
+                    TextWrapping = TextWrapping.Wrap,   // a long line wraps rather than hiding past the card's edge
+                };
+                rows.Children.Add(new Border { Background = new SolidColorBrush(tint), Padding = new Thickness(6, 0, 6, 0), Child = text });
+            }
+            var scroll = new ScrollViewer
+            {
+                Content = rows,
+                MaxHeight = PreviewMaxHeight,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+            AutomationProperties.SetName(scroll, "The change");
+            return new Border
+            {
+                Background = NotchView.Brush(Palette.Track),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(0, 5, 0, 5),
+                Margin = new Thickness(0, 0, 0, 8),
+                Child = scroll,
+            };
+        }
+
+        // A plan as readable text: headings bold, bullets as •, code blocks and `code` in a code font, **bold** bold. The
+        // rest of Markdown shows as written.
+        static UIElement PlanBox(List<string> lines)
+        {
+            var rows = new StackPanel();
+            var mono = new FontFamily("Cascadia Mono, Consolas");
+            bool code = false;
+            foreach (string raw in lines)
+            {
+                string line = raw.TrimEnd();
+                if (line.TrimStart().StartsWith("```", StringComparison.Ordinal)) { code = !code; continue; }
+                TextBlock t;
+                if (code)
+                {
+                    t = new TextBlock { Text = line, FontFamily = mono, FontSize = 11, Foreground = NotchView.Brush(Palette.Text), TextWrapping = TextWrapping.Wrap };
+                    rows.Children.Add(t);
+                    continue;
+                }
+                string trimmed = line.TrimStart();
+                if (trimmed == "")
+                {
+                    rows.Children.Add(new Border { Height = 6 });   // a blank line: a little room, not a whole line
+                    continue;
+                }
+                int depth = (line.Length - trimmed.Length) / 2;
+                double size = 12.5;
+                FontWeight weight = FontWeights.Normal;
+                if (trimmed.StartsWith("#", StringComparison.Ordinal))
+                {
+                    int level = 0;
+                    while (level < trimmed.Length && trimmed[level] == '#') level++;
+                    trimmed = trimmed.Substring(level).Trim();
+                    size = level <= 1 ? 15 : level == 2 ? 14 : 13;
+                    weight = FontWeights.SemiBold;
+                }
+                else if (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal))
+                    trimmed = "\u2022 " + trimmed.Substring(2);
+                t = new TextBlock
+                {
+                    FontSize = size,
+                    FontWeight = weight,
+                    FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+                    Foreground = NotchView.Brush(Palette.Text),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(depth * 12, weight == FontWeights.SemiBold ? 4 : 0, 0, 1),
+                };
+                AddInline(t, trimmed, mono);
+                rows.Children.Add(t);
+            }
+            var scroll = new ScrollViewer
+            {
+                Content = rows,
+                MaxHeight = PreviewMaxHeight,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+            AutomationProperties.SetName(scroll, "The plan");
+            return new Border
+            {
+                Background = NotchView.Brush(Palette.Track),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 0, 0, 8),
+                Child = scroll,
+            };
+        }
+
+        // **bold** and `code` within a line; everything else as it is.
+        static void AddInline(TextBlock t, string text, FontFamily mono)
+        {
+            int i = 0;
+            while (i < text.Length)
+            {
+                int bold = text.IndexOf("**", i, StringComparison.Ordinal), tick = text.IndexOf('`', i);
+                int next = bold < 0 ? tick : tick < 0 ? bold : Math.Min(bold, tick);
+                if (next < 0) { t.Inlines.Add(new System.Windows.Documents.Run(text.Substring(i))); return; }
+                if (next > i) t.Inlines.Add(new System.Windows.Documents.Run(text.Substring(i, next - i)));
+                bool isBold = next == bold;
+                string mark = isBold ? "**" : "`";
+                int close = text.IndexOf(mark, next + mark.Length, StringComparison.Ordinal);
+                if (close < 0) { t.Inlines.Add(new System.Windows.Documents.Run(text.Substring(next))); return; }
+                var run = new System.Windows.Documents.Run(text.Substring(next + mark.Length, close - next - mark.Length));
+                if (isBold) run.FontWeight = FontWeights.SemiBold;
+                else { run.FontFamily = mono; run.FontSize = 11.5; }
+                t.Inlines.Add(run);
+                i = close + mark.Length;
             }
         }
 
