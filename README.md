@@ -12,9 +12,11 @@ when each limit will run out at your current **pace**, and **warns you** before 
 event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: your usage, your sessions, today's
 and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
 idea that lands in **Notion**. And when Claude asks for
-permission or asks you a question, you can **approve it or answer it right on the capsule**, without switching
-to the Claude app. You can also connect Codex and local ChatGPT Work for command approvals and answers. And it shows
-what's playing in **Spotify** or **YouTube Music**, with pause, skip and a player switch.
+permission, asks you a question, wants to **edit a file** or has a **plan** ready, you can **review it and answer
+right on the capsule**, with the change shown line by line, without switching to the Claude app. Each session shows
+your last prompt and what Claude did last, and a short **sound** tells you when one needs you or finishes. You can
+also connect Codex and local ChatGPT Work for command approvals and answers. And it shows what's playing in
+**Spotify** or **YouTube Music**, with pause, skip and a player switch.
 
 Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).

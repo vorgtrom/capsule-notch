@@ -5,6 +5,8 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+## v1.6.0
+
 - **Review edits and plans from the capsule.** A file edit shows its change line by line, red for what's taken out and
   green for what's put in; a new file shows all of its lines. A plan shows in full, with its headings, lists and code.
   Allow or deny an edit, approve a plan, or type feedback and send Claude back to planning. Anything too long to show
