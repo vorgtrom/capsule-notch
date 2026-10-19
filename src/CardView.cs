@@ -286,11 +286,21 @@ namespace Capsule
             Grid.SetColumn(status, 1);
             line.Children.Add(project);
             line.Children.Add(status);
-            if (s.Detail == "") return line;
+            if (s.Detail == "" && s.Usage == "") return line;
             var both = new StackPanel { Margin = new Thickness(0, 1, 0, 3) };
             line.Margin = new Thickness(0);
             both.Children.Add(line);
-            both.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
+            // The prompt and last action on the left, cut with "…"; the model and tokens on the right, always whole.
+            var second = new DockPanel { LastChildFill = true };
+            if (s.Usage != "")
+            {
+                TextBlock usage = MakeText(s.Usage, 11, Palette.Secondary, FontWeights.Normal);
+                usage.Margin = new Thickness(s.Detail == "" ? 0 : 8, 0, 0, 0);
+                DockPanel.SetDock(usage, s.Detail == "" ? Dock.Left : Dock.Right);
+                second.Children.Add(usage);
+            }
+            if (s.Detail != "") second.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
+            both.Children.Add(second);
             return both;
         }
 

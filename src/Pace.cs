@@ -14,13 +14,16 @@ namespace Capsule
         public double Used;
     }
 
-    public enum ForecastKind { None, Full, AtReset, Reached }
+    // Even: no pace yet, only how the use so far compares with spreading the limit evenly over its window.
+    public enum ForecastKind { None, Full, AtReset, Reached, Even }
 
     public sealed class Forecast
     {
         public ForecastKind Kind;
         public long FullAtMs;        // Full: when it reaches 100%
         public int AtResetPercent;   // AtReset: about how full at the reset
+        public double EvenRatio;     // Even: percent used / percent of the window gone; 1 is even
+        public int GonePercent;      // Even: how much of the window has passed
         public long ResetMs;
         public long LengthMs;
     }
@@ -163,7 +166,22 @@ namespace Capsule
         public static Forecast Shown(SampleStore store, Reading r, LimitWindow w, long now)
         {
             if (!SampleStore.IsFresh(r, now)) return new Forecast { Kind = ForecastKind.None, ResetMs = w.ResetsAtMs, LengthMs = LengthMs(r.Provider, w) };
-            return For(store, r.Provider, w, now);
+            Forecast f = For(store, r.Provider, w, now);
+            return f.Kind == ForecastKind.None ? Even(f, w, now) : f;
+        }
+
+        // Without a pace, how the use so far compares with an even spread: 85% used with 81% of the window gone is
+        // 1.05x. Nothing for an unused limit, or in the first 5% of a window, where the ratio swings wildly.
+        // ponytail: a fixed 5% floor; scale it per window length if 5-hour ratios still jump early on.
+        public static Forecast Even(Forecast f, LimitWindow w, long now)
+        {
+            if (f.LengthMs <= 0 || w.ResetsAtMs <= now || w.Used < 1) return f;
+            double gone = 1 - (w.ResetsAtMs - now) / (double)f.LengthMs;
+            if (gone < 0.05 || gone > 1) return f;
+            f.Kind = ForecastKind.Even;
+            f.EvenRatio = w.Used / (gone * 100);
+            f.GonePercent = (int)Math.Round(gone * 100);
+            return f;
         }
 
         public static Forecast For(SampleStore store, string provider, LimitWindow w, long now)
@@ -180,15 +198,18 @@ namespace Capsule
             return withDay ? t.ToString("ddd", culture) + " " + time : time;
         }
 
-        // The hover card's line: "At this pace: full at 4:10 PM", or null.
+        // The hover card's line: "At this pace: full at 4:10 PM · locked 41 min", or null.
         public static string CardLine(Forecast f, CultureInfo culture)
         {
             bool day = f.LengthMs > Day;
             switch (f.Kind)
             {
-                case ForecastKind.Full: return "At this pace: full " + (day ? "" : "at ") + When(f.FullAtMs, day, culture);
+                case ForecastKind.Full:
+                    string full = "At this pace: full " + (day ? "" : "at ") + When(f.FullAtMs, day, culture);
+                    return f.ResetMs > f.FullAtMs ? full + " · locked " + LimitAlerts.Gap(f.ResetMs - f.FullAtMs) : full;
                 case ForecastKind.AtReset: return "At this pace: about " + f.AtResetPercent + "% at reset";
                 case ForecastKind.Reached: return "Limit reached · resets " + When(f.ResetMs, day, culture);
+                case ForecastKind.Even: return f.GonePercent + "% of the window gone · " + f.EvenRatio.ToString("0.0", culture) + "× even pace";
                 default: return null;
             }
         }

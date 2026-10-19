@@ -21,6 +21,26 @@ namespace Capsule
         // Calendars whose box the user changed: calendar id -> shown. The others follow Google's own "selected". Ids
         // only, never names.
         public Dictionary<string, bool> CalendarChoices = new Dictionary<string, bool>();
+        // The rings switched off in Settings: name -> on. A ring that isn't listed is on.
+        public Dictionary<string, bool> Rings = new Dictionary<string, bool>();
+        public bool ClipboardHistory = true;   // the last copies, in memory only
+        public int FocusMinutes = 25, ShortBreakMinutes = 5, LongBreakMinutes = 15;
+
+        public static readonly string[] RingNames = { "claude", "codex", "calendar", "music", "focus" };
+        public const int MaxFocusMinutes = 120, MaxBreakMinutes = 60;
+
+        public bool RingOn(string name)
+        {
+            bool on;
+            return !Rings.TryGetValue(name, out on) || on;
+        }
+
+        // A ring may go off only while another one stays on, so the capsule always has something it can show.
+        public bool CanTurnOff(string name)
+        {
+            foreach (string other in RingNames) if (other != name && RingOn(other)) return true;
+            return false;
+        }
 
         public static Config Load(string path)
         {
@@ -45,6 +65,15 @@ namespace Capsule
             if (choices != null)
                 foreach (KeyValuePair<string, object> choice in choices)
                     if (choice.Key != "" && choice.Value is bool) c.CalendarChoices[choice.Key] = (bool)choice.Value;
+            Dictionary<string, object> rings = Json.Obj(Json.Get(o, "rings"));
+            if (rings != null)
+                foreach (string name in RingNames)
+                    if (rings.ContainsKey(name) && rings[name] is bool) c.Rings[name] = (bool)rings[name];
+            if (!c.RingOn("claude") && !c.CanTurnOff("claude")) c.Rings["claude"] = true;   // all off, by hand: Claude comes back
+            c.ClipboardHistory = Json.Get(o, "clipboard_history") as bool? ?? true;
+            c.FocusMinutes = Minutes(Json.Get(o, "focus_minutes"), 25, MaxFocusMinutes);
+            c.ShortBreakMinutes = Minutes(Json.Get(o, "short_break_minutes"), 5, MaxBreakMinutes);
+            c.LongBreakMinutes = Minutes(Json.Get(o, "long_break_minutes"), 15, MaxBreakMinutes);
             return c;
         }
 
@@ -66,7 +95,22 @@ namespace Capsule
             var choices = new Dictionary<string, object>();
             foreach (KeyValuePair<string, bool> choice in CalendarChoices) choices[choice.Key] = choice.Value;
             d["google_calendars"] = choices;
+            var rings = new Dictionary<string, object>();
+            foreach (KeyValuePair<string, bool> ring in Rings) rings[ring.Key] = ring.Value;
+            d["rings"] = rings;
+            d["clipboard_history"] = ClipboardHistory;
+            d["focus_minutes"] = FocusMinutes;
+            d["short_break_minutes"] = ShortBreakMinutes;
+            d["long_break_minutes"] = LongBreakMinutes;
             return Files.WriteAtomic(path, Json.Write(d));
+        }
+
+        // A whole number of minutes from 1 to max, or the default.
+        static int Minutes(object value, int fallback, int max)
+        {
+            double? n = Json.Num(value);
+            if (!n.HasValue || double.IsNaN(n.Value)) return fallback;
+            return (int)Math.Max(1, Math.Min(max, Math.Round(n.Value)));
         }
     }
 

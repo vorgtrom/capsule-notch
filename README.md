@@ -16,7 +16,8 @@ permission, asks you a question, wants to **edit a file** or has a **plan** read
 right on the capsule**, with the change shown line by line, without switching to the Claude app. Each session shows
 your last prompt and what Claude did last, and a short **sound** tells you when one needs you or finishes. You can
 also connect Codex and local ChatGPT Work for command approvals and answers. And it shows what's playing in
-**Spotify** or **YouTube Music**, with pause, skip and a player switch.
+**Spotify** or **YouTube Music**, with pause, skip and a player switch, runs a **focus timer**, and keeps a short
+**clipboard history**. Each ring can be switched off in Settings.
 
 Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
@@ -32,8 +33,10 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 - **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions: each with the start of your
-  last prompt and what Claude did last ("“fix the auth bug…” · Edited middleware.ts"). Under each limit, its pace:
-  "At this pace: full at 4:10 PM" (amber, before the reset) or "about 64% at reset".
+  last prompt, what Claude did last ("“fix the auth bug…” · Edited middleware.ts"), and its model and tokens so far
+  ("Opus 4.8 · 1.2M tokens"). Under each limit, its pace:
+  "At this pace: full at 4:10 PM · locked 41 min" (amber, before the reset) or "about 64% at reset". Until there's a
+  pace to go on, how your use compares with an even spread: "81% of the window gone · 1.1× even pace".
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
   When Capsule holds a Codex / Work request, the Codex ring pulses amber.
 - **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses
@@ -56,6 +59,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 - **Limit alerts**: a notification at 80% and 95% of a limit, and when you're on pace to run out before it resets.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add, edit or delete one.
+- **A focus timer and your clipboard**: see [below](#focus-timer-clipboard-and-your-rings).
+- **Only the rings you want**: switch any ring off in Settings.
 
 | Hover the calendar | The month page |
 |:---:|:---:|
@@ -89,6 +94,25 @@ the same music controls. No extra sign-in or API key is needed.
 - Music needs Windows 10 version 1809 or later. Track metadata and artwork stay in memory; Capsule does not save
   listening history or contact Spotify or YouTube itself.
 
+## Focus timer, clipboard and your rings
+
+| The Focus ring | Focus and Clipboard tiles | Choose your rings |
+|:---:|:---:|:---:|
+| <img src="docs/images/notch-focus.png" width="116" alt="Capsule with Claude and Codex rings and a red Focus ring counting down, 18:42 left"> | <img src="docs/images/panel-focus.png" width="340" alt="The panel with each session's model and tokens, the Focus tile with Pause, Skip and Stop, and the Clipboard tile listing a command, a link, two colours and a note"> | <img src="docs/images/settings-rings.png" width="340" alt="Settings: a switch for each ring and for clipboard history, and the focus lengths"> |
+
+- **Focus timer.** Click **Start** on the panel's Focus tile: 25 minutes of focus, then a 5-minute break, and a
+  15-minute break after every four. Each part starts the next by itself. While it runs, a Focus ring counts down
+  in the capsule, red while you focus and green on a break, and dimmed while paused. A sound (unless Sounds is off)
+  and a notification mark the end of each part. **Pause**, **Skip** and **Stop** are on the tile; the lengths are in
+  Settings. Quitting Capsule stops the timer.
+- **Clipboard history.** The Clipboard tile lists your last 25 copies, newest first: text, links (by host and path,
+  without the part after `?`), colours (`#30D158`, `rgb(255, 69, 58)`) with a swatch, and up to 5 screenshots with a
+  thumbnail. Copying something again moves it to the top. Filter by kind, click one to put it back on the clipboard,
+  or **Clear** them all.
+- **Your rings.** Settings (⚙ in the panel) has a switch for Claude, Codex, Calendar, Music and Focus. A ring that's
+  off leaves the capsule and the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that
+  ring would hold goes straight to the Claude or Codex app. One ring always stays on.
+
 ## Usage history and limit alerts
 
 Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
@@ -111,7 +135,9 @@ Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or E
 
 **Pace.** Capsule remembers each usage check (`usage-samples.json`) and works out how fast each limit is rising:
 over the last hour for 5-hour limits, the last day for weekly ones. It needs 15 minutes (2 hours for weekly limits)
-and a visible rise before it forecasts anything.
+and a visible rise before it forecasts anything. Until then, the hover card shows the even-pace comparison instead:
+percent used divided by percent of the window gone, so 1.0× uses the limit exactly as fast as the window runs out. It
+stays blank for an unused limit and in the first 5% of a window.
 
 **Alerts** come as Windows notifications from Capsule's tray icon, each once per limit window:
 - "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)
@@ -540,6 +566,12 @@ anywhere else.
 - **Usage history** reads Claude Code's logs (`~/.claude/projects`) and Codex's session logs every 5 minutes, only
   what's new since last time. From each reply it keeps the model, the time and the token counts. Prompts, replies,
   file paths and project names are never kept, shown or logged; `usage-history.json` names each log only by a hash.
+- **Each session's model and tokens** come from that session's own log in `~/.claude/projects`, read when the
+  session has news (at most every 10 seconds while it works), only what's new. Only the model and the token counts
+  are kept, in memory.
+- **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
+  Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
+  managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only

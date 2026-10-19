@@ -3,15 +3,24 @@ using System.Globalization;
 
 namespace Capsule
 {
-    // Everything the panel shows, tile by tile, in a fixed order: Claude, Codex, Sessions, Calendar, Ideas.
+    // Everything the panel shows, tile by tile, in a fixed order: Claude, Codex, Sessions, Calendar, Music, Focus,
+    // Clipboard, Ideas. A tile whose ring is switched off (or that has nothing to show) is null, and isn't shown.
     public sealed class PanelModel
     {
         public UsageTile Claude;
         public UsageTile Codex;
-        public SessionsTile Sessions;
-        public CalendarTile Calendar;   // null: no Calendar tile
+        public SessionsTile Sessions;   // null while Claude is off
+        public CalendarTile Calendar;
         public MusicSnapshot Music;
+        public FocusTile Focus;
+        public ClipboardTile Clipboard;
         public IdeasTile Ideas;
+    }
+
+    // The Clipboard tile: the copies kept, newest first.
+    public sealed class ClipboardTile
+    {
+        public List<ClipItem> Items = new List<ClipItem>();
     }
 
     // What the panel's Claude or Codex tile shows (spec §2), as plain text and numbers. Built here; drawn by PanelView.
@@ -93,7 +102,7 @@ namespace Capsule
         public int More;
         public string Hint = "";   // instead of rows: hooks not connected, or nothing to show
 
-        public static SessionsTile From(IList<SessionStatus> sessions, bool hooksConnected, long now)
+        public static SessionsTile From(IList<SessionStatus> sessions, bool hooksConnected, long now, System.Func<string, SessionUse> use = null)
         {
             var t = new SessionsTile();
             if (!hooksConnected)
@@ -102,7 +111,7 @@ namespace Capsule
                 return t;
             }
             int more;
-            t.Rows = SessionRow.ListFor(sessions ?? new List<SessionStatus>(), now, out more);
+            t.Rows = SessionRow.ListFor(sessions ?? new List<SessionStatus>(), now, out more, use);
             t.More = more;
             if (t.Rows.Count == 0) t.Hint = "No active sessions";
             return t;

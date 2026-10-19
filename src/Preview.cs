@@ -36,7 +36,7 @@ namespace Capsule
             SaveNotch(dir, "notch-dimmed.png", Cells(now, null, dimmed, codex), false);
             SaveNotch(dir, "notch-signin.png", Cells(now, null, signin), false);
             SaveNotch(dir, "notch-left.png", Cells(now, null, claude, codex), true);
-            SaveCard(dir, "card-claude.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
+            SaveCard(dir, "card-claude.png", CardModel.From(claude, SampleSessions(now), true, now, en, null, SampleUse), true);
             SaveCard(dir, "card-codex.png", CardModel.From(codex, null, true, now, en), true);
             SaveCard(dir, "card-claude-left.png", CardModel.From(claude, new List<SessionStatus>(), false, now, en), false);
             foreach (KeyValuePair<string, PromptCardModel> sample in SamplePrompts()) SavePrompt(dir, "card-" + sample.Key + ".png", sample.Value);
@@ -46,6 +46,7 @@ namespace Capsule
             SaveMonth(dir, "", now, en);
             SaveUsage(dir, "", en);
             SaveMusic(dir, "", claude, codex, now, en);
+            SaveFocusClipboard(dir, "", claude, codex, now, en);
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
@@ -55,7 +56,49 @@ namespace Capsule
             SaveMonth(dir, "-light", now, en);
             SaveUsage(dir, "-light", en);
             SaveMusic(dir, "-light", claude, codex, now, en);
+            SaveFocusClipboard(dir, "-light", claude, codex, now, en);
             Theme.Use(Theme.For(false, false));
+        }
+
+        // Made-up model and token use for the sample sessions.
+        static SessionUse SampleUse(string sessionId)
+        {
+            int n = 0;
+            foreach (char c in sessionId ?? "") n += c;
+            return new SessionUse { Model = n % 2 == 0 ? "claude-opus-4-8" : "claude-sonnet-4-5-20250929", Tokens = 180000 + (n % 7) * 310000 };
+        }
+
+        // v1.7.0: the Focus ring counting down under the others, the panel with its Focus and Clipboard tiles, and
+        // Settings' ring switches.
+        static void SaveFocusClipboard(string dir, string suffix, Reading claude, Reading codex, long now, CultureInfo en)
+        {
+            var timer = new FocusTimer();
+            timer.Start(now - (25 * 60 - 18 * 60 - 42) * 1000L);
+            List<CellModel> cells = Cells(now, null, claude, codex);
+            cells.Add(timer.Cell(now));
+            SaveNotch(dir, "notch-focus" + suffix + ".png", cells, false);
+            PanelModel panel = SamplePanel(claude, codex, now, en);
+            panel.Calendar = null;
+            panel.Focus = FocusTile.From(timer, now, en);
+            var clips = new ClipboardTile();
+            clips.Items.Add(ClipboardHistory.FromText("npm run build -- --watch", now));
+            clips.Items.Add(ClipboardHistory.FromText("https://github.com/vorgtrom/capsule-notch/pulls?utm_source=newsletter", now));
+            clips.Items.Add(ClipboardHistory.FromText("#30D158", now));
+            clips.Items.Add(ClipboardHistory.FromText("Meeting moved to 3:30, same room", now));
+            clips.Items.Add(ClipboardHistory.FromText("rgb(255, 69, 58)", now));
+            clips.Items.Add(ClipboardHistory.FromText("ssh deploy@staging.example.com", now));
+            panel.Clipboard = clips;
+            SavePanel(dir, "panel-focus" + suffix + ".png", panel, false);
+            var view = new PanelView();
+            view.Update(panel);
+            var config = new Config();
+            config.Rings["calendar"] = false;
+            view.ShowRings(config);
+            view.ShowSettings(true, "0123456789abcdef0123456789abcdef", HotkeyText.Default);
+            view.Relayout();
+            var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+            host.Children.Add(view);
+            SavePng(host, Path.Combine(dir, "settings-rings" + suffix + ".png"));
         }
 
         static void SaveMusic(string dir, string suffix, Reading claude, Reading codex, long now, CultureInfo en)
@@ -212,7 +255,7 @@ namespace Capsule
             {
                 Claude = UsageTile.From(claude, now, en),
                 Codex = UsageTile.From(codex, now, en),
-                Sessions = SessionsTile.From(SampleSessions(now), true, now),
+                Sessions = SessionsTile.From(SampleSessions(now), true, now, SampleUse),
                 Ideas = ideas,
                 Calendar = CalendarDay.Tile(SampleCalendar(now), now, TimeZoneInfo.Local, en),
             };

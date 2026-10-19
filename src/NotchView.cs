@@ -22,6 +22,13 @@ namespace Capsule
         public bool Dimmed;
         public bool SignIn;
         public string Activity;           // null, States.Working or States.Waiting (Codex: only Working)
+
+        // Whether drawing o would look the same: the capsule is then left alone, so WPF has nothing to redraw.
+        public bool SameAs(CellModel o)
+        {
+            return o != null && Provider == o.Provider && Glyph == o.Glyph && Artwork == o.Artwork && Text == o.Text && ShowArc == o.ShowArc
+                && Used == o.Used && ArcColor == o.ArcColor && Dimmed == o.Dimmed && SignIn == o.SignIn && Activity == o.Activity;
+        }
     }
 
     // The glass pill and its cells, laid out in DIPs for the right screen edge and mirrored for the left.
@@ -174,6 +181,7 @@ namespace Capsule
             readonly TextBlock text = new TextBlock();
             readonly RotateTransform spin = new RotateTransform();
             string activity = "";   // "" = never applied, so the first Apply always sets it up
+            CellModel applied;      // what the cell shows now
 
             public CellVisual(NotchView view, int index)
             {
@@ -252,6 +260,10 @@ namespace Capsule
 
             public void Apply(CellModel m, bool animate)
             {
+                // The capsule is rebuilt every 5 s; a new arc geometry and brush each time made WPF redraw the window
+                // (about 1% of a core while idle). Unchanged, nothing is touched.
+                if (m.SameAs(applied)) return;
+                applied = m;
                 bool hasGlyph = m.Glyph != null;
                 logo.Visibility = hasGlyph || m.Artwork != null ? Visibility.Collapsed : Visibility.Visible;
                 glyphBox.Visibility = hasGlyph && m.Artwork == null ? Visibility.Visible : Visibility.Collapsed;

@@ -41,8 +41,8 @@ namespace Capsule
             {
                 polling = false;
                 if (disposed) return;
-                // Every second while there is a player to show; every 3 s while there is none.
-                if (due != 0) due = Clock.NowMs() + (t.IsFaulted || t.IsCanceled ? 10000 : t.Result.Tracks.Count == 0 ? 3000 : 1000);
+                // Every second while something plays (its position moves); every 3 s otherwise, paused players included.
+                if (due != 0) due = Clock.NowMs() + (t.IsFaulted || t.IsCanceled ? 10000 : t.Result.Tracks.Exists(track => track.Playing) ? 1000 : 3000);
                 MusicSnapshot next = t.IsFaulted || t.IsCanceled
                     ? new MusicSnapshot { Note = "Couldn't read Windows media. Try playing music again." } : t.Result;
                 string fault = t.IsFaulted ? t.Exception.GetBaseException().GetType().Name : "";
