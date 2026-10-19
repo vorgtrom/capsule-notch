@@ -43,7 +43,14 @@ namespace Capsule
         PromptBroker prompts;        // the requests held, and their rules
         PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
-        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick;
+        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead;
+        readonly FocusTimer focus = new FocusTimer();
+        readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
+        ClipboardWatcher clipWatcher;
+        long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
+        int clipRetries;        // reads tried again while another app held the clipboard
+        SessionTally tally;     // each session's model and tokens, from its transcript
+        bool tallyBusy;
         List<UsageModule> shown = new List<UsageModule>();
         List<CellModel> notchCells;
         string lastActivity;
@@ -57,6 +64,7 @@ namespace Capsule
         int hoverCell = -1, cardCell = -1;
         int calendarCell = -1;   // the calendar's cell on the capsule, under the usage cells; -1 while signed out
         int musicCell = -1;      // the music's cell on the capsule; -1 while nothing plays
+        int focusCell = -1;      // the focus timer's cell; -1 while it isn't running or paused
         long musicPlayedMs;      // the last time any player was playing
         int monthYear, monthMonth;   // the month page's month, while it shows
         DateTime monthDay;           // and its selected day
@@ -108,6 +116,8 @@ namespace Capsule
             updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
             updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
             codexActivity = new CodexActivity(Paths.CodexHome);
+            tally = new SessionTally(Paths.ClaudeDir);
+            focus.SetLengths(config.FocusMinutes, config.ShortBreakMinutes, config.LongBreakMinutes);
             lastActivity = sessions.Activity;
             blurWorks = GlassLayer.Supported;   // asked here, on the UI thread, which then runs the blur
             Theme.Refresh(blurWorks);
@@ -121,12 +131,16 @@ namespace Capsule
             codexCheck = NewTimer(2000, CheckCodex);
             promptTick = NewTimer(250, delegate { Guard("prompts", PromptTick); });   // runs only while a request is held
             musicTick = NewTimer(1000, delegate { music.Tick(Clock.NowMs()); });
+            focusTick = NewTimer(1000, delegate { Guard("focus", FocusTick); });   // runs only while the timer does
+            clipRead = NewTimer(100, delegate { clipRead.Stop(); Guard("clipboard", ReadClipboard); });   // once the copying app has let go
+            clipWatcher = new ClipboardWatcher();
+            clipWatcher.Changed += delegate { clipRead.Stop(); clipRead.Start(); };
 
             // Capsule steps aside while the Claude app's window is in front, and while the capsule is hidden (turned off,
             // or under a fullscreen app): the card can't be seen then, and holding would only delay the app's own prompt.
-            prompts = new PromptBroker(() => !notch.IsVisible || ClaudeApp.IsInFront());
+            prompts = new PromptBroker(() => !config.RingOn("claude") || !notch.IsVisible || ClaudeApp.IsInFront());
             prompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
-            codexPrompts = new PromptBroker(() => !notch.IsVisible || CodexApp.IsInFront());
+            codexPrompts = new PromptBroker(() => !config.RingOn("codex") || !notch.IsVisible || CodexApp.IsInFront());
             codexPrompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
 
             menuOwner = new MenuOwner();
@@ -158,8 +172,19 @@ namespace Capsule
             panel.View.IdeaSubmitted += OnIdeaSubmitted;
             panel.View.IdeaOpened += OpenIdea;
             panel.View.DiscardClicked += delegate { ideas.Discard(); };
+            panel.View.FocusCommand += delegate(string command) { Guard("focus", delegate { OnFocusCommand(command); }); };
+            panel.View.ClipCopyRequested += delegate(ClipItem item) { Guard("clipboard", delegate { CopyBack(item); }); };
+            panel.View.ClipClearRequested += delegate
+            {
+                clips.Clear();
+                panel.View.UpdateClipboard(ClipTile());
+            };
+            panel.View.RingToggled += delegate(string name, bool on) { Guard("rings", delegate { OnRingToggled(name, on); }); };
+            panel.View.ClipboardToggled += delegate(bool on) { Guard("clipboard", delegate { OnClipboardToggled(on); }); };
+            panel.View.FocusLengthChanged += delegate(string which, int minutes) { Guard("focus", delegate { OnFocusLength(which, minutes); }); };
             panel.View.SettingsClicked += delegate
             {
+                panel.View.ShowRings(config);
                 panel.View.ShowSettings(SecretStore.Exists(Paths.NotionSecretFile), config.NotionDatabase, config.Hotkey);
                 panel.View.ShowGoogle(calendar.Settings());
             };
@@ -216,8 +241,9 @@ namespace Capsule
             ApplyVisibility();
             tick.Start();
             screenCheck.Start();
-            codexCheck.Start();
-            musicTick.Start();
+            if (config.RingOn("codex")) codexCheck.Start();
+            if (config.RingOn("music")) musicTick.Start();
+            if (config.ClipboardHistory && !clipWatcher.Start()) Log.Info("clipboard: Windows didn't let Capsule watch the clipboard");
             Tick();
             promptServer = new PromptServer(PromptPipe.Name, OnPromptArrived);
             Log.Info(promptServer.Start() ? "prompts: listening" : "prompts: not listening; Claude asks in the app as usual");
@@ -246,8 +272,40 @@ namespace Capsule
             if (lastActivity == null && activity != null) claude.CheckBy(Clock.NowMs() + ClaudeActiveMs);
             lastActivity = activity;
             prompts.SessionsChanged(sessions.All);   // a session that moved on was answered in the app: Capsule lets go
-            PlayCue(cues.Next(sessions.HooksConnected ? sessions.All : new List<SessionStatus>()));
+            PlayCue(cues.Next(ClaudeSessionsForCues()));
+            UpdateTally();
             Render();
+        }
+
+        // Claude's sessions count for sounds only while its hooks are connected and its ring is on.
+        List<SessionStatus> ClaudeSessionsForCues()
+        {
+            return sessions.HooksConnected && config.RingOn("claude") ? sessions.All : new List<SessionStatus>();
+        }
+
+        // A module whose ring is off does no work: no checks, no reads.
+        bool ModuleOn(IModule m)
+        {
+            if (m == claude) return config.RingOn("claude");
+            if (m == codex) return config.RingOn("codex");
+            if (m == calendar) return config.RingOn("calendar");
+            if (m == music) return config.RingOn("music");
+            if (m == history) return config.RingOn("claude") || config.RingOn("codex");   // the Usage page opens from their tiles
+            return true;
+        }
+
+        // Reads what is new in the sessions' transcripts, on a worker thread; their rows are drawn again if it changed.
+        void UpdateTally()
+        {
+            if (tallyBusy || !config.RingOn("claude") || !sessions.HooksConnected) return;
+            tallyBusy = true;
+            var list = new List<SessionStatus>(sessions.All);
+            long now = Clock.NowMs();
+            Task.Run(() => tally.Update(list, now)).ContinueWith(t =>
+            {
+                tallyBusy = false;
+                if (!t.IsFaulted && t.Result) Guard("render", Render);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         // A sound for what needs you, unless Sounds is off. Claude's sessions count only while its hooks are connected.
@@ -266,11 +324,12 @@ namespace Capsule
         void Tick()
         {
             long now = Clock.NowMs();
-            foreach (IModule m in modules) m.Tick(now);
+            foreach (IModule m in modules) if (ModuleOn(m)) m.Tick(now);
             Guard("updates", delegate { updates.Tick(now); });
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
-            PlayCue(cues.Next(sessions.HooksConnected ? sessions.All : new List<SessionStatus>()));
+            PlayCue(cues.Next(ClaudeSessionsForCues()));
+            UpdateTally();
             Render();
         }
 
@@ -402,12 +461,13 @@ namespace Capsule
             if (disposed) return;   // a check that ends while the way out pumps the dispatcher (GlassLayer.Stop)
             long now = Clock.NowMs();
             string activity = sessions.Activity;
-            shown = new List<UsageModule> { claude };
-            if (codex.Current.Status != "none" || codexPrompts.Count > 0) shown.Add(codex);
+            shown = new List<UsageModule>();
+            if (config.RingOn("claude")) shown.Add(claude);
+            if (config.RingOn("codex") && (codex.Current.Status != "none" || codexPrompts.Count > 0)) shown.Add(codex);
             string codexActivityNow = codexPrompts.Count > 0 ? States.Waiting : codexWorking ? States.Working : null;
             List<CellModel> cells = shown.Select(m => m.Cell(m == codex ? codexActivityNow : activity, now)).ToList();
             calendarCell = -1;
-            if (calendar.Connected)   // under Claude and Codex, while there is a link or a sign-in (calendar spec §2)
+            if (config.RingOn("calendar") && calendar.Connected)   // under Claude and Codex, while there is a link or a sign-in (calendar spec §2)
             {
                 calendarCell = cells.Count;
                 cells.Add(calendar.Cell(now, CultureInfo.CurrentCulture));
@@ -418,10 +478,16 @@ namespace Capsule
                 musicCell = cells.Count;
                 cells.Add(music.Current.Cell());
             }
+            focusCell = -1;
+            if (config.RingOn("focus") && focus.Active)
+            {
+                focusCell = cells.Count;
+                cells.Add(focus.Cell(now));
+            }
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
             notchCells = cells;
             notch.SetCells(cells);
-            LimitWindow headline = claude.Current.DisplayWindow;
+            LimitWindow headline = config.RingOn("claude") ? claude.Current.DisplayWindow : null;
             tray.Update(headline != null ? (double?)headline.Used : null, TrayText());
             // Not while it folds: that would turn it round. Nor while it shows a request: OnPromptsChanged redraws that.
             if (card.IsOpen && cardCell >= 0 && !card.View.ShowingPrompt) ShowCard(cardCell);
@@ -443,6 +509,7 @@ namespace Capsule
 
         bool MusicShown(long now)
         {
+            if (!config.RingOn("music")) return false;
             if (music.Current.Tracks.Exists(t => t.Playing)) musicPlayedMs = now;
             return MusicSelection.ShowCell(music.Current, now, musicPlayedMs);
         }
@@ -460,13 +527,174 @@ namespace Capsule
             long now = Clock.NowMs();
             return new PanelModel
             {
-                Claude = claude.Tile(now, CultureInfo.CurrentCulture),
-                Codex = codex.Tile(now, CultureInfo.CurrentCulture),
-                Sessions = sessions.Tile(now),
-                Calendar = calendar.Tile(now, CultureInfo.CurrentCulture),
-                Music = music.Current,
+                Claude = config.RingOn("claude") ? claude.Tile(now, CultureInfo.CurrentCulture) : null,
+                Codex = config.RingOn("codex") ? codex.Tile(now, CultureInfo.CurrentCulture) : null,
+                Sessions = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null,
+                Calendar = config.RingOn("calendar") ? calendar.Tile(now, CultureInfo.CurrentCulture) : null,
+                Music = config.RingOn("music") ? music.Current : null,
+                Focus = config.RingOn("focus") ? FocusTile.From(focus, now, CultureInfo.CurrentCulture) : null,
+                Clipboard = ClipTile(),
                 Ideas = ideas.Tile(),
             };
+        }
+
+        ClipboardTile ClipTile()
+        {
+            return config.ClipboardHistory ? new ClipboardTile { Items = new List<ClipItem>(clips.Items) } : null;
+        }
+
+        // ---- Rings, the focus timer and the clipboard ----
+
+        // A switch in Settings. Off, the ring's work stops too, and requests it holds go to the app.
+        void OnRingToggled(string name, bool on)
+        {
+            if (!on && !config.CanTurnOff(name)) return;
+            config.Rings[name] = on;
+            if (!config.Save(Paths.ConfigFile)) Log.Info("rings: couldn't write config.json; the switch holds only until Capsule restarts");
+            Log.Info("rings: " + name + (on ? " on" : " off"));
+            switch (name)
+            {
+                case "claude":
+                    if (on) claude.Refresh();
+                    else prompts.ReleaseAll();
+                    break;
+                case "codex":
+                    if (on)
+                    {
+                        codexCheck.Start();
+                        codex.Refresh();
+                    }
+                    else
+                    {
+                        codexCheck.Stop();
+                        codexWorking = false;
+                        codexPrompts.ReleaseAll();
+                    }
+                    break;
+                case "calendar":
+                    if (on) calendar.Refresh();
+                    break;
+                case "music":
+                    if (on)
+                    {
+                        musicTick.Start();
+                        music.Refresh();
+                    }
+                    else musicTick.Stop();
+                    break;
+                case "focus":
+                    if (!on)
+                    {
+                        focus.Stop();
+                        focusTick.Stop();
+                    }
+                    break;
+            }
+            panel.View.ShowRings(config);
+            Render();
+        }
+
+        void OnClipboardToggled(bool on)
+        {
+            config.ClipboardHistory = on;
+            if (!config.Save(Paths.ConfigFile)) Log.Info("clipboard: couldn't write config.json; the switch holds only until Capsule restarts");
+            if (on)
+            {
+                if (!clipWatcher.Start()) Log.Info("clipboard: Windows didn't let Capsule watch the clipboard");
+            }
+            else
+            {
+                clipWatcher.Stop();
+                clipRead.Stop();
+                clips.Clear();
+            }
+            panel.View.ShowRings(config);
+            Render();
+        }
+
+        void OnFocusLength(string which, int minutes)
+        {
+            if (which == "focus") config.FocusMinutes = Math.Max(1, Math.Min(Config.MaxFocusMinutes, minutes));
+            else if (which == "short") config.ShortBreakMinutes = Math.Max(1, Math.Min(Config.MaxBreakMinutes, minutes));
+            else if (which == "long") config.LongBreakMinutes = Math.Max(1, Math.Min(Config.MaxBreakMinutes, minutes));
+            else return;
+            config.Save(Paths.ConfigFile);
+            focus.SetLengths(config.FocusMinutes, config.ShortBreakMinutes, config.LongBreakMinutes);
+            panel.View.ShowRings(config);
+            Render();
+        }
+
+        void OnFocusCommand(string command)
+        {
+            long now = Clock.NowMs();
+            switch (command)
+            {
+                case "start": focus.Start(now); break;
+                case "pause": focus.Pause(now); break;
+                case "resume": focus.Resume(now); break;
+                case "skip": focus.Skip(now); break;
+                case "stop": focus.Stop(); break;
+                default: return;
+            }
+            if (focus.Running) focusTick.Start();
+            else focusTick.Stop();
+            Render();
+        }
+
+        // Every second while the timer runs: a part that ended is marked by a sound and a notification, and the ring and
+        // the open Focus tile count down. Nothing else is redrawn.
+        void FocusTick()
+        {
+            long now = Clock.NowMs();
+            FocusPhase? ended = focus.Tick(now);
+            if (ended.HasValue)
+            {
+                PlayCue(Capsule.Cue.Done);
+                tray.Balloon("Capsule", focus.EndedText(ended.Value));
+            }
+            if (notchCells != null && focusCell >= 0 && focusCell < notchCells.Count)
+            {
+                notchCells[focusCell] = focus.Cell(now);
+                notch.SetCells(notchCells);
+            }
+            if (panel.IsOpen && !panel.View.ShowingSettings) panel.View.UpdateFocus(FocusTile.From(focus, now, CultureInfo.CurrentCulture));
+        }
+
+        // The clipboard changed: what is on it now joins the history, unless it is private or was put back from the tile.
+        // Nothing about it is logged but the type of a failure.
+        void ReadClipboard()
+        {
+            if (!config.ClipboardHistory) return;
+            long now = Clock.NowMs();
+            if (now < clipIgnoreUntil) return;
+            ClipItem item;
+            try { item = ClipboardHistory.Read(now); }
+            catch (Exception e)
+            {
+                // Another app still holds it: try again a little later, a few times.
+                if (clipRetries++ < 3) clipRead.Start();
+                else
+                {
+                    clipRetries = 0;
+                    Log.Info("clipboard: couldn't read a copy (" + e.GetType().Name + ")");
+                }
+                return;
+            }
+            clipRetries = 0;
+            if (clips.Add(item) && panel.IsOpen) panel.View.UpdateClipboard(ClipTile());
+        }
+
+        void CopyBack(ClipItem item)
+        {
+            clipIgnoreUntil = Clock.NowMs() + 500;
+            if (!ClipboardHistory.CopyBack(item))
+            {
+                clipIgnoreUntil = 0;
+                tray.Balloon("Capsule", "Another app is using the clipboard. Try again in a moment.");
+                return;
+            }
+            clips.Add(item);   // to the top
+            panel.View.UpdateClipboard(ClipTile());
         }
 
         void TogglePanel()
@@ -489,7 +717,7 @@ namespace Capsule
 
         void RefreshAll()
         {
-            foreach (IModule m in modules) m.Refresh();
+            foreach (IModule m in modules) if (ModuleOn(m)) m.Refresh();
             Render();
         }
 
@@ -623,6 +851,7 @@ namespace Capsule
             bool changed = false;
             foreach (UsageModule m in new[] { claude, codex })
             {
+                if (!config.RingOn(m == claude ? "claude" : "codex")) continue;
                 Reading r = m.Current;
                 if (!samples.Record(r, now)) continue;
                 changed = true;
@@ -651,6 +880,7 @@ namespace Capsule
             long now = Clock.NowMs();
             foreach (UsageModule u in new[] { claude, codex })
             {
+                if (!config.RingOn(u == claude ? "claude" : "codex")) continue;
                 Reading r = u.Current;
                 LimitWindow w = r.DisplayWindow;
                 if (r.Status != "ok" || w == null) continue;
@@ -871,6 +1101,12 @@ namespace Capsule
         {
             if (!notch.IsVisible) return;
             long now = Clock.NowMs();
+            if (cell >= 0 && cell == focusCell)   // the Focus ring has no card: its tile is in the panel
+            {
+                if (card.IsVisible) card.Fold();
+                cardCell = -1;
+                return;
+            }
             if (cell >= 0 && cell == musicCell)
             {
                 cardCell = cell;
@@ -891,7 +1127,7 @@ namespace Capsule
             if (broker.Current != null)
                 card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             else
-                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w), tally.For), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             NotchOnTop();
         }
 
@@ -1194,7 +1430,8 @@ namespace Capsule
         {
             if (disposed) return;
             disposed = true;
-            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick }) if (timer != null) timer.Stop();
+            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead }) if (timer != null) timer.Stop();
+            if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening
             // Every request held goes to the app. A reply still being written when the process ends reaches the hook as a

@@ -74,6 +74,7 @@ namespace Capsule
             Run("SessionRows", SessionRowsTests.Run);
             Run("Sounds", SoundsTests.Run);
             Run("ReviewCard", ReviewCardTests.Run);
+            Run("RingsFocusClipboard", RingsFocusClipboardTests.Run);
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
         }

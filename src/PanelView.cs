@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,6 +19,7 @@ namespace Capsule
         public const double ShadowMargin = 20;
         public const string IconFont = "Segoe Fluent Icons, Segoe MDL2 Assets";
         const string RefreshGlyph = "\uE72C", SettingsGlyph = "\uE713", BackGlyph = "\uE72B";   // U+E72C Refresh, U+E713 Settings, U+E72B Back: the icon fonts' glyphs, kept as escapes because the characters themselves are invisible and a rewrite can drop them
+        const string LinkGlyph = "\uE71B", TextGlyph = "\uE8A5", MinusSign = "\u2013";   // U+E71B Link and U+E8A5 Document in the icon fonts; an en dash
         const string SecretSavedHint = "Saved. Paste a new one to replace it.";
         const string ClientSecretSavedHint = "Secret saved. Paste a new one to replace it.";
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
@@ -31,6 +33,11 @@ namespace Capsule
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
         readonly StackPanel ideasContent = new StackPanel();
         readonly Border musicTile = new Border();
+        readonly Border focusTile = new Border(), clipTile = new Border();
+        ClipboardTile clipModel;
+        ClipKind? clipFilter;   // null: every kind
+        bool clipExpanded;      // every copy, not just the first ClipRows
+        const int ClipRows = 5;
         readonly MusicView music = new MusicView();
         readonly DockPanel ideasHeader = new DockPanel { LastChildFill = false };
         readonly StackPanel ideasRows = new StackPanel();
@@ -72,6 +79,12 @@ namespace Capsule
         public event Action<string, string> GoogleClientDraft;   // what is in the client's fields as the settings close, or a client file pasted whole
         public event Action GoogleLinkRemoved;
         public event Action Resized;                       // the content changed size outside Update
+        public event Action<string> FocusCommand;          // "start", "pause", "resume", "skip" or "stop"
+        public event Action<ClipItem> ClipCopyRequested;   // a copy clicked: back onto the clipboard
+        public event Action ClipClearRequested;
+        public event Action<string, bool> RingToggled;     // a ring's name, and whether it is now on
+        public event Action<bool> ClipboardToggled;
+        public event Action<string, int> FocusLengthChanged;   // "focus", "short" or "long", and its new minutes
 
         public PanelView()
         {
@@ -87,18 +100,18 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 9; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 13; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
             Place(sessionsTile, 2, 0, 3);
             Place(calendarTile, 4, 0, 3);   // below Sessions, above Ideas (calendar spec §2); only while there is a model for it
             Place(musicTile, 6, 0, 3);
+            Place(focusTile, 8, 0, 3);
+            Place(clipTile, 10, 0, 3);
             musicTile.Child = music;
-            musicTile.Visibility = Visibility.Collapsed;
-            tiles.RowDefinitions[7].Height = new GridLength(0);
-            Place(ideasTile, 8, 0, 3);
-            calendarTile.Visibility = Visibility.Collapsed;
-            tiles.RowDefinitions[5].Height = new GridLength(0);
+            Place(ideasTile, 12, 0, 3);
+            foreach (Border tile in new[] { calendarTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
+            FixGaps();
             boardScroll.Content = tiles;
             board.Children.Add(boardScroll);
 
@@ -208,7 +221,7 @@ namespace Capsule
             month.Restyle();
             usage.Restyle();
             music.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, ideasTile })
+            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, ideasTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -262,23 +275,66 @@ namespace Capsule
 
         public void Update(PanelModel m)
         {
-            claudeTile.Child = UsageContent(m.Claude);
-            codexTile.Child = UsageContent(m.Codex);
-            sessionsTile.Child = SessionsContent(m.Sessions);
-            bool calendar = m.Calendar != null;
-            calendarTile.Visibility = calendar ? Visibility.Visible : Visibility.Collapsed;
-            tiles.RowDefinitions[5].Height = new GridLength(calendar ? Gap : 0);   // no gap left behind a hidden tile
-            calendarTile.Child = calendar ? CalendarContent(m.Calendar) : null;
+            // Claude and Codex share a row; either one alone takes all of it.
+            bool claude = m.Claude != null, codex = m.Codex != null;
+            Show(claudeTile, claude);
+            Show(codexTile, codex);
+            Grid.SetColumnSpan(claudeTile, codex ? 1 : 3);
+            Grid.SetColumn(codexTile, claude ? 2 : 0);
+            Grid.SetColumnSpan(codexTile, claude ? 1 : 3);
+            claudeTile.Child = claude ? UsageContent(m.Claude) : null;
+            codexTile.Child = codex ? UsageContent(m.Codex) : null;
+            Show(sessionsTile, m.Sessions != null);
+            sessionsTile.Child = m.Sessions != null ? SessionsContent(m.Sessions) : null;
+            Show(calendarTile, m.Calendar != null);
+            calendarTile.Child = m.Calendar != null ? CalendarContent(m.Calendar) : null;
             BuildIdeas(m.Ideas);
+            UpdateFocus(m.Focus);
+            UpdateClipboard(m.Clipboard);
             UpdateMusic(m.Music);
         }
 
         public void UpdateMusic(MusicSnapshot model)
         {
-            musicTile.Visibility = model != null ? Visibility.Visible : Visibility.Collapsed;
-            tiles.RowDefinitions[7].Height = new GridLength(model != null ? Gap : 0);
+            Show(musicTile, model != null);
             music.Update(model);
+            FixGaps();
             Relayout();
+        }
+
+        // The Focus tile alone, every second while the timer runs. null: the Focus ring is off.
+        public void UpdateFocus(FocusTile t)
+        {
+            Show(focusTile, t != null);
+            focusTile.Child = t != null ? FocusContent(t) : null;
+            FixGaps();
+            Relayout();
+        }
+
+        // The Clipboard tile alone, after each copy. null: clipboard history is off.
+        public void UpdateClipboard(ClipboardTile t)
+        {
+            clipModel = t;
+            Show(clipTile, t != null);
+            clipTile.Child = t != null ? ClipboardContent(t) : null;
+            FixGaps();
+            Relayout();
+        }
+
+        static void Show(UIElement tile, bool shown) { tile.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; }
+
+        // A gap above each shown tile that has a shown tile somewhere above it: none left behind a hidden one.
+        void FixGaps()
+        {
+            bool above = false;
+            for (int row = 0; row < tiles.RowDefinitions.Count; row += 2)
+            {
+                bool shown = false;
+                foreach (UIElement child in tiles.Children)
+                    if (Grid.GetRow(child) == row && child.Visibility == Visibility.Visible) shown = true;
+                if (row > 0) tiles.RowDefinitions[row - 1].Height = new GridLength(shown && above ? Gap : 0);
+                above |= shown;
+            }
         }
 
         // Measures the shown page and fits the glass to it.
@@ -344,6 +400,8 @@ namespace Capsule
             settingsScroll.Content = settingsBody;
             settings.Children.Add(settingsScroll);
 
+            ringsBox.Margin = new Thickness(Pad + 4, 0, Pad + 4, 8);
+            settingsBody.Children.Add(ringsBox);   // first: what the capsule shows
             settingsBody.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
@@ -945,6 +1003,232 @@ namespace Capsule
                 line.MouseLeftButtonUp += delegate { if (IdeaOpened != null) IdeaOpened(url); };
             }
             return line;
+        }
+
+        // The Focus tile: the part and its round, the time left, and the buttons that fit the timer's state.
+        UIElement FocusContent(FocusTile t)
+        {
+            var box = new StackPanel();
+            var top = new DockPanel { LastChildFill = false };
+            TextBlock heading = CardView.MakeText(t.Heading, 11.5, Palette.Secondary, FontWeights.Normal);
+            DockPanel.SetDock(heading, Dock.Right);
+            top.Children.Add(heading);
+            top.Children.Add(TileHeader("Focus"));
+            box.Children.Add(top);
+            var row = new DockPanel { LastChildFill = false };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (!t.Active) buttons.Children.Add(FocusButton("Start", "start"));
+            else
+            {
+                buttons.Children.Add(t.Paused ? FocusButton("Resume", "resume") : FocusButton("Pause", "pause"));
+                buttons.Children.Add(FocusButton("Skip", "skip"));
+                buttons.Children.Add(FocusButton("Stop", "stop"));
+            }
+            DockPanel.SetDock(buttons, Dock.Right);
+            row.Children.Add(buttons);
+            TextBlock time = CardView.MakeText(t.Time, 26, t.Active ? t.Color : Palette.Text, FontWeights.SemiBold);
+            if (t.Paused) time.Opacity = 0.45;
+            row.Children.Add(time);
+            box.Children.Add(row);
+            box.Children.Add(CardView.Wrap(CardView.MakeText(t.Note, 11.5, Palette.Secondary, FontWeights.Normal)));
+            return box;
+        }
+
+        Border FocusButton(string text, string command)
+        {
+            Border b = PillButton(text, delegate { if (FocusCommand != null) FocusCommand(command); });
+            b.Margin = new Thickness(6, 0, 0, 0);
+            return b;
+        }
+
+        // The Clipboard tile: Clear, a filter by kind, and the copies, each copied back by a click.
+        UIElement ClipboardContent(ClipboardTile t)
+        {
+            var box = new StackPanel();
+            var top = new DockPanel { LastChildFill = false };
+            if (t.Items.Count > 0)
+            {
+                Border clear = LinkButton("Clear", delegate { if (ClipClearRequested != null) ClipClearRequested(); });
+                clear.Margin = new Thickness(0, -3, -4, 0);
+                DockPanel.SetDock(clear, Dock.Right);
+                top.Children.Add(clear);
+            }
+            top.Children.Add(TileHeader("Clipboard"));
+            box.Children.Add(top);
+            if (t.Items.Count == 0)
+            {
+                box.Children.Add(CardView.Wrap(CardView.MakeText("Copy something and it shows here. Kept in memory only, never saved.", 12, Palette.Secondary, FontWeights.Normal)));
+                return box;
+            }
+            var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+            chips.Children.Add(Chip("All", null));
+            chips.Children.Add(Chip("Text", ClipKind.Text));
+            chips.Children.Add(Chip("Links", ClipKind.Link));
+            chips.Children.Add(Chip("Colours", ClipKind.Colour));
+            chips.Children.Add(Chip("Images", ClipKind.Image));
+            box.Children.Add(chips);
+            List<ClipItem> list = t.Items.FindAll(i => !clipFilter.HasValue || i.Kind == clipFilter.Value);
+            if (list.Count == 0) box.Children.Add(CardView.MakeText("None of this kind yet", 12, Palette.Secondary, FontWeights.Normal));
+            for (int i = 0; i < list.Count && (clipExpanded || i < ClipRows); i++) box.Children.Add(ClipLine(list[i]));
+            if (list.Count > ClipRows)
+            {
+                Border more = LinkButton(clipExpanded ? "Show fewer" : "Show all " + list.Count, delegate
+                {
+                    clipExpanded = !clipExpanded;
+                    UpdateClipboard(clipModel);
+                    RaiseResized();
+                });
+                more.HorizontalAlignment = HorizontalAlignment.Left;
+                more.Margin = new Thickness(-4, 2, 0, 0);
+                box.Children.Add(more);
+            }
+            return box;
+        }
+
+        Border Chip(string text, ClipKind? kind)
+        {
+            bool on = clipFilter == kind;
+            TextBlock label = CardView.MakeText(text, 11.5, on ? Palette.Text : Palette.Secondary, on ? FontWeights.SemiBold : FontWeights.Normal);
+            Border chip = Button(label, delegate
+            {
+                clipFilter = kind;
+                clipExpanded = false;
+                UpdateClipboard(clipModel);
+                RaiseResized();
+            }, on ? NotchView.Brush(Palette.Track) : Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(8, 2, 8, 3));
+            chip.Margin = new Thickness(0, 0, 4, 2);
+            System.Windows.Automation.AutomationProperties.SetName(chip, text);
+            return chip;
+        }
+
+        UIElement ClipLine(ClipItem item)
+        {
+            var line = new DockPanel { LastChildFill = true };
+            FrameworkElement mark;
+            if (item.Kind == ClipKind.Image)
+                mark = new Image { Source = item.Thumb, Height = 36, MaxWidth = 96, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };
+            else if (item.Kind == ClipKind.Colour)
+                mark = new WEllipse { Width = 14, Height = 14, Fill = NotchView.Brush(item.Swatch), Stroke = NotchView.Brush(Palette.Track), StrokeThickness = 1 };
+            else
+                mark = new TextBlock
+                {
+                    Text = item.Kind == ClipKind.Link ? LinkGlyph : TextGlyph,
+                    FontFamily = new FontFamily(IconFont),
+                    FontSize = 12,
+                    Foreground = NotchView.Brush(Palette.Secondary),
+                    Width = 14,
+                };
+            mark.Margin = new Thickness(0, 0, 8, 0);
+            mark.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(mark, Dock.Left);
+            line.Children.Add(mark);
+            TextBlock text = CardView.MakeText(item.Preview, 12.5, Palette.Text, FontWeights.Normal);
+            text.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(text);
+            Border row = Button(line, delegate { if (ClipCopyRequested != null) ClipCopyRequested(item); }, Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(4, 3, 4, 3));
+            row.Margin = new Thickness(-4, 0, -4, 0);
+            row.ToolTip = "Copy";
+            System.Windows.Automation.AutomationProperties.SetName(row, "Copy " + (item.Kind == ClipKind.Image ? "image " : "") + item.Preview);
+            return row;
+        }
+
+        // ---- Rings settings ----
+
+        readonly StackPanel ringsBox = new StackPanel();
+
+        // The ring switches, Clipboard history, and the focus lengths, as config.json has them now.
+        public void ShowRings(Config c)
+        {
+            ringsBox.Children.Clear();
+            ringsBox.Children.Add(SettingsHeading("Rings"));
+            string[] labels = { "Claude", "Codex", "Calendar", "Music", "Focus timer" };
+            for (int i = 0; i < Config.RingNames.Length; i++)
+            {
+                string name = Config.RingNames[i];
+                bool on = c.RingOn(name);
+                bool can = !on || c.CanTurnOff(name);
+                ringsBox.Children.Add(SwitchRow(labels[i], on, can, can ? null : "One ring stays on", delegate { if (RingToggled != null) RingToggled(name, !on); }));
+            }
+            bool clip = c.ClipboardHistory;
+            ringsBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
+            if (c.RingOn("focus"))
+            {
+                ringsBox.Children.Add(SettingsHeading("Focus timer"));
+                ringsBox.Children.Add(StepperRow("Focus", c.FocusMinutes, 5, 5, Config.MaxFocusMinutes, "focus"));
+                ringsBox.Children.Add(StepperRow("Short break", c.ShortBreakMinutes, 1, 1, Config.MaxBreakMinutes, "short"));
+                ringsBox.Children.Add(StepperRow("Long break, after " + FocusTimer.RoundsPerSet, c.LongBreakMinutes, 5, 5, Config.MaxBreakMinutes, "long"));
+            }
+            RaiseResized();
+        }
+
+        static TextBlock SettingsHeading(string text)
+        {
+            TextBlock t = CardView.MakeText(text, 12, Palette.Secondary, FontWeights.SemiBold);
+            t.Margin = new Thickness(0, 6, 0, 4);
+            return t;
+        }
+
+        static UIElement SwitchRow(string label, bool on, bool enabled, string tip, Action toggle)
+        {
+            var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 3, 0, 3) };
+            Border s = Switch(label, on, enabled, toggle);
+            DockPanel.SetDock(s, Dock.Right);
+            row.Children.Add(s);
+            TextBlock text = CardView.MakeText(label, 12.5, Palette.Text, FontWeights.Normal);
+            text.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(text);
+            if (tip != null) row.ToolTip = tip;
+            return row;
+        }
+
+        // An on/off switch: green with its knob on the right when on.
+        static Border Switch(string label, bool on, bool enabled, Action toggle)
+        {
+            var knob = new WEllipse
+            {
+                Width = 14,
+                Height = 14,
+                Fill = on ? Brushes.White : NotchView.Brush(Palette.Secondary),
+                Margin = new Thickness(2),
+                HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            };
+            var track = new Border
+            {
+                Width = 34,
+                Height = 18,
+                CornerRadius = new CornerRadius(9),
+                Background = NotchView.Brush(on ? Palette.Green : Palette.Track),
+                Child = knob,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = enabled ? 1 : 0.4,
+                Cursor = enabled ? Cursors.Hand : Cursors.Arrow,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(track, label + (on ? ", on" : ", off"));
+            if (enabled) track.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e) { e.Handled = true; toggle(); };
+            return track;
+        }
+
+        UIElement StepperRow(string label, int minutes, int step, int min, int max, string which)
+        {
+            var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 2, 0, 2) };
+            var stepper = new StackPanel { Orientation = Orientation.Horizontal };
+            Border less = PillButton(MinusSign, delegate { if (FocusLengthChanged != null) FocusLengthChanged(which, Math.Max(min, minutes - step)); });
+            Border more = PillButton("+", delegate { if (FocusLengthChanged != null) FocusLengthChanged(which, Math.Min(max, minutes + step)); });
+            System.Windows.Automation.AutomationProperties.SetName(less, "Shorter " + label);
+            System.Windows.Automation.AutomationProperties.SetName(more, "Longer " + label);
+            TextBlock value = CardView.MakeText(minutes + " min", 12.5, Palette.Text, FontWeights.SemiBold);
+            value.Width = 52;
+            value.TextAlignment = TextAlignment.Center;
+            value.VerticalAlignment = VerticalAlignment.Center;
+            stepper.Children.Add(less);
+            stepper.Children.Add(value);
+            stepper.Children.Add(more);
+            DockPanel.SetDock(stepper, Dock.Right);
+            row.Children.Add(stepper);
+            TextBlock text = CardView.MakeText(label, 12.5, Palette.Text, FontWeights.Normal);
+            text.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(text);
+            return row;
         }
 
         static TextBlock TileHeader(string text)

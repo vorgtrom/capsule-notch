@@ -21,10 +21,11 @@ namespace Capsule
         public string Status = "";
         public string Color = Palette.Secondary;
         public string Detail = "";   // "“fix the auth bug…” · Edited middleware.ts", or 
+        public string Usage = "";    // "Opus 4.8 · 1.2M tokens", or "" before its transcript is read
 
         // The rows the card and the panel show: waiting first, then working, then recently done or idle, at most
         // Sessions.MaxRows of them. more: how many didn't fit.
-        public static List<SessionRow> ListFor(IEnumerable<SessionStatus> sessions, long now, out int more)
+        public static List<SessionRow> ListFor(IEnumerable<SessionStatus> sessions, long now, out int more, Func<string, SessionUse> use = null)
         {
             var rows = new List<SessionRow>();
             foreach (SessionStatus s in Sessions.ForCard(sessions, now, out more))
@@ -34,6 +35,8 @@ namespace Capsule
                 line.Status = Sessions.RowText(s, now);
                 line.Color = s.State == States.Waiting ? Palette.Amber : s.State == States.Working ? Palette.Text : Palette.Secondary;
                 line.Detail = DetailFor(s);
+                SessionUse u = use != null ? use(s.SessionId) : null;
+                if (u != null) line.Usage = u.Text;
                 rows.Add(line);
             }
             return rows;
@@ -64,7 +67,7 @@ namespace Capsule
         public string Footer = "";
 
         // pace: the forecast for a window (usage history spec §2), or null for none.
-        public static CardModel From(Reading r, IList<SessionStatus> sessions, bool hooksConnected, long now, CultureInfo culture, Func<LimitWindow, Forecast> pace = null)
+        public static CardModel From(Reading r, IList<SessionStatus> sessions, bool hooksConnected, long now, CultureInfo culture, Func<LimitWindow, Forecast> pace = null, Func<string, SessionUse> use = null)
         {
             var m = new CardModel();
             m.Provider = r.Provider;
@@ -93,7 +96,7 @@ namespace Capsule
                 else
                 {
                     int more;
-                    m.SessionRows = SessionRow.ListFor(sessions ?? new List<SessionStatus>(), now, out more);
+                    m.SessionRows = SessionRow.ListFor(sessions ?? new List<SessionStatus>(), now, out more, use);
                     m.MoreSessions = more;
                 }
             }
