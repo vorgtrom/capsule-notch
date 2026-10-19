@@ -185,7 +185,9 @@ namespace Capsule
             TestRunner.Eq("25:00", ready.Time, "shows the focus length");
             idle.Start(Now);
             FocusTile running = FocusTile.From(idle, Now, En);
-            TestRunner.Eq("Focus · 1 of 4", running.Heading, "a running timer's tile names the part and round");
+            TestRunner.Eq("1 of 4", running.Heading, "a running timer's tile names its round");
+            idle.Skip(Now);
+            TestRunner.Eq("Short break · 1 of 4", FocusTile.From(idle, Now, En).Heading, "and a break by name");
             TestRunner.Check(running.Note.StartsWith("until ", StringComparison.Ordinal), "and when it ends");
         }
 

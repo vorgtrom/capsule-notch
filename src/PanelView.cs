@@ -1153,7 +1153,7 @@ namespace Capsule
             ringsBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
             if (c.RingOn("focus"))
             {
-                ringsBox.Children.Add(SettingsHeading("Focus timer"));
+                ringsBox.Children.Add(SettingsHeading("Focus lengths"));
                 ringsBox.Children.Add(StepperRow("Focus", c.FocusMinutes, 5, 5, Config.MaxFocusMinutes, "focus"));
                 ringsBox.Children.Add(StepperRow("Short break", c.ShortBreakMinutes, 1, 1, Config.MaxBreakMinutes, "short"));
                 ringsBox.Children.Add(StepperRow("Long break, after " + FocusTimer.RoundsPerSet, c.LongBreakMinutes, 5, 5, Config.MaxBreakMinutes, "long"));

@@ -148,7 +148,7 @@ namespace Capsule
     public sealed class FocusTile
     {
         public bool Active, Running, Paused;
-        public string Heading = "";   // "Focus · 2 of 4", or "Ready"
+        public string Heading = "";   // "2 of 4", "Short break · 2 of 4", or "Ready"
         public string Time = "";      // "18:42"
         public string Note = "";      // "until 4:10 PM", or the lengths while stopped
         public string Color = Palette.Text;
@@ -164,7 +164,7 @@ namespace Capsule
                     + (t.LengthMs(FocusPhase.LongBreak) / 60000) + " min after " + FocusTimer.RoundsPerSet;
                 return tile;
             }
-            tile.Heading = FocusTimer.PhaseName(t.Phase) + " · " + t.Round + " of " + FocusTimer.RoundsPerSet;
+            tile.Heading = (t.Phase == FocusPhase.Focus ? "" : FocusTimer.PhaseName(t.Phase) + " · ") + t.Round + " of " + FocusTimer.RoundsPerSet;   // the tile is called Focus already
             tile.Time = FocusTimer.Clock(t.LeftMs(now));
             tile.Note = t.Paused ? "Paused" : "until " + Clock.FromMs(t.EndsAtMs).ToLocalTime().ToString("t", culture);
             tile.Color = t.Phase == FocusPhase.Focus ? Palette.Red : Palette.Green;

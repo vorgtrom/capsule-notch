@@ -3,8 +3,22 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
-## Unreleased
+## v1.7.0
 
+- **Choose your rings.** Settings (⚙ in the panel) has a switch for each ring: Claude, Codex, Calendar, Music and
+  Focus. A ring that's off leaves the capsule and the panel, and Capsule stops checking it; its alerts and sounds stop,
+  and any request it would hold goes to the Claude or Codex app as if Capsule weren't there. One ring always stays on.
+- **Model and tokens for each session.** Each session row shows its model and the tokens it has used so far, counted
+  as the Usage page counts them: "Opus 4.8 · 1.2M tokens".
+- **Focus timer.** 25 minutes of focus, a 5-minute break, and a 15-minute break after every four. While it runs, a
+  Focus ring counts down in the capsule, red while you focus and green on a break; a sound and a notification mark
+  the end of each part. Start, pause, skip and stop from the Focus tile in the panel; change the lengths in Settings.
+- **Clipboard history.** The panel's Clipboard tile keeps your last 25 copies: text, links (shown by host and path,
+  without tracking codes), colours with a swatch, and screenshots with a thumbnail. Filter by kind, and click one to
+  copy it again. Kept in memory only, never saved or logged, and copies that password managers mark as private are
+  skipped. Turn it off in Settings.
+- **Lighter when idle.** The capsule is no longer redrawn every 5 seconds when nothing on it changed, and a paused
+  player is checked every 3 seconds instead of every second.
 - **How long you'll be locked out.** When a limit will fill before it resets, the hover card says for how long:
   "At this pace: full at 4:10 PM · locked 41 min".
 - **Even pace while there's no forecast yet.** Before Capsule has seen enough of a limit rise to forecast it, the
