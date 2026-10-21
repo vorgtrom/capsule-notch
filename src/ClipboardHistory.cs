@@ -72,6 +72,7 @@ namespace Capsule
             if (text == null || text.Length > MaxTextChars) return null;
             string t = text.Trim();
             if (t == "") return null;
+            if (IcsLink.Normalize(t) != null) return null;   // a calendar's secret iCal address: anyone with it can read the calendar
             var item = new ClipItem { Kind = ClipKind.Text, Text = text, AtMs = now, Key = "t:" + text };
             Uri uri;
             if (t.IndexOfAny(new[] { ' ', '\t', '\r', '\n' }) < 0 && Uri.TryCreate(t, UriKind.Absolute, out uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))

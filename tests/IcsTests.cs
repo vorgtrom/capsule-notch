@@ -175,6 +175,7 @@ namespace Capsule
             TestRunner.Eq(null, IcsLink.Normalize("https://calendar.google.com/calendar/embed?src=x"), "not the embed page");
             TestRunner.Eq(null, IcsLink.Normalize("https://calendar.google.com:8443/calendar/ical/x/basic.ics"), "not another port");
             TestRunner.Check(IcsLink.Normalize(null) == null && IcsLink.Normalize("  ") == null, "nothing is no address");
+            TestRunner.Check(ClipboardHistory.FromText(Secret, 0) == null, "a copied secret address stays out of the clipboard history");
         }
 
         // A calendar feed is read with a larger limit than other replies, and a reply over it says so.

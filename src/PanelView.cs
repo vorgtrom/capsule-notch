@@ -24,7 +24,7 @@ namespace Capsule
         const string ClientSecretSavedHint = "Secret saved. Paste a new one to replace it.";
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
         const string ClientSecretPendingHint = "Secret kept for the next sign-in. Paste a new one to replace it.";
-        const string LinkHint = "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format.";
+        const string LinkHint = "Read-only events. No Google Tasks or event changes. Click Get link: Google Calendar opens. Click your calendar, then Integrate calendar, and copy Secret address in iCal format. Capsule saves it as soon as you copy it.";
         readonly GlassSurface glass = new GlassSurface();
         readonly StackPanel board = new StackPanel();
         readonly ScrollViewer boardScroll = BodyScroll();
@@ -78,6 +78,7 @@ namespace Capsule
         public event Action<string> GoogleLinkSaved;       // what was pasted as the calendar's iCal address; LinkKept follows once it is kept
         public event Action<string, string> GoogleClientDraft;   // what is in the client's fields as the settings close, or a client file pasted whole
         public event Action GoogleLinkRemoved;
+        public event Action GoogleLinkFetch;               // Get link: Google Calendar's settings open, and the iCal address is saved when it's copied
         public event Action Resized;                       // the content changed size outside Update
         public event Action<string> FocusCommand;          // "start", "pause", "resume", "skip" or "stop"
         public event Action<ClipItem> ClipCopyRequested;   // a copy clicked: back onto the clipboard
@@ -726,7 +727,10 @@ namespace Capsule
             calendarLinkHint.Text = !google.LinkSaved ? LinkHint
                 : "Link saved" + (google.LinkName != "" ? ": showing " + google.LinkName : "") + ". Read-only events, no Google Tasks. Paste a new one to replace it.";
             calendarLinkButtons.Children.Clear();
-            calendarLinkButtons.Children.Add(PillButton("Save link", delegate { if (GoogleLinkSaved != null) GoogleLinkSaved(calendarLinkBox.Password); }));
+            calendarLinkButtons.Children.Add(PillButton("Get link", delegate { if (GoogleLinkFetch != null) GoogleLinkFetch(); }));
+            Border save = PillButton("Save link", delegate { if (GoogleLinkSaved != null) GoogleLinkSaved(calendarLinkBox.Password); });
+            save.Margin = new Thickness(8, 0, 0, 0);
+            calendarLinkButtons.Children.Add(save);
             if (google.LinkSaved)
             {
                 Border remove = PillButton("Remove link", delegate { if (GoogleLinkRemoved != null) GoogleLinkRemoved(); });

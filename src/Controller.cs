@@ -43,7 +43,8 @@ namespace Capsule
         PromptBroker prompts;        // the requests held, and their rules
         PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
-        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead;
+        DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd;
+        bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
         ClipboardWatcher clipWatcher;
@@ -135,6 +136,7 @@ namespace Capsule
             musicTick = NewTimer(1000, delegate { music.Tick(Clock.NowMs()); });
             focusTick = NewTimer(1000, delegate { Guard("focus", FocusTick); });   // runs only while the timer does
             clipRead = NewTimer(100, delegate { clipRead.Stop(); Guard("clipboard", ReadClipboard); });   // once the copying app has let go
+            linkWatchEnd = NewTimer(LinkWatchMs, delegate { Guard("calendar link", EndLinkWatch); });
             clipWatcher = new ClipboardWatcher();
             clipWatcher.Changed += delegate { clipRead.Stop(); clipRead.Start(); };
 
@@ -222,6 +224,7 @@ namespace Capsule
             page.DeleteTaskRequested += delegate(string listId, string taskId) { Guard("month", delegate { calendar.DeleteTask(listId, taskId, RowResult); }); };
             panel.View.GoogleLinkSaved += delegate(string text) { Guard("calendar link", delegate { if (calendar.SaveLink(text)) panel.View.LinkKept(); }); };
             panel.View.GoogleLinkRemoved += delegate { Guard("calendar link", calendar.RemoveLink); };
+            panel.View.GoogleLinkFetch += delegate { Guard("calendar link", StartLinkWatch); };
             panel.View.GoogleClientDraft += delegate(string id, string secret) { Guard("calendar client", delegate { calendar.KeepClient(id, secret); }); };
             shortcut = new GlobalHotkey();
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
@@ -736,6 +739,7 @@ namespace Capsule
         // Nothing about it is logged but the type of a failure.
         void ReadClipboard()
         {
+            if (linkWatch && CatchCalendarLink()) return;
             if (!config.ClipboardHistory) return;
             long now = Clock.NowMs();
             if (now < clipIgnoreUntil) return;
@@ -754,6 +758,55 @@ namespace Capsule
             }
             clipRetries = 0;
             if (clips.Add(item) && panel.IsOpen) panel.View.UpdateClipboard(ClipTile());
+        }
+
+        const string GoogleSettingsPage = "https://calendar.google.com/calendar/r/settings";
+        const int LinkWatchMs = 5 * 60 * 1000;
+
+        // Get link: Google Calendar's settings open in the browser, and for the next few minutes the clipboard is watched
+        // for the calendar's secret iCal address. Copying it there is all that's left: it is saved at once.
+        void StartLinkWatch()
+        {
+            try { System.Diagnostics.Process.Start(GoogleSettingsPage); }
+            catch (Exception e) { Log.Error("open google calendar", e); return; }
+            if (!clipWatcher.Start())
+            {
+                Log.Info("calendar link: Windows didn't let Capsule watch the clipboard");   // pasting into the box still works
+                return;
+            }
+            linkWatch = true;
+            linkWatchEnd.Stop();
+            linkWatchEnd.Start();
+        }
+
+        void EndLinkWatch()
+        {
+            linkWatchEnd.Stop();
+            linkWatch = false;
+            if (!config.ClipboardHistory) clipWatcher.Stop();
+        }
+
+        // While Get link waits: a copied iCal address is saved, the wait ends, and a balloon says so. True when the copy
+        // was handled here (or the clipboard was busy), so it doesn't go on to the history. The address is never logged.
+        bool CatchCalendarLink()
+        {
+            string text;
+            try { text = Clipboard.ContainsText() ? Clipboard.GetText() : null; }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                if (clipRetries++ < 3) clipRead.Start();
+                else clipRetries = 0;
+                return true;
+            }
+            clipRetries = 0;
+            if (IcsLink.Normalize(text) == null) return false;
+            EndLinkWatch();
+            if (!calendar.SaveLink(text)) return true;   // its status says why, in the settings
+            panel.View.LinkKept();
+            tray.Balloon("Capsule", config.RingOn("calendar")
+                ? "Google Calendar connected. Your events show on the capsule in a moment."
+                : "Google Calendar connected. Turn on the Calendar ring in Settings to see it.");
+            return true;
         }
 
         void CopyBack(ClipItem item)
@@ -1513,7 +1566,7 @@ namespace Capsule
         {
             if (disposed) return;
             disposed = true;
-            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead }) if (timer != null) timer.Stop();
+            foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd }) if (timer != null) timer.Stop();
             if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening
