@@ -135,6 +135,12 @@ namespace Capsule
             Present(delegate(bool pointRight) { view.ShowCalendar(model, pointRight); }, cell, leftEdge, monitor);
         }
 
+        public void ShowFocusBeside(FocusTile model, RECT cell, bool leftEdge, MonitorInfo monitor)
+        {
+            GiveUpFocus();
+            Present(delegate(bool pointRight) { view.ShowFocus(model, pointRight); }, cell, leftEdge, monitor);
+        }
+
         public void ShowMusicBeside(MusicSnapshot model, RECT cell, bool leftEdge, MonitorInfo monitor)
         {
             GiveUpFocus();
@@ -325,7 +331,7 @@ namespace Capsule
         {
             var from = new POINT { X = x, Y = y };
             var to = new POINT { X = target.Left, Y = target.Top };
-            frames = CardMotion.Glide(from, to, CardMotion.GlideMs, NotchView.AnimationFps);
+            frames = CardMotion.Glide(from, to, CardMotion.GlideMs, CardMotion.MotionFps);
             framesShown = 0;
             glideClock.Restart();
             glide.Stop();
@@ -340,7 +346,7 @@ namespace Capsule
                 StopGlide();
                 return;
             }
-            int due = CardMotion.FramesDue(glideClock.ElapsedMilliseconds, frames.Count, CardMotion.GlideMs, NotchView.AnimationFps);
+            int due = CardMotion.FramesDue(glideClock.ElapsedMilliseconds, frames.Count, CardMotion.GlideMs, CardMotion.MotionFps);
             if (due > framesShown)
             {
                 framesShown = due;

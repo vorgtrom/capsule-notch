@@ -54,7 +54,7 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
   Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
   after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
-- **Your token use**: click the Claude or Codex tile for the [Usage page](#usage-history-and-limit-alerts): tokens per
+- **Your token use**: click the Claude or Codex tile for the [Usage page](#usage-history-and-limit-alerts): a heatmap of tokens per
   day by model, for a week, a month or a year.
 - **Limit alerts**: a notification at 80% and 95% of a limit, and when you're on pace to run out before it resets.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
@@ -104,7 +104,11 @@ the same music controls. No extra sign-in or API key is needed.
   15-minute break after every four. Each part starts the next by itself. While it runs, a Focus ring counts down
   in the capsule, red while you focus and green on a break, and dimmed while paused. A sound (unless Sounds is off)
   and a notification mark the end of each part. **Pause**, **Skip** and **Stop** are on the tile; the lengths are in
-  Settings. Quitting Capsule stops the timer.
+  Settings. Hover the Focus ring for a card with the same buttons, or choose **Start focus** in Capsule's menu. The
+  timer is saved in `%USERPROFILE%\.capsule\focus.json`, so it picks up where it was when Capsule starts again.
+- **Quiet while focusing.** During focus, Capsule's own chimes and limit alerts wait for the break, then come as one
+  note, such as "While you focused: 2 requests needed you, 1 session finished." The rings still glow and spin, so you
+  can look up any time. Turn it off in Settings, under Focus lengths.
 - **Clipboard history.** The Clipboard tile lists your last 25 copies, newest first: text, links (by host and path,
   without the part after `?`), colours (`#30D158`, `rgb(255, 69, 58)`) with a swatch, and up to 5 screenshots with a
   thumbnail. Copying something again moves it to the top. Filter by kind, click one to put it back on the clipboard,
@@ -117,14 +121,17 @@ the same music controls. No extra sign-in or API key is needed.
 
 Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
 
-<img src="docs/images/usage.png" width="340" alt="The Usage page: Week picked, two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 2.5M tokens, stacked bars for Sunday to Saturday coloured by model, and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
+<img src="docs/images/usage.png" width="340" alt="The Usage page: two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 48M tokens, a heatmap of the last 26 weeks in shades of orange with today ringed, the figures under it (per active day, active days, current and longest streak, most active day, favourite model), and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
 
-- **Week, Month or Year**, with ‹ › to look back. Each bar is a day (a month in Year), split by model. Hover a bar
-  for its numbers.
+- **A heatmap** of the last 26 weeks, like Claude Code's `/stats`: a square a day, a column a week, in four shades
+  of orange by how busy the day was against the others shown. Today is ringed. Hover a day for its tokens and
+  its biggest models; ‹ › looks back another 26 weeks.
+- **The figures** under it: tokens per active day, active days, your current and longest streak (every day on
+  record counts), your most active day and your favourite model.
 - **Tokens without cache reads**: input, output and cache writes. Claude re-reads its cached context on every turn,
   which would bury everything else; **Details** shows the cache reads apart, with the busiest day and the daily
   average.
-- **The legend** totals each model for the period, biggest first. Claude and Codex share one chart.
+- **The legend** totals each model over the weeks shown, biggest first. Claude and Codex count together.
 - **Pace lines** at the top: how each ring's limit is going, for example "Claude · 5-hour · 73% · full at 4:10 PM".
 - **Where the numbers come from**: the logs Claude Code and Codex already write on this PC, archived Codex chats
   included. A turn copied into a forked chat counts once; separate chats always count separately. Capsule reads only the

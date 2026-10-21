@@ -41,6 +41,7 @@ namespace Capsule
         public PromptView Prompt { get { return prompt; } }
         public MusicView Music { get { return music; } }
         public bool ShowingPrompt { get { return panel.Child == prompt; } }
+        public event Action<string> FocusCommand;   // "start", "pause", "resume", "skip" or "stop", from the Focus card
 
         // pointRight: the notch is to the card's right (a right-edge notch), so the pointer goes on the right.
         public void Show(CardModel model, bool pointRight)
@@ -66,6 +67,45 @@ namespace Capsule
             music.Restyle();
             music.Update(model);
             panel.Child = music;
+            Point(pointRight);
+        }
+
+        // The Focus ring's card: the part and round, the time left, and the timer's buttons.
+        public void ShowFocus(FocusTile t, bool pointRight)
+        {
+            prompt.Clear();
+            content.Children.Clear();
+            var title = new DockPanel { Margin = new Thickness(0, 0, 0, 6), LastChildFill = false };
+            var mark = new TextBlock { Text = FocusTimer.Glyph, FontFamily = new FontFamily(PanelView.IconFont), FontSize = 15, Foreground = NotchView.Brush(Palette.Text), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            title.Children.Add(mark);
+            TextBlock name = MakeText("Focus", 15, Palette.Text, FontWeights.SemiBold);
+            name.VerticalAlignment = VerticalAlignment.Center;
+            title.Children.Add(name);
+            TextBlock heading = MakeText(t.Heading, 11.5, Palette.Secondary, FontWeights.Normal);
+            heading.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(heading, Dock.Right);
+            title.Children.Insert(0, heading);
+            content.Children.Add(title);
+            TextBlock time = MakeText(t.Time, 34, t.Active ? t.Color : Palette.Text, FontWeights.SemiBold);
+            if (t.Paused) time.Opacity = 0.45;
+            content.Children.Add(time);
+            content.Children.Add(Wrap(MakeText(t.Note, 11.5, Palette.Secondary, FontWeights.Normal)));
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+            Action<string, string> add = (text, command) =>
+            {
+                Border b = PanelView.PillButton(text, delegate { if (FocusCommand != null) FocusCommand(command); });
+                b.Margin = new Thickness(0, 0, 6, 0);
+                buttons.Children.Add(b);
+            };
+            if (!t.Active) add("Start", "start");
+            else
+            {
+                add(t.Paused ? "Resume" : "Pause", t.Paused ? "resume" : "pause");
+                add("Skip", "skip");
+                add("Stop", "stop");
+            }
+            content.Children.Add(buttons);
+            panel.Child = content;
             Point(pointRight);
         }
 

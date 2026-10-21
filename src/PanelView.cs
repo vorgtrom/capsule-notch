@@ -85,6 +85,7 @@ namespace Capsule
         public event Action<string, bool> RingToggled;     // a ring's name, and whether it is now on
         public event Action<bool> ClipboardToggled;
         public event Action<string, int> FocusLengthChanged;   // "focus", "short" or "long", and its new minutes
+        public event Action<bool> FocusQuietToggled;
 
         public PanelView()
         {
@@ -1157,6 +1158,8 @@ namespace Capsule
                 ringsBox.Children.Add(StepperRow("Focus", c.FocusMinutes, 5, 5, Config.MaxFocusMinutes, "focus"));
                 ringsBox.Children.Add(StepperRow("Short break", c.ShortBreakMinutes, 1, 1, Config.MaxBreakMinutes, "short"));
                 ringsBox.Children.Add(StepperRow("Long break, after " + FocusTimer.RoundsPerSet, c.LongBreakMinutes, 5, 5, Config.MaxBreakMinutes, "long"));
+                bool quiet = c.FocusQuiet;
+                ringsBox.Children.Add(SwitchRow("Quiet while focusing", quiet, true, "Capsule's sounds and limit alerts wait for the break", delegate { if (FocusQuietToggled != null) FocusQuietToggled(!quiet); }));
             }
             RaiseResized();
         }

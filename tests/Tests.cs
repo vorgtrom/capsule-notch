@@ -75,6 +75,7 @@ namespace Capsule
             Run("Sounds", SoundsTests.Run);
             Run("ReviewCard", ReviewCardTests.Run);
             Run("RingsFocusClipboard", RingsFocusClipboardTests.Run);
+            Run("FocusHeat", FocusHeatTests.Run);
             Console.WriteLine(passed + " passed, " + failed + " failed");
             return failed == 0 ? 0 : 1;
         }

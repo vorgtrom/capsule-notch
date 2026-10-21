@@ -3,6 +3,22 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## v1.7.1
+
+- **Smoother cards.** The hover card now unfolds, folds and glides between rings at 60 frames a second, in step with
+  its blur, and opens a little sooner when you rest on a ring. The panel slides at 60 too.
+- **A heatmap of your usage.** The Usage page now shows the last 26 weeks as a grid of days, shaded by tokens, like
+  Claude Code's `/stats`, with ‹ › to look further back. Under it: tokens per active day, active days, your current and
+  longest streak, your most active day and your favourite model. The pace lines, the per-model totals and Details
+  stay.
+- **Focus from the capsule.** Hover the Focus ring for a card with Pause, Skip and Stop. **Start focus** is in
+  Capsule's menu.
+- **Focus survives a restart.** The timer picks up where it was when Capsule starts again. A part that ran out while
+  Capsule was closed (in the last 10 minutes) ends as it would have, and the next one starts.
+- **Quiet while focusing.** During focus, Capsule's own sounds and limit alerts wait for the break, then come as one
+  note: "While you focused: 2 requests needed you, 1 session finished." The rings still glow and spin. Turn it off in
+  Settings, under Focus lengths.
+
 ## v1.7.0
 
 - **Choose your rings.** Settings (⚙ in the panel) has a switch for each ring: Claude, Codex, Calendar, Music and

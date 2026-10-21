@@ -75,7 +75,8 @@ namespace Capsule
         {
             body.Children.Clear();
             body.Children.Add(CardView.MakeText(model.Title, 12, Palette.Secondary, FontWeights.Normal));
-            body.Children.Add(Switch());
+            if (model.Heat == null) body.Children.Add(Switch());
+            else body.Children.Add(new Border { Height = 8 });
 
             foreach (PaceLine p in model.Pace)
             {
@@ -102,7 +103,12 @@ namespace Capsule
                 return;
             }
 
-            body.Children.Add(Chart());
+            if (model.Heat != null)
+            {
+                body.Children.Add(Heatmap(model.Heat));
+                body.Children.Add(Figures(model.Heat));
+            }
+            else body.Children.Add(Chart());
 
             var legend = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
             foreach (LegendRow row in model.Legend)
@@ -189,6 +195,70 @@ namespace Capsule
             }
             // Month labels sit under every 7th day and may be wider than a bar: let them overflow their column.
             grid.ClipToBounds = false;
+            return grid;
+        }
+
+        public const double HeatGap = 2.5, DayLabelWidth = 24, MonthRow = 15;
+
+        // The weeks as columns of days, Claude's orange in four shades; today ringed; each day says its tokens on hover.
+        UIElement Heatmap(HeatModel h)
+        {
+            double width = PanelView.PanelWidth - 2 * (PanelView.Pad + 4);
+            double step = (width - DayLabelWidth) / Math.Max(1, h.Columns.Count);
+            double cell = step - HeatGap;
+            var canvas = new Canvas { Width = width, Height = MonthRow + 7 * step, Margin = new Thickness(0, 4, 0, 0) };
+            foreach (var month in h.Months)
+            {
+                TextBlock t = CardView.MakeText(month.Value, 10, Palette.Secondary, FontWeights.Normal);
+                t.TextTrimming = TextTrimming.None;
+                Canvas.SetLeft(t, DayLabelWidth + month.Key * step);
+                canvas.Children.Add(t);
+            }
+            for (int row = 1; row < 7; row += 2)
+            {
+                TextBlock t = CardView.MakeText(h.DayNames[row], 9.5, Palette.Secondary, FontWeights.Normal);
+                Canvas.SetTop(t, MonthRow + row * step + (cell - 13) / 2);
+                canvas.Children.Add(t);
+            }
+            Color accent = Color.FromRgb(0xD9, 0x77, 0x57);
+            double[] alpha = { 0, 0.32, 0.55, 0.78, 1 };
+            for (int col = 0; col < h.Columns.Count; col++)
+                for (int row = 0; row < h.Columns[col].Count; row++)
+                {
+                    HeatCell c = h.Columns[col][row];
+                    if (c.Future) continue;
+                    var square = new System.Windows.Shapes.Rectangle
+                    {
+                        Width = cell,
+                        Height = cell,
+                        RadiusX = 2,
+                        RadiusY = 2,
+                        Fill = c.Level == 0 ? NotchView.Brush(Palette.Track) : Theme.Current.Brush(Color.FromArgb((byte)Math.Round(255 * alpha[c.Level]), accent.R, accent.G, accent.B)),
+                        ToolTip = c.Tip,
+                    };
+                    if (c.Today)
+                    {
+                        square.Stroke = NotchView.Brush(Palette.Text);
+                        square.StrokeThickness = 1.2;
+                    }
+                    Canvas.SetLeft(square, DayLabelWidth + col * step);
+                    Canvas.SetTop(square, MonthRow + row * step);
+                    canvas.Children.Add(square);
+                }
+            return canvas;
+        }
+
+        // The figures under the heatmap, two to a row: the value, and what it is under it.
+        static UIElement Figures(HeatModel h)
+        {
+            var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 10, 0, 0) };
+            foreach (HeatStat s in h.Stats)
+            {
+                var block = new StackPanel { Margin = new Thickness(0, 0, 8, 8) };
+                block.Children.Add(CardView.MakeText(s.Value, 15, Palette.Text, FontWeights.SemiBold));
+                block.Children.Add(CardView.MakeText(s.Label, 11, Palette.Secondary, FontWeights.Normal));
+                grid.Children.Add(block);
+            }
             return grid;
         }
 

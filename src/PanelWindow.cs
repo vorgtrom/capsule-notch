@@ -224,11 +224,11 @@ namespace Capsule
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             var move = new DoubleAnimation(appear ? 0 : away, TimeSpan.FromMilliseconds(MotionMs));
             move.EasingFunction = ease;
-            Timeline.SetDesiredFrameRate(move, NotchView.AnimationFps);
+            Timeline.SetDesiredFrameRate(move, CardMotion.MotionFps);
             slide.BeginAnimation(TranslateTransform.XProperty, move);
             var fade = new DoubleAnimation(appear ? 1 : 0, TimeSpan.FromMilliseconds(MotionMs));
             fade.EasingFunction = ease;
-            Timeline.SetDesiredFrameRate(fade, NotchView.AnimationFps);
+            Timeline.SetDesiredFrameRate(fade, CardMotion.MotionFps);
             view.BeginAnimation(UIElement.OpacityProperty, fade);
             if (glass != null) glass.Animate(appear, (float)(away * monitor.Scale), MotionMs);
         }

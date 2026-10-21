@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Capsule
 {
-    public enum UsagePeriod { Week, Month, Year }
+    public enum UsagePeriod { Week, Month, Year, Heat }   // Heat: the heatmap's HeatModel.Weeks weeks, the page's view
 
     public sealed class UsageSegment
     {
@@ -51,6 +51,7 @@ namespace Capsule
         public List<PaceLine> Pace = new List<PaceLine>();
         public string Progress = "";   // "Reading your logs… 40%" during the first backfill
         public bool Empty;              // no activity counted at all
+        public HeatModel Heat;          // the heatmap, for UsagePeriod.Heat; null for the bar periods
 
         // offset: 0 for the current period, -1 for the one before, and so on.
         public static UsageModel Build(UsageStore store, UsagePeriod period, int offset, DateTime today, CultureInfo culture, bool dark)
@@ -93,8 +94,9 @@ namespace Capsule
             if (ordered.Count > shown.Count)
                 m.Legend.Add(new LegendRow { Name = OtherName, Color = Palette.Secondary, Tokens = ordered.Skip(shown.Count).Sum(k => perModel[k]) });
 
-            // Bars: a day each for a week or a month, a month each for a year.
-            if (period == UsagePeriod.Year)
+            // Bars: a day each for a week or a month, a month each for a year. The heatmap has its own cells instead.
+            if (period == UsagePeriod.Heat) m.Heat = HeatModel.Build(store, from, to, today, culture);
+            else if (period == UsagePeriod.Year)
                 for (int i = 0; i < 12; i++)
                 {
                     DateTime first = new DateTime(from.Year, i + 1, 1);
@@ -175,6 +177,12 @@ namespace Capsule
                     from = today.AddDays(-back + 7 * offset);
                     to = from.AddDays(6);
                     break;
+                case UsagePeriod.Heat:
+                    // Whole weeks, the last one this week; each step back is the weeks before.
+                    int lead = ((int)today.DayOfWeek - (int)culture.DateTimeFormat.FirstDayOfWeek + 7) % 7;
+                    to = today.AddDays(6 - lead + 7 * HeatModel.Weeks * offset);
+                    from = to.AddDays(-7 * HeatModel.Weeks + 1);
+                    break;
                 case UsagePeriod.Month:
                     from = new DateTime(today.Year, today.Month, 1).AddMonths(offset);
                     to = from.AddMonths(1).AddDays(-1);
@@ -189,6 +197,7 @@ namespace Capsule
         static string PeriodTitle(UsagePeriod period, DateTime from, DateTime to, CultureInfo culture)
         {
             if (period == UsagePeriod.Year) return from.Year.ToString(culture);
+            if (period == UsagePeriod.Heat) return from.ToString("MMM d", culture) + (from.Year != to.Year ? from.ToString(", yyyy", culture) : "") + " – " + to.ToString("MMM d, yyyy", culture);
             if (period == UsagePeriod.Month) return from.ToString("MMMM yyyy", culture);
             return from.Month == to.Month
                 ? from.ToString("MMM d", culture) + " – " + to.Day.ToString(culture)
