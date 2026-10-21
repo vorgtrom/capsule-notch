@@ -4,7 +4,7 @@
 
 A little glass capsule that sits on the edge of your Windows screen.
 
-https://github.com/user-attachments/assets/a06d9093-e438-45f3-80eb-665846a6d5f4
+https://github.com/user-attachments/assets/c8bfb80a-3e77-457a-8dc6-a3cf5f4c52c9
 
 It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
 session is **working** or **waiting on you**. It keeps a **history of your tokens** by day and model, forecasts
