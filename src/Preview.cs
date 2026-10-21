@@ -322,6 +322,7 @@ namespace Capsule
             SaveSettings(dir, "calendar-settings" + suffix + ".png", panel, settings);
             SaveSettings(dir, "calendar-settings-signin" + suffix + ".png", panel, new GoogleSettings { ClientId = "123456789012-sample.apps.googleusercontent.com" });
             SaveSettings(dir, "calendar-settings-link" + suffix + ".png", panel, new GoogleSettings { LinkSaved = true, LinkName = "you@example.com" });
+            SaveSettings(dir, "calendar-settings-empty" + suffix + ".png", panel, new GoogleSettings());
         }
 
         static void SaveSettings(string dir, string name, PanelModel model, GoogleSettings google)

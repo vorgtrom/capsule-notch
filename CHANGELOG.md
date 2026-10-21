@@ -3,6 +3,14 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## v1.7.2
+
+- **Connecting Google Calendar is quicker.** Click **Get link** in Settings: Google Calendar opens, and Capsule saves
+  the calendar's secret address as soon as you copy it there. No pasting, no Save. For 5 minutes it looks at what you
+  copy for that address only.
+- **The secret address stays out of the clipboard history.** Anyone with it can read your calendar, so Capsule never
+  keeps it in the Clipboard tile.
+
 ## v1.7.1
 
 - **Smoother cards.** The hover card now unfolds, folds and glides between rings at 60 frames a second, in step with

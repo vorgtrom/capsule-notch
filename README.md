@@ -387,10 +387,14 @@ There are two ways to connect. The quick one takes about a minute and only reads
 
 **The quick way: your calendar's secret link (read-only)**
 
-1. Open [Google Calendar](https://calendar.google.com/) on the web and click ⚙ → **Settings**.
+1. In Capsule, open the panel, click ⚙, and under **Google Calendar** click **Get link**. Google Calendar's settings
+   open in your browser.
 2. Under **Settings for my calendars**, click your calendar, then **Integrate calendar**.
 3. Copy **Secret address in iCal format**. Not the public address: that one only works for a public calendar.
-4. In Capsule, open the panel, click ⚙, paste it under **Google Calendar → Calendar link**, and click **Save link**.
+   Capsule saves it the moment you copy it, and says so in a balloon.
+   - For 5 minutes after **Get link**, Capsule looks at what you copy for that one kind of address, and nothing else.
+     The address never goes into the clipboard history.
+   - Or paste it under **Calendar link** yourself and click **Save link**.
 
 The capsule then gets a third cell, and the panel a Calendar tile.
 - The link shows one calendar, your main one. Its events and the ones you're invited to are in it.

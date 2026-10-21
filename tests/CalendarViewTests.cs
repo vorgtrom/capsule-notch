@@ -602,7 +602,8 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(HasText(view, "Calendar link") && HasText(view, "Save link") && HasText(view, "Use your own Google client instead"), "nothing set up: the calendar link first, your own client behind a link");
             TestRunner.Check(!HasText(view, "Client ID") && !HasText(view, "Remove link"), "the client's fields hidden, and nothing to remove");
-            TestRunner.Check(HasText(view, "Read-only events. No Google Tasks or event changes. In Google Calendar on the web: Settings → your calendar → Integrate calendar → Secret address in iCal format."), "the link explains read-only access and the absence of tasks");
+            TestRunner.Check(HasText(view, "Read-only events. No Google Tasks or event changes. Click Get link: Google Calendar opens. Click your calendar, then Integrate calendar, and copy Secret address in iCal format. Capsule saves it as soon as you copy it."), "the link explains read-only access, the absence of tasks, and Get link");
+            TestRunner.Check(HasText(view, "Get link"), "Get link opens Google Calendar for the address");
             string saved = null;
             int removed = 0;
             view.GoogleLinkSaved += delegate(string text) { saved = text; };
