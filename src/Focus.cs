@@ -6,8 +6,8 @@ namespace Capsule
     public enum FocusPhase { Focus, ShortBreak, LongBreak }
 
     // A Pomodoro timer: focus, a short break, and a long break after every RoundsPerSet focus sessions. Each part starts
-    // the next by itself. The end is a time on the clock, so sleep and a busy UI thread can't make it drift. In memory
-    // only: quitting Capsule stops it.
+    // the next by itself. The end is a time on the clock, so sleep and a busy UI thread can't make it drift. Its state is
+    // saved (State/Restore), so a restart of Capsule picks it up where it was.
     public sealed class FocusTimer
     {
         public const int RoundsPerSet = 4;
@@ -103,6 +103,51 @@ namespace Capsule
             }
             if (Running) endsAtMs = now + LengthMs(Phase);
             else leftMs = LengthMs(Phase);
+        }
+
+        // What is saved in focus.json: the part, the round, and when it ends (or, paused, how long it has left).
+        public System.Collections.Generic.Dictionary<string, object> State()
+        {
+            var d = new System.Collections.Generic.Dictionary<string, object>();
+            d["running"] = Running;
+            d["paused"] = Paused;
+            d["phase"] = Phase.ToString();
+            d["round"] = Round;
+            d["ends_at"] = endsAtMs;
+            d["left"] = leftMs;
+            return d;
+        }
+
+        public const long RestoreGraceMs = 10 * 60 * 1000;
+
+        // Picks a saved timer up again. One that ran out while Capsule was closed is let go, unless it ended within
+        // RestoreGraceMs: then the part that ended is returned, and the next one starts now, as it would have. Null when
+        // there was nothing to pick up, or it was let go.
+        public FocusPhase? Restore(System.Collections.Generic.Dictionary<string, object> d, long now)
+        {
+            Stop();
+            if (d == null) return null;
+            bool running = d.ContainsKey("running") && d["running"] is bool && (bool)d["running"];
+            bool paused = d.ContainsKey("paused") && d["paused"] is bool && (bool)d["paused"];
+            FocusPhase phase;
+            if ((!running && !paused) || !d.ContainsKey("phase") || !Enum.TryParse(d["phase"] as string ?? "", out phase)) return null;
+            double? round = Json.Num(Json.Get(d, "round")), ends = Json.Num(Json.Get(d, "ends_at")), left = Json.Num(Json.Get(d, "left"));
+            if (!round.HasValue || round.Value < 1 || round.Value > RoundsPerSet) return null;
+            Phase = phase;
+            Round = (int)round.Value;
+            if (paused)
+            {
+                if (!left.HasValue || left.Value < 0 || left.Value > LengthMs(phase) + 1000) { Stop(); return null; }
+                Paused = true;
+                leftMs = (long)left.Value;
+                return null;
+            }
+            if (!ends.HasValue) { Stop(); return null; }
+            endsAtMs = (long)ends.Value;
+            Running = true;
+            if (now < endsAtMs) return null;
+            if (now - endsAtMs > RestoreGraceMs) { Stop(); return null; }
+            return Tick(now);
         }
 
         // What to say when a part ends, now that the next one has started.

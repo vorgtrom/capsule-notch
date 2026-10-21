@@ -129,8 +129,8 @@ namespace Capsule
         static void ReducedMotionSkipsTheAnimation()
         {
             TestRunner.Eq(0, CardMotion.Duration(CardMotion.OpenMs, false), "Animation effects off: no time to unfold");
-            TestRunner.Eq(200, CardMotion.Duration(CardMotion.OpenMs, true), "on: the unfold takes 200 ms");
-            TestRunner.Eq(150, CardMotion.Duration(CardMotion.CloseMs, true), "and the fold 150 ms");
+            TestRunner.Eq(240, CardMotion.Duration(CardMotion.OpenMs, true), "on: the unfold takes 240 ms");
+            TestRunner.Eq(170, CardMotion.Duration(CardMotion.CloseMs, true), "and the fold 170 ms");
 
             var content = new Border();
             var zoom = new ScaleTransform();
@@ -207,7 +207,7 @@ namespace Capsule
             TestRunner.Eq(TimeSpan.FromMilliseconds(CardMotion.CloseMs), motion.Duration.TimeSpan, "over the time given");
             var ease = motion.EasingFunction as System.Windows.Media.Animation.CubicEase;
             TestRunner.Check(ease != null && ease.EasingMode == System.Windows.Media.Animation.EasingMode.EaseOut, "on the cubic ease-out");
-            TestRunner.Eq(NotchView.AnimationFps, System.Windows.Media.Animation.Timeline.GetDesiredFrameRate(motion) ?? 0, "at the notch's frame rate");
+            TestRunner.Eq(60, System.Windows.Media.Animation.Timeline.GetDesiredFrameRate(motion) ?? 0, "at 60 fps, in step with the blur");
         }
 
         static string Frames(List<POINT> frames)
@@ -220,9 +220,9 @@ namespace Capsule
         // The glide's frames, as they are: their rounding, a glide up as well as down, and none at all for no time.
         static void GlideFramesAreExactlyThese()
         {
-            TestRunner.Eq("1556,301 1556,323 1556,330 1556,330", Frames(CardMotion.Glide(P(1556, 254), P(1556, 330), CardMotion.GlideMs, NotchView.AnimationFps)), "down 76 pixels");
-            TestRunner.Eq("1548,352 1544,397 1543,410 1543,411", Frames(CardMotion.Glide(P(1556, 254), P(1543, 411), CardMotion.GlideMs, NotchView.AnimationFps)), "down 157 and left 13");
-            TestRunner.Eq("1556,283 1556,261 1556,254 1556,254", Frames(CardMotion.Glide(P(1556, 330), P(1556, 254), CardMotion.GlideMs, NotchView.AnimationFps)), "and up the same 76 pixels");
+            TestRunner.Eq("1556,301 1556,323 1556,330 1556,330", Frames(CardMotion.Glide(P(1556, 254), P(1556, 330), 120, 30)), "down 76 pixels");
+            TestRunner.Eq("1548,352 1544,397 1543,410 1543,411", Frames(CardMotion.Glide(P(1556, 254), P(1543, 411), 120, 30)), "down 157 and left 13");
+            TestRunner.Eq("1556,283 1556,261 1556,254 1556,254", Frames(CardMotion.Glide(P(1556, 330), P(1556, 254), 120, 30)), "and up the same 76 pixels");
             TestRunner.Eq("1543,411", Frames(CardMotion.Glide(P(1556, 254), P(1543, 411), 0, NotchView.AnimationFps)), "no time: one frame, on the target");
         }
 
@@ -230,8 +230,11 @@ namespace Capsule
         // target, never past it.
         static void GlideEndsExactlyAtTheTarget()
         {
-            List<POINT> frames = CardMotion.Glide(P(1556, 254), P(1556, 330), CardMotion.GlideMs, NotchView.AnimationFps);
+            List<POINT> frames = CardMotion.Glide(P(1556, 254), P(1556, 330), 120, 30);
             TestRunner.Eq(4, frames.Count, "120 ms at 30 fps is four frames");
+            List<POINT> smooth = CardMotion.Glide(P(1556, 254), P(1556, 330), CardMotion.GlideMs, CardMotion.MotionFps);
+            TestRunner.Eq(11, smooth.Count, "the glide itself: 170 ms at 60 fps is eleven frames");
+            TestRunner.Check(smooth[smooth.Count - 1].Y == 330 && smooth[0].Y > 254 && smooth[0].Y - 254 < 330 - smooth[0].Y, "it starts moving at once and lands exactly on the target");
             TestRunner.Check(frames[frames.Count - 1].X == 1556 && frames[frames.Count - 1].Y == 330, "the last frame is the target");
             bool steady = true;
             for (int i = 0; i < frames.Count; i++)
@@ -239,9 +242,9 @@ namespace Capsule
             TestRunner.Check(steady, "each frame is further on, and none goes past the target");
             TestRunner.Check(frames[0].Y - 254 >= (330 - 254) / 2, "eased out: more than half the way in the first frame (" + frames[0].Y + ")");
 
-            List<POINT> odd = CardMotion.Glide(P(1556, 254), P(1543, 411), CardMotion.GlideMs, NotchView.AnimationFps);
+            List<POINT> odd = CardMotion.Glide(P(1556, 254), P(1543, 411), 120, 30);
             TestRunner.Check(odd[odd.Count - 1].X == 1543 && odd[odd.Count - 1].Y == 411, "an uneven distance still ends exactly on the target");
-            List<POINT> still = CardMotion.Glide(P(70, 90), P(70, 90), CardMotion.GlideMs, NotchView.AnimationFps);
+            List<POINT> still = CardMotion.Glide(P(70, 90), P(70, 90), 120, 30);
             bool stays = true;
             foreach (POINT p in still) stays &= p.X == 70 && p.Y == 90;
             TestRunner.Check(still.Count == 4 && stays, "a glide to where the card already is stays put");
@@ -249,9 +252,9 @@ namespace Capsule
             // Frames are picked by the clock: one every 1/30 s, the last at 120 ms, however late the timer's ticks come.
             int[] due = new int[7];
             long[] at = { 0, 20, 34, 67, 101, 119, 120 };
-            for (int i = 0; i < at.Length; i++) due[i] = CardMotion.FramesDue(at[i], 4, CardMotion.GlideMs, NotchView.AnimationFps);
+            for (int i = 0; i < at.Length; i++) due[i] = CardMotion.FramesDue(at[i], 4, 120, 30);
             TestRunner.Eq("0,0,1,2,3,3,4", string.Join(",", due), "frames due at 0, 20, 34, 67, 101, 119 and 120 ms");
-            TestRunner.Eq(4, CardMotion.FramesDue(400, 4, CardMotion.GlideMs, NotchView.AnimationFps), "a timer that comes late still ends on the last frame");
+            TestRunner.Eq(4, CardMotion.FramesDue(400, 4, 120, 30), "a timer that comes late still ends on the last frame");
         }
     }
 }

@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11, CmdFocus = 12;
 
         readonly Application app;
         Config config;
@@ -31,7 +31,7 @@ namespace Capsule
         CodexActivity codexActivity;
         UsageHistory history;        // token use per day and model, from the Claude Code and Codex logs
         SampleStore samples;         // the limit readings behind the pace forecast, and the alerts already shown
-        UsagePeriod usagePeriod = UsagePeriod.Week;
+        UsagePeriod usagePeriod = UsagePeriod.Heat;
         int usageOffset;             // the Usage page's period: 0 now, -1 the one before
         List<IModule> modules;
         NotchWindow notch;
@@ -50,6 +50,8 @@ namespace Capsule
         long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
         int clipRetries;        // reads tried again while another app held the clipboard
         SessionTally tally;     // each session's model and tokens, from its transcript
+        int heldNeeds, heldDone;                              // sounds held while you focus
+        readonly List<string> heldAlerts = new List<string>();   // limit alerts held while you focus
         bool tallyBusy;
         List<UsageModule> shown = new List<UsageModule>();
         List<CellModel> notchCells;
@@ -124,7 +126,7 @@ namespace Capsule
             Theme.Changed += OnThemeChanged;
             GlassLayer.Failed += OnGlassLayerFailed;
 
-            openCard = NewTimer(150, OpenCard);
+            openCard = NewTimer(110, OpenCard);   // long enough to pass over a ring without opening its card
             closeCard = NewTimer(200, CloseCardIfAway);
             tick = NewTimer(5000, Tick);
             screenCheck = NewTimer(2000, CheckScreen);
@@ -182,6 +184,8 @@ namespace Capsule
             panel.View.RingToggled += delegate(string name, bool on) { Guard("rings", delegate { OnRingToggled(name, on); }); };
             panel.View.ClipboardToggled += delegate(bool on) { Guard("clipboard", delegate { OnClipboardToggled(on); }); };
             panel.View.FocusLengthChanged += delegate(string which, int minutes) { Guard("focus", delegate { OnFocusLength(which, minutes); }); };
+            panel.View.FocusQuietToggled += delegate(bool on) { Guard("focus", delegate { OnFocusQuiet(on); }); };
+            card.View.FocusCommand += delegate(string command) { Guard("focus", delegate { OnFocusCommand(command); }); };
             panel.View.SettingsClicked += delegate
             {
                 panel.View.ShowRings(config);
@@ -244,6 +248,7 @@ namespace Capsule
             if (config.RingOn("codex")) codexCheck.Start();
             if (config.RingOn("music")) musicTick.Start();
             if (config.ClipboardHistory && !clipWatcher.Start()) Log.Info("clipboard: Windows didn't let Capsule watch the clipboard");
+            RestoreFocus();
             Tick();
             promptServer = new PromptServer(PromptPipe.Name, OnPromptArrived);
             Log.Info(promptServer.Start() ? "prompts: listening" : "prompts: not listening; Claude asks in the app as usual");
@@ -311,7 +316,65 @@ namespace Capsule
         // A sound for what needs you, unless Sounds is off. Claude's sessions count only while its hooks are connected.
         void PlayCue(Cue cue)
         {
+            if (cue == Capsule.Cue.None) return;
+            if (Quiet)
+            {
+                if (cue == Capsule.Cue.Attention) heldNeeds++;
+                else heldDone++;
+                return;
+            }
             if (config.Sounds) Sounds.Play(cue, Clock.NowMs());
+        }
+
+        // While you focus, Capsule's own sounds and limit alerts wait for the break (the rings still glow and spin).
+        bool Quiet { get { return config.FocusQuiet && config.RingOn("focus") && focus.Running && focus.Phase == FocusPhase.Focus; } }
+
+        // What waited while you focused, in one line, or null; the count starts again.
+        string HeldSummary()
+        {
+            var parts = new List<string>();
+            if (heldNeeds > 0) parts.Add(heldNeeds == 1 ? "1 request needed you" : heldNeeds + " requests needed you");
+            if (heldDone > 0) parts.Add(heldDone == 1 ? "1 session finished" : heldDone + " sessions finished");
+            string text = parts.Count > 0 ? "While you focused: " + string.Join(", ", parts) + "." : null;
+            if (heldAlerts.Count > 0) text = (text == null ? "" : text + "\n") + string.Join("\n", heldAlerts);
+            Cue cue = heldNeeds > 0 ? Capsule.Cue.Attention : heldDone > 0 ? Capsule.Cue.Done : Capsule.Cue.None;
+            heldNeeds = heldDone = 0;
+            heldAlerts.Clear();
+            if (text != null && cue != Capsule.Cue.None && config.Sounds) Sounds.Play(cue, Clock.NowMs());
+            return text;
+        }
+
+        // Focus is over (paused, skipped, stopped, or switched off): what waited is told now.
+        void ReleaseHeld()
+        {
+            if (Quiet) return;
+            string text = HeldSummary();
+            if (text != null) tray.Balloon("Capsule", text);
+        }
+
+        void SaveFocus()
+        {
+            if (!Files.WriteAtomic(Paths.FocusFile, Json.Write(focus.State()))) Log.Info("focus: couldn't save the timer");
+        }
+
+        // A timer that was running when Capsule closed picks up where it was (one that ran out meanwhile is let go).
+        void RestoreFocus()
+        {
+            if (!config.RingOn("focus")) return;
+            long now = Clock.NowMs();
+            FocusPhase? ended = focus.Restore(Json.Obj(Json.TryParse(Files.ReadText(Paths.FocusFile))), now);
+            if (focus.Running) focusTick.Start();
+            if (ended.HasValue) tray.Balloon("Capsule", focus.EndedText(ended.Value));
+            if (focus.Active) Log.Info("focus: picked up where it was");
+            SaveFocus();
+        }
+
+        void OnFocusQuiet(bool on)
+        {
+            config.FocusQuiet = on;
+            config.Save(Paths.ConfigFile);
+            panel.View.ShowRings(config);
+            ReleaseHeld();
         }
 
         void OnUsageChecked()
@@ -587,6 +650,8 @@ namespace Capsule
                     {
                         focus.Stop();
                         focusTick.Stop();
+                        SaveFocus();
+                        ReleaseHeld();
                     }
                     break;
             }
@@ -638,7 +703,10 @@ namespace Capsule
             }
             if (focus.Running) focusTick.Start();
             else focusTick.Stop();
+            SaveFocus();
+            ReleaseHeld();
             Render();
+            if (card.IsOpen && cardCell >= 0 && cardCell == focusCell) ShowCard(focusCell);
         }
 
         // Every second while the timer runs: a part that ended is marked by a sound and a notification, and the ring and
@@ -649,8 +717,11 @@ namespace Capsule
             FocusPhase? ended = focus.Tick(now);
             if (ended.HasValue)
             {
-                PlayCue(Capsule.Cue.Done);
-                tray.Balloon("Capsule", focus.EndedText(ended.Value));
+                // The end of focus also tells what waited meanwhile; its chime is the one sound for both.
+                string held = ended.Value == FocusPhase.Focus ? HeldSummary() : null;
+                if (held == null) PlayCue(Capsule.Cue.Done);
+                tray.Balloon("Capsule", focus.EndedText(ended.Value) + (held != null ? "\n" + held : ""));
+                SaveFocus();
             }
             if (notchCells != null && focusCell >= 0 && focusCell < notchCells.Count)
             {
@@ -658,6 +729,7 @@ namespace Capsule
                 notch.SetCells(notchCells);
             }
             if (panel.IsOpen && !panel.View.ShowingSettings) panel.View.UpdateFocus(FocusTile.From(focus, now, CultureInfo.CurrentCulture));
+            if (card.IsOpen && cardCell >= 0 && cardCell == focusCell) ShowCard(focusCell);
         }
 
         // The clipboard changed: what is on it now joins the history, unless it is private or was put back from the tile.
@@ -857,6 +929,12 @@ namespace Capsule
                 changed = true;
                 foreach (string text in LimitAlerts.Check(samples, r, config.LimitAlerts, now, CultureInfo.CurrentCulture))
                 {
+                    if (Quiet)
+                    {
+                        Log.Info("limits: alert held for the break");
+                        heldAlerts.Add(text);
+                        continue;
+                    }
                     Log.Info("limits: alert shown");
                     tray.Balloon("Capsule", text);
                 }
@@ -1101,10 +1179,11 @@ namespace Capsule
         {
             if (!notch.IsVisible) return;
             long now = Clock.NowMs();
-            if (cell >= 0 && cell == focusCell)   // the Focus ring has no card: its tile is in the panel
+            if (cell >= 0 && cell == focusCell)
             {
-                if (card.IsVisible) card.Fold();
-                cardCell = -1;
+                cardCell = cell;
+                card.ShowFocusBeside(FocusTile.From(focus, now, CultureInfo.CurrentCulture), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                NotchOnTop();
                 return;
             }
             if (cell >= 0 && cell == musicCell)
@@ -1204,6 +1283,7 @@ namespace Capsule
             });
             items.Add(new MenuItemSpec { Id = CmdLimitAlerts, Text = "Limit alerts", Checked = config.LimitAlerts });
             items.Add(new MenuItemSpec { Id = CmdSounds, Text = "Sounds", Checked = config.Sounds });
+            if (config.RingOn("focus")) items.Add(new MenuItemSpec { Id = CmdFocus, Text = focus.Active ? "Stop focus" : "Start focus" });
             if (updates.CanCheck) items.Add(new MenuItemSpec { Id = CmdCheckUpdates, Text = "Check for updates", Checked = config.CheckUpdates });   // a release build only
             items.Add(new MenuItemSpec { Separator = true });
             items.Add(new MenuItemSpec { Id = CmdQuit, Text = "Quit Capsule" });
@@ -1245,6 +1325,9 @@ namespace Capsule
                     config.Sounds = !config.Sounds;
                     config.Save(Paths.ConfigFile);
                     if (config.Sounds) Sounds.Play(Capsule.Cue.Attention, Clock.NowMs());   // so you hear what it sounds like
+                    break;
+                case CmdFocus:
+                    OnFocusCommand(focus.Active ? "stop" : "start");
                     break;
                 case CmdLimitAlerts:
                     config.LimitAlerts = !config.LimitAlerts;

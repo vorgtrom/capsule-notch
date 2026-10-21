@@ -11,7 +11,10 @@ namespace Capsule
     // window. HoverCard moves the card's blur the same way, through GlassLayer.
     public static class CardMotion
     {
-        public const int OpenMs = 200, CloseMs = 150, GlideMs = 120;
+        public const int OpenMs = 240, CloseMs = 170, GlideMs = 170;
+        // Motions run at 60 fps: at 30 a 240 ms unfold was only seven frames, and stepped against the blur, which Windows'
+        // compositor animates at the display's own rate. The capsule's slow spin and pulse stay at NotchView.AnimationFps.
+        public const int MotionFps = 60;
         public const double StartScale = 0.33;   // the card's size where it unfolds from and folds into, 1 being full size
 
         // The anchor, in pixels from the card window's top-left: the hovered ring's centre on the capsule's inner edge, the
@@ -85,11 +88,11 @@ namespace Capsule
         }
 
         // One property's motion: from wherever it is (From is left unset) to `to`, over ms milliseconds on the cubic
-        // ease-out, at the notch's frame rate.
+        // ease-out, at MotionFps.
         internal static DoubleAnimation Motion(double to, int ms)
         {
             var motion = new DoubleAnimation(to, TimeSpan.FromMilliseconds(ms)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Timeline.SetDesiredFrameRate(motion, NotchView.AnimationFps);
+            Timeline.SetDesiredFrameRate(motion, MotionFps);
             return motion;
         }
 

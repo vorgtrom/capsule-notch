@@ -89,6 +89,12 @@ namespace Capsule
             clips.Items.Add(ClipboardHistory.FromText("ssh deploy@staging.example.com", now));
             panel.Clipboard = clips;
             SavePanel(dir, "panel-focus" + suffix + ".png", panel, false);
+            var focusCard = new CardView();
+            focusCard.ShowFocus(FocusTile.From(timer, now, en), true);
+            focusCard.SetPointer(48);
+            var cardHost = new Grid { Background = NotchView.Brush(Wallpaper) };
+            cardHost.Children.Add(focusCard);
+            SavePng(cardHost, Path.Combine(dir, "card-focus" + suffix + ".png"));
             var view = new PanelView();
             view.Update(panel);
             var config = new Config();
@@ -157,8 +163,19 @@ namespace Capsule
             for (int d = 0; d < 7; d++)
                 for (int i = 0; i < models.Length; i++)
                     store.Add(saturday.AddDays(d - 6).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[i], week[d][i], week[d][i] * 30);
-            store.Add(saturday.AddDays(-40).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[0], 1000, 0);
-            UsageModel m = UsageModel.Build(store, UsagePeriod.Week, 0, saturday, en, !Theme.Current.Light);
+            // And a made-up half-year before it for the heatmap: busier on weekdays, quieter at weekends, a few days off.
+            var rng = new Random(7);
+            for (int d = 7; d < 7 * HeatModel.Weeks; d++)
+            {
+                DateTime day = saturday.AddDays(-d);
+                bool weekend = day.DayOfWeek == DayOfWeek.Saturday || day.DayOfWeek == DayOfWeek.Sunday;
+                if (rng.NextDouble() < (weekend ? 0.55 : 0.12)) continue;
+                double scale = (weekend ? 0.35 : 1.0) * (0.25 + rng.NextDouble()) * (1 + 0.6 * Math.Sin(d / 9.0));
+                for (int i = 0; i < models.Length; i++)
+                    store.Add(day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[i], (long)(week[3][i] * scale), 0);
+            }
+            DateTime wednesday = saturday.AddDays(-3);
+            UsageModel m = UsageModel.Build(store, UsagePeriod.Heat, 0, wednesday, en, !Theme.Current.Light);
             m.Pace.Add(new PaceLine { Text = "Claude · 5-hour · 73% · full at 4:10 PM", Warn = true });
             m.Pace.Add(new PaceLine { Text = "Codex · 5-hour · 21% · about 40% at reset" });
             var view = new PanelView();
