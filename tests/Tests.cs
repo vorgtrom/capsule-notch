@@ -35,6 +35,7 @@ namespace Capsule
             Run("CardView", CardViewTests.Run);
             Run("Layout", LayoutTests.Run);
             Run("Native", NativeTests.Run);
+            Run("Capture", CaptureTests.Run);
             Run("GlassShape", GlassShapeTests.Run);
             Run("Theme", ThemeTests.Run);
             Run("Tray", TrayTests.Run);
