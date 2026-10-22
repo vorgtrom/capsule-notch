@@ -53,6 +53,7 @@ namespace Capsule
             Run("ClaudeApp", ClaudeAppTests.Run);
             Run("QuestionFlow", QuestionFlowTests.Run);
             Run("PromptBroker", PromptBrokerTests.Run);
+            Run("PromptBrokerOrders", PromptBrokerOrderTests.Run);
             Run("PromptCard", PromptCardTests.Run);
             Run("PromptView", PromptViewTests.Run);
             Run("GoogleAuth", GoogleAuthTests.Run);
