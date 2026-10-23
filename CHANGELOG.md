@@ -3,6 +3,15 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## Unreleased
+
+- Capture a visible rectangle or a scrolling webpage in Edge or Chrome. Open Capture from the panel, menu, or
+  Ctrl+Alt+S. Inspect the preview, crop or reset it, then explicitly Copy or Save PNG.
+- Scrolling is visible. Moving the pointer outside the rectangle pauses it. Stop keeps a partial image.
+  Escape, Cancel, or a target change discards the session. A partial notice explains uncertain matching or limits.
+- Capture stays local and does not enable clipboard history. Retained clipboard images now have pixel, PNG size,
+  total size, and count limits. Native browser and display validation remains limited.
+
 ## v1.7.2
 
 - **Connecting Google Calendar is quicker.** Click **Get link** in Settings: Google Calendar opens, and Capsule saves

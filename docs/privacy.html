@@ -9,7 +9,7 @@
 <body>
 <main>
 <h1>Privacy policy</h1>
-<p class="muted">Effective 6 October 2026.</p>
+<p class="muted">Effective 24 October 2026.</p>
 
 <p>Capsule is a Windows app that runs only on your own PC. It has no server: nothing it reads is sent to its developer
 or to anyone else.</p>
@@ -40,6 +40,19 @@ own Notion database, each with your own sign-in for that service. That data, too
 service.</p>
 <p>A downloaded Capsule asks GitHub once a day for the newest release's version number, so it can tell you when an
 update is out. That request carries no sign-in and nothing about you, and you can turn it off in Capsule's menu.</p>
+
+<h2>Screenshots, scrolling capture, and clipboard images</h2>
+<p>Capture reads the screen rectangle you select on one physical monitor. Scrolling capture visibly scrolls the
+selected page in Edge or Chrome. Capsule keeps capture pixels and crop images in memory while the preview is open.
+It does not upload them, log page content or addresses, or add private paths to its settings.</p>
+<p>Capsule changes the clipboard only when you choose <strong>Copy</strong>. It writes a PNG only when you choose
+<strong>Save PNG</strong> and select a destination. Closing the preview releases its capture and crop buffers.
+Copies and saved files can remain outside Capsule. Windows and other clipboard tools can handle copied images
+according to their own settings.</p>
+<p>Capture does not enable clipboard history. If you already enabled history, its normal clipboard watcher can retain
+an explicit copy in memory. Each retained image is limited to 16 million pixels and 8 MiB of PNG data. Capsule keeps
+at most five images and 32 MiB of PNG data across them, removing the oldest images first. Turning history off clears
+the list. Capsule does not save or log this history.</p>
 
 <h2>Removing access</h2>
 <p>Choose <strong>Sign out</strong> in Capsule's settings: it deletes the saved sign-in and asks Google to revoke it.

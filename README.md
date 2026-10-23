@@ -94,6 +94,44 @@ the same music controls. No extra sign-in or API key is needed.
 - Music needs Windows 10 version 1809 or later. Track metadata and artwork stay in memory; Capsule does not save
   listening history or contact Spotify or YouTube itself.
 
+## Screenshots and scrolling webpages
+
+Open **Capture** from the panel's camera button or Capsule's menu. The default capture shortcut is **Ctrl+Alt+S**.
+Change it under **Capture shortcut** in Settings. Settings shows whether Windows registered the shortcut.
+The Ideas shortcut remains separate.
+
+1. Choose **Screenshot** for a visible area, or **Scrolling webpage** for a page in Edge or Chrome.
+2. Drag a rectangle within one physical monitor. For scrolling, select page content inside the browser window.
+3. Keep the browser width and zoom fixed. Keep the pointer inside the rectangle while capture runs.
+4. Inspect the preview. Use **Fit**, **100%**, or zoom controls to check the image. Drag the image to pan.
+5. Choose **Crop**, drag a rectangle, then press **Enter** to apply it. **Reset crop** restores the original capture.
+6. Choose **Copy** or **Save PNG** to export the current image. **Retake** starts another selection.
+
+Scrolling capture visibly scrolls the page. It first tries to reach the top, then matches overlapping pixels as it
+scrolls down. The pointer chooses the scrollable area, so nested page regions can behave differently.
+Moving the pointer outside the rectangle pauses scrolling. Moving it inside resumes scrolling.
+**Stop** keeps the verified portion. **Escape** or **Cancel** discards the session. A foreground change, closed target,
+minimized target, or changed target bounds cancels scrolling capture.
+
+Scrolling results carry a **Partial capture** notice. A page that stops moving might be at its end, or it might have
+blocked scrolling. Capsule cannot prove which. Repeated or blank sections, changing content, an uncertain seam,
+failure to reach the top, and capture limits can also stop capture. Sticky bars and lazy content can affect matching.
+Check the notice and inspect seams at **100%** before using the image. Escape cancels a pending crop first in preview.
+
+One session can run at a time. Output is limited to **32 million pixels**, **32,000 rows**, **120 accepted frames**,
+and **90 seconds**, including pauses. Selection stays within one physical monitor. Scrolling is vertical at the
+browser's current width and zoom. Edge and Chrome are the supported initial targets. Native smoke checks used a
+local Chrome page on one monitor at 100% scaling. They covered screenshot preview, crop/reset, explicit Copy,
+pointer pause, and partial notices. Complete-page stitching and native Save remain unverified. Edge, sticky/lazy
+content, nested scrolling, infinite feeds, fractional scaling, and mixed displays need further desktop checks.
+
+Capture stays local. Images remain in memory until the preview closes. Capsule writes a file only after **Save PNG**,
+and changes the clipboard only after **Copy**. Capture does not enable clipboard history. If history is already on,
+its normal clipboard watcher can retain an explicit copy. Each retained image is limited to **16 million pixels** and
+**8 MiB of PNG data**. History keeps at most **five images** and **32 MiB of PNG data** across them, evicting the oldest
+images first. Images above these history limits can still be explicitly copied. Windows and other clipboard tools
+can handle the copied image according to their own settings.
+
 ## Focus timer, clipboard and your rings
 
 | The Focus ring | Focus and Clipboard tiles | Choose your rings |
@@ -583,6 +621,9 @@ anywhere else.
 - **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
   Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
   managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
+- **Capture** reads only the rectangle you select. Capture pixels, page content, addresses, and private paths are
+  not logged or added to settings. Captures remain in memory until you close the preview, unless you explicitly
+  copy them or save a PNG. Capture does not contact a server or enable clipboard history.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only
