@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace Capsule
@@ -19,6 +20,7 @@ namespace Capsule
             Crop();
             PreviewActions();
             InitialFit();
+            DpiTransition();
             Progress();
             ThemeRendering();
         }
@@ -208,6 +210,66 @@ namespace Capsule
                 Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
                 TestRunner.Near(1, preview.Zoom, "resizing preserves explicit 100 percent zoom");
                 preview.Close();
+            }
+        }
+        static void DpiTransition()
+        {
+            using (CaptureFrame source = Image())
+            {
+                var preview = new CapturePreviewWindow(new CaptureResult { Image = source }, delegate { return false; }, delegate { return false; });
+                var content = (DockPanel)preview.Content;
+                var scroll = (ScrollViewer)content.Children[1];
+                var canvas = (Canvas)scroll.Content;
+                var image = (System.Windows.Controls.Image)canvas.Children[0];
+                var selection = (System.Windows.Shapes.Rectangle)canvas.Children[1];
+                preview.Content = null;
+                var host = new Grid { Width = 920, Height = 650 };
+                host.Children.Add(content);
+                host.Measure(new Size(920, 650));
+                host.Arrange(new Rect(0, 0, 920, 650));
+                host.UpdateLayout();
+                VisualTreeHelper.SetRootDpi(preview, new DpiScale(1, 1));
+                Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                int transitions = 0;
+                preview.DpiChanged += delegate { transitions++; };
+                preview.SetZoom(1);
+                foreach (double scale in new[] { 2.0, 1.25, 1.5, 1.0 })
+                {
+                    double previousWidth = image.Width;
+                    VisualTreeHelper.SetRootDpi(preview, new DpiScale(scale, scale));
+                    TestRunner.Near(previousWidth, image.Width, "DPI refresh waits for deferred window layout");
+                    Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                    TestRunner.Near(scale, VisualTreeHelper.GetDpi(preview).DpiScaleX, "effective preview DPI changes");
+                    TestRunner.Near(1, preview.Zoom, "DPI transition retains physical 100 percent zoom");
+                    TestRunner.Near(source.Width / scale, image.Width, "image width follows effective DPI at fixed zoom");
+                    TestRunner.Near(source.Height / scale, image.Height, "image height follows effective DPI at fixed zoom");
+                    TestRunner.Near(source.Width / scale, canvas.Width, "canvas width follows effective DPI at fixed zoom");
+                    TestRunner.Near(source.Height / scale, canvas.Height, "canvas height follows effective DPI at fixed zoom");
+                    RECT pixels = CapturePreviewWindow.PixelArea(new Point(10 / scale, 20 / scale), new Point(30 / scale, 50 / scale), preview.ViewScale, source.Width, source.Height);
+                    TestRunner.Check(pixels.Left == 10 && pixels.Top == 20 && pixels.Right == 30 && pixels.Bottom == 50, "displayed crop maps to exact pixels after DPI transition");
+                }
+                TestRunner.Eq(4, transitions, "effective DPI changes raise production window events");
+                preview.Fit(scroll.ViewportWidth, scroll.ViewportHeight);
+                double fitZoom = preview.Zoom;
+                VisualTreeHelper.SetRootDpi(preview, new DpiScale(2, 2));
+                Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                TestRunner.Near(fitZoom * 2, preview.Zoom, "DPI transition refits in Fit mode");
+                TestRunner.Near(Math.Min(scroll.ViewportWidth / source.Width, scroll.ViewportHeight / source.Height), image.Width / source.Width, "Fit display fills viewport after DPI transition");
+                preview.SetZoom(1);
+                foreach (Button button in preview.ActionButtons)
+                    if (AutomationProperties.GetName(button) == "Crop") button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                typeof(CapturePreviewWindow).GetField("cropArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .SetValue(preview, new RECT { Left = 10, Top = 20, Right = 30, Bottom = 50 });
+                selection.Visibility = Visibility.Visible;
+                VisualTreeHelper.SetRootDpi(preview, new DpiScale(1, 1));
+                Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                TestRunner.Eq(Visibility.Collapsed, selection.Visibility, "DPI transition clears displayed pending crop");
+                preview.HandleKey(Key.Enter);
+                TestRunner.Check(Object.ReferenceEquals(source, preview.CurrentImage), "DPI transition clears pending pixel crop before Enter");
+                VisualTreeHelper.SetRootDpi(preview, new DpiScale(2, 2));
+                preview.Close();
+                Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                TestRunner.Check(preview.IsReleased && source.Pixels != null, "queued DPI refresh after close preserves caller ownership");
             }
         }
         static void Progress()

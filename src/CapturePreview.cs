@@ -89,6 +89,19 @@ namespace Capsule
             canvas.MouseLeftButtonDown += BeginDrag;
             canvas.MouseMove += MoveDrag;
             canvas.MouseLeftButtonUp += EndDrag;
+            DpiChanged += delegate
+            {
+                Dispatcher.BeginInvoke(new Action(delegate
+                {
+                    if (IsReleased) return;
+                    dragging = false;
+                    canvas.ReleaseMouseCapture();
+                    cropArea = new RECT();
+                    selection.Visibility = Visibility.Collapsed;
+                    if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight);
+                    else ResizeImage();
+                }));
+            };
             PreviewKeyDown += delegate(object sender, KeyEventArgs e) { if (HandleKey(e.Key)) e.Handled = true; };
             Closed += delegate { Release(); };
         }
@@ -105,11 +118,10 @@ namespace Capsule
         {
             get
             {
-                PresentationSource source = PresentationSource.FromVisual(this);
-                return source == null || source.CompositionTarget == null ? 1 : source.CompositionTarget.TransformToDevice.M11;
+                return VisualTreeHelper.GetDpi(this).DpiScaleX;
             }
         }
-        double ViewScale { get { return Zoom / DeviceScale; } }
+        internal double ViewScale { get { return Zoom / DeviceScale; } }
 
         public void Fit(double width, double height)
         {
