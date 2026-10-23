@@ -135,7 +135,24 @@ namespace Capsule
             return Native.GetCursorPos(out point) && Contains(area, point);
         }
 
+        internal Action BeforeRead, AfterRead;
+
         public CaptureFrame ReadFrame(RECT area)
+        {
+            return ReadFrame(area, ReadScreen);
+        }
+
+        internal CaptureFrame ReadFrame(RECT area, Func<RECT, CaptureFrame> read)
+        {
+            try
+            {
+                if (BeforeRead != null) BeforeRead();
+                return read(area);
+            }
+            finally { if (AfterRead != null) AfterRead(); }
+        }
+
+        CaptureFrame ReadScreen(RECT area)
         {
             if (!OrdinaryDesktop() || !SelectionValid(area)) throw new InvalidOperationException("This screen area cannot be captured.");
             try

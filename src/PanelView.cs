@@ -60,8 +60,15 @@ namespace Capsule
         readonly TextBlock shortcutText = new TextBlock();
         readonly TextBlock shortcutResult = new TextBlock();
         string shortcut = HotkeyText.Default;
+        readonly Border captureShortcutBox = new Border();
+        readonly TextBlock captureShortcutText = new TextBlock();
+        readonly TextBlock captureShortcutResult = new TextBlock();
+        string captureShortcut = "Ctrl+Alt+S";
+        bool captureShortcutRecording;
         bool capturing;
 
+        public event Action CaptureClicked;
+        public event Action<string> CaptureShortcutChosen;
         public event Action RefreshAllClicked;
         public event Action<string> RefreshClicked;        // "claude" or "codex"
         public event Action SignInClicked;
@@ -231,7 +238,7 @@ namespace Capsule
                 tile.Background = theme.Brush(theme.Tile);
                 tile.BorderBrush = theme.Brush(theme.TileRim);
             }
-            foreach (Border box in new[] { ideaField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
+            foreach (Border box in new[] { ideaField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
             foreach (Control box in new Control[] { ideaBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox }) box.Foreground = NotchView.Brush(Palette.Text);
             calendarLinkBox.CaretBrush = NotchView.Brush(Palette.Text);
             ideaBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -243,7 +250,8 @@ namespace Capsule
             ideaHint.FontSize = 13;
             ideaHint.FontFamily = ideaBox.FontFamily;
             shortcutText.Foreground = NotchView.Brush(Palette.Text);
-            foreach (TextBlock t in new[] { secretHint, shortcutResult, notionResult, clientSecretHint, calendarLinkHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
+            captureShortcutText.Foreground = NotchView.Brush(Palette.Text);
+            foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
             googleAccount.Foreground = NotchView.Brush(Palette.Text);
 
             header.Children.Clear();
@@ -253,6 +261,10 @@ namespace Capsule
             Border refreshAll = IconButton(RefreshGlyph, "Refresh", delegate { if (RefreshAllClicked != null) RefreshAllClicked(); });
             DockPanel.SetDock(refreshAll, Dock.Right);
             header.Children.Add(refreshAll);
+            Border capture = IconButton("\uE722", "Capture", delegate { if (CaptureClicked != null) CaptureClicked(); });
+            System.Windows.Automation.AutomationProperties.SetName(capture, "Capture");
+            DockPanel.SetDock(capture, Dock.Right);
+            header.Children.Add(capture);
             TextBlock title = CardView.MakeText("Capsule", 15, Palette.Text, FontWeights.SemiBold);
             title.VerticalAlignment = VerticalAlignment.Center;
             header.Children.Add(title);
@@ -467,6 +479,48 @@ namespace Capsule
             shortcutResult.Margin = new Thickness(0, 3, 0, 0);
             notion.Children.Add(shortcutResult);
             settingsBody.Children.Add(notion);
+            var captureSettings = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
+            captureSettings.Children.Add(Section("Capture shortcut"));
+            captureShortcutText.FontSize = 13;
+            captureShortcutText.FontWeight = FontWeights.SemiBold;
+            captureShortcutBox.Child = captureShortcutText;
+            captureShortcutBox.CornerRadius = new CornerRadius(10);
+            captureShortcutBox.Padding = new Thickness(10, 6, 10, 6);
+            captureShortcutBox.HorizontalAlignment = HorizontalAlignment.Left;
+            captureShortcutBox.MinWidth = 150;
+            captureShortcutBox.Focusable = true;
+            InputMethod.SetIsInputMethodEnabled(captureShortcutBox, false);
+            captureShortcutBox.FocusVisualStyle = null;
+            captureShortcutBox.Cursor = Cursors.Hand;
+            System.Windows.Automation.AutomationProperties.SetName(captureShortcutBox, "Capture shortcut");
+            captureShortcutBox.MouseLeftButtonUp += delegate
+            {
+                Keyboard.Focus(captureShortcutBox);
+                captureShortcutRecording = true;
+                captureShortcutText.Text = "Press a shortcut...";
+            };
+            captureShortcutBox.PreviewKeyDown += delegate(object sender, KeyEventArgs e)
+            {
+                if (!captureShortcutRecording || e.Key == Key.Escape) return;
+                e.Handled = true;
+                uint modifiers, key;
+                if (!HotkeyText.FromKeys(e.Key, e.SystemKey, Keyboard.Modifiers, out modifiers, out key)) return;
+                captureShortcutRecording = false;
+                string refusal = HotkeyText.Refusal(modifiers, key);
+                if (refusal != null) ShowCaptureShortcutResult(false, captureShortcut, refusal);
+                else if (CaptureShortcutChosen != null) CaptureShortcutChosen(HotkeyText.Format(modifiers, key));
+            };
+            captureShortcutBox.LostKeyboardFocus += delegate
+            {
+                captureShortcutRecording = false;
+                captureShortcutText.Text = captureShortcut;
+            };
+            captureSettings.Children.Add(captureShortcutBox);
+            captureShortcutResult.FontSize = 11;
+            captureShortcutResult.TextWrapping = TextWrapping.Wrap;
+            captureShortcutResult.Margin = new Thickness(0, 3, 0, 0);
+            captureSettings.Children.Add(captureShortcutResult);
+            settingsBody.Children.Add(captureSettings);
         }
 
         void OnShortcutKey(object sender, KeyEventArgs e)
@@ -494,7 +548,7 @@ namespace Capsule
 
         // Opens the settings with what is saved now. The secret itself is never shown: only whether one is saved. The Google
         // Calendar section follows with ShowGoogle.
-        public void ShowSettings(bool secretSaved, string databaseId, string currentShortcut)
+        public void ShowSettings(bool secretSaved, string databaseId, string currentShortcut, string currentCaptureShortcut = "Ctrl+Alt+S", bool captureRegistered = true)
         {
             secretBox.Clear();
             clientSecretBox.Clear();
@@ -510,6 +564,10 @@ namespace Capsule
             shortcutText.Text = currentShortcut;
             shortcutResult.Text = "Click, then press a new shortcut.";
             shortcutResult.Foreground = NotchView.Brush(Palette.Secondary);
+            captureShortcut = currentCaptureShortcut;
+            captureShortcutText.Text = currentCaptureShortcut;
+            captureShortcutResult.Text = captureRegistered ? "Registered. Click, then press a new shortcut." : "Shortcut unavailable. Choose another shortcut.";
+            captureShortcutResult.Foreground = NotchView.Brush(captureRegistered ? Palette.Green : Palette.Amber);
             if (ShowingMonth)
             {
                 month.Visibility = Visibility.Collapsed;
@@ -531,6 +589,7 @@ namespace Capsule
             if (ShowingSettings && googleClient.Visibility == Visibility.Visible && (clientIdBox.Text.Trim() != "" || clientSecretBox.Password.Trim() != "") && GoogleClientDraft != null)
                 GoogleClientDraft(clientIdBox.Text, clientSecretBox.Password);
             capturing = false;
+            captureShortcutRecording = false;
             secretBox.Clear();
             clientSecretBox.Clear();
             calendarLinkBox.Clear();
@@ -578,6 +637,15 @@ namespace Capsule
             shortcutText.Text = current;
             shortcutResult.Text = text;
             shortcutResult.Foreground = NotchView.Brush(ok ? Palette.Green : Palette.Amber);
+            RaiseResized();
+        }
+
+        public void ShowCaptureShortcutResult(bool ok, string current, string text)
+        {
+            captureShortcut = current;
+            captureShortcutText.Text = current;
+            captureShortcutResult.Text = text;
+            captureShortcutResult.Foreground = NotchView.Brush(ok ? Palette.Green : Palette.Amber);
             RaiseResized();
         }
 

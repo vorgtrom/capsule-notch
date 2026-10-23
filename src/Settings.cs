@@ -14,6 +14,7 @@ namespace Capsule
         public bool FirstRunDone;
         public string NotionDatabase = "";   // the ideas database's id (32 hex digits); "" = not set up
         public string Hotkey = HotkeyText.Default;   // the global shortcut that opens the panel on the Ideas box
+        public string CaptureHotkey = "Ctrl+Alt+S";
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
         public bool Sounds = true;           // a short sound when a session needs you or finishes
@@ -58,6 +59,7 @@ namespace Capsule
             c.NotionDatabase = Json.Str(Json.Get(o, "notion_database")) ?? "";
             uint modifiers, key;
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "hotkey")), out modifiers, out key)) c.Hotkey = HotkeyText.Format(modifiers, key);
+            if (HotkeyText.TryParse(Json.Str(Json.Get(o, "capture_hotkey")), out modifiers, out key)) c.CaptureHotkey = HotkeyText.Format(modifiers, key);
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
@@ -90,6 +92,7 @@ namespace Capsule
             d["first_run_done"] = FirstRunDone;
             d["notion_database"] = NotionDatabase;
             d["hotkey"] = Hotkey;
+            d["capture_hotkey"] = CaptureHotkey;
             d["check_updates"] = CheckUpdates;
             d["limit_alerts"] = LimitAlerts;
             d["sounds"] = Sounds;

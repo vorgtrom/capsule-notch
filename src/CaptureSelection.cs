@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
@@ -115,18 +116,41 @@ namespace Capsule
         readonly List<CaptureSelectionOverlay> overlays = new List<CaptureSelectionOverlay>();
         readonly TaskCompletionSource<CaptureRequest> completion = new TaskCompletionSource<CaptureRequest>();
         bool finished;
+        readonly CancellationToken cancel;
+        CancellationTokenRegistration registration;
+        readonly Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
         internal Task<CaptureRequest> Completion { get { return completion.Task; } }
         internal bool OverlaysClosed { get; private set; }
 
         internal CaptureSelection(CaptureMode mode, IEnumerable<MonitorInfo> monitors)
+            : this(mode, monitors, CancellationToken.None) { }
+
+        internal CaptureSelection(CaptureMode mode, IEnumerable<MonitorInfo> monitors, CancellationToken cancel)
         {
             this.mode = mode;
+            this.cancel = cancel;
             foreach (MonitorInfo monitor in monitors) overlays.Add(new CaptureSelectionOverlay(this, monitor));
+            registration = cancel.Register(delegate
+            {
+                if (dispatcher.CheckAccess()) CancelOwned();
+                else dispatcher.BeginInvoke(new Action(CancelOwned));
+            });
         }
 
         public static Task<CaptureRequest> Open(CaptureMode mode)
         {
-            var selection = new CaptureSelection(mode, Native.Monitors());
+            return Open(mode, CancellationToken.None);
+        }
+
+        public static Task<CaptureRequest> Open(CaptureMode mode, CancellationToken cancel)
+        {
+            if (cancel.IsCancellationRequested)
+            {
+                var cancelled = new TaskCompletionSource<CaptureRequest>();
+                cancelled.SetCanceled();
+                return cancelled.Task;
+            }
+            var selection = new CaptureSelection(mode, Native.Monitors(), cancel);
             if (selection.overlays.Count == 0) selection.Cancel();
             else foreach (CaptureSelectionOverlay overlay in selection.overlays) overlay.Show();
             return selection.Completion;
@@ -155,12 +179,19 @@ namespace Capsule
             OverlaysClosed = true;
         }
 
+        void CancelOwned()
+        {
+            Cancel();
+            completion.TrySetCanceled();   // also cancel a chosen area while its compositor wait is pending
+        }
+
         internal void Cancel()
         {
             if (finished) return;
             finished = true;
             CloseOverlays();
             completion.TrySetCanceled();
+            registration.Dispose();
         }
 
         internal async void Complete(RECT area)
@@ -172,7 +203,8 @@ namespace Capsule
             {
                 // The overlays must leave the compositor before any caller reads the screen.
                 await Dispatcher.CurrentDispatcher.InvokeAsync(delegate { }, DispatcherPriority.ContextIdle);
-                await Task.Delay(50);
+                await Task.Delay(50, cancel);
+                cancel.ThrowIfCancellationRequested();
                 CaptureRequest request;
                 if (mode == CaptureMode.Scrolling)
                 {
@@ -181,9 +213,12 @@ namespace Capsule
                         throw new InvalidOperationException("Select a page area inside an Edge or Chrome window.");
                 }
                 else request = new CaptureRequest { Mode = mode, Area = area };
+                cancel.ThrowIfCancellationRequested();
                 completion.TrySetResult(request);
             }
+            catch (OperationCanceledException) { completion.TrySetCanceled(); }
             catch (Exception e) { completion.TrySetException(e); }
+            finally { registration.Dispose(); }
         }
     }
 
