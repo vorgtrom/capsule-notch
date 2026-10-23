@@ -107,6 +107,9 @@ The Ideas shortcut remains separate.
 5. Choose **Crop**, drag a rectangle, then press **Enter** to apply it. **Reset crop** restores the original capture.
 6. Choose **Copy** or **Save PNG** to export the current image. **Retake** starts another selection.
 
+For a whole-page attempt, select the full visible height of the scrollable content, through the viewport bottom.
+A shorter rectangle can omit first or last content even after scrolling stops.
+
 Scrolling capture visibly scrolls the page. It first tries to reach the top, then matches overlapping pixels as it
 scrolls down. The pointer chooses the scrollable area, so nested page regions can behave differently.
 Moving the pointer outside the rectangle pauses scrolling. Moving it inside resumes scrolling.
