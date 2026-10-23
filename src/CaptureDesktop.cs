@@ -144,12 +144,22 @@ namespace Capsule
 
         internal CaptureFrame ReadFrame(RECT area, Func<RECT, CaptureFrame> read)
         {
+            CaptureFrame frame = null;
             try
             {
-                if (BeforeRead != null) BeforeRead();
-                return read(area);
+                try
+                {
+                    if (BeforeRead != null) BeforeRead();
+                    frame = read(area);
+                }
+                finally { if (AfterRead != null) AfterRead(); }
+                return frame;
             }
-            finally { if (AfterRead != null) AfterRead(); }
+            catch
+            {
+                if (frame != null) frame.Dispose();
+                throw;
+            }
         }
 
         CaptureFrame ReadScreen(RECT area)

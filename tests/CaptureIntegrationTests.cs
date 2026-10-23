@@ -178,6 +178,16 @@ namespace Capsule
             order.Clear(); desktop.BeforeRead = delegate { order.Add("hide"); };
             try { desktop.ReadFrame(Request().Area, delegate { throw new InvalidOperationException(); }); } catch (InvalidOperationException) { }
             TestRunner.Check(order.SequenceEqual(new[] { "hide", "restore" }), "failed native read restores through finally");
+            var completed = Result().Image;
+            var restorationFailure = new InvalidOperationException("synthetic restoration failure");
+            desktop.BeforeRead = null;
+            desktop.AfterRead = delegate { throw restorationFailure; };
+            Exception reported = null;
+            try { desktop.ReadFrame(Request().Area, delegate { return completed; }); }
+            catch (InvalidOperationException error) { reported = error; }
+            TestRunner.Check(ReferenceEquals(restorationFailure, reported), "failed restoration propagates its exception after a successful read");
+            TestRunner.Check(completed.Pixels == null, "failed restoration releases the completed frame before ownership can transfer");
+            completed.Dispose();
             token.Dispose();
         }
         static void ProgressExclusion()
