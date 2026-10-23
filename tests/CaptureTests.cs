@@ -12,6 +12,7 @@ namespace Capsule
             Validation();
             Ownership();
             BoundedStorage();
+            SparseSearchBound();
             Limits();
         }
 
@@ -291,6 +292,76 @@ namespace Capsule
                 bytes += frame.Pixels.LongLength;
             }
             return bytes;
+        }
+
+        sealed class CountedRows : System.Collections.ObjectModel.ReadOnlyCollection<ulong>, System.Collections.Generic.IList<ulong>
+        {
+            public long Reads;
+            readonly long limit;
+            public CountedRows(ulong[] values, long readLimit) : base(values) { limit = readLimit; }
+            ulong System.Collections.Generic.IList<ulong>.this[int index]
+            {
+                get
+                {
+                    if (++Reads > limit) throw new InvalidOperationException("Row search read budget exhausted.");
+                    return base[index];
+                }
+                set { throw new NotSupportedException(); }
+            }
+        }
+
+        static ulong SparseValue(int row)
+        {
+            return (ulong)(row == 0 ? 9 : row < 31794 ? 1 : row - 31800 + 20);
+        }
+
+        static CaptureFrame SparseFrame(int start, int rows)
+        {
+            byte[] pixels = new byte[3 * rows * 4];
+            for (int y = 0; y < rows; y++)
+                for (int x = 0; x < 3; x++)
+                {
+                    int p = (y * 3 + x) * 4;
+                    pixels[p] = (byte)SparseValue(start + y);
+                    pixels[p + 3] = 255;
+                }
+            return new CaptureFrame(3, rows, pixels);
+        }
+
+        static void SparseSearchBound()
+        {
+            const int height = 31800;
+            for (int step = 1; step <= 3; step++)
+            {
+                var oldValues = new ulong[height];
+                var newValues = new ulong[height];
+                for (int y = 0; y < height; y++)
+                {
+                    oldValues[y] = SparseValue(step - 1 + y);
+                    newValues[y] = SparseValue(step + y);
+                }
+                var oldRows = new CountedRows(oldValues, 12L * height);
+                var newRows = new CountedRows(newValues, 12L * height);
+                bool bounded = true;
+                int shift = 0;
+                try { shift = CaptureStitcher.FindOverlap(oldRows, newRows, 0, height, 1, 0); }
+                catch (InvalidOperationException) { bounded = false; }
+                TestRunner.Check(bounded && oldRows.Reads + newRows.Reads <= 12L * height, "sparse search " + step + " uses at most 12 row reads per input row");
+                TestRunner.Eq(1, shift, "sparse search " + step + " finds the one-row advance");
+            }
+            var previous = SparseFrame(0, height);
+            using (var stitcher = new CaptureStitcher(previous))
+            {
+                for (int step = 1; step <= 3; step++)
+                {
+                    var next = SparseFrame(step, height);
+                    TestRunner.Eq(1, stitcher.Append(next).AddedRows, "sparse frame advances exactly one row");
+                    TestRunner.Check(previous.Pixels == null, "sparse append releases the older full frame");
+                    TestRunner.Check(RetainedBytes(stitcher) <= (long)(height + step + height) * 3 * 4, "sparse append preserves the storage bound");
+                    previous = next;
+                }
+                Same(SparseFrame(0, height + 3), stitcher.Build(), "sparse-prefix capture");
+            }
         }
     }
 }

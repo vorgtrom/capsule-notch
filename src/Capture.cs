@@ -104,26 +104,12 @@ namespace Capsule
 
             int contentRows = height - top - bottom;
             var shifts = new int[regions];
-            var ambiguous = new bool[regions];
-            for (int shift = 1; shift <= contentRows - MinimumOverlap; shift++)
-            {
-                int overlap = contentRows - shift;
-                for (int region = 0; region < regions; region++)
-                {
-                    if (ambiguous[region]) continue;
-                    bool match = true;
-                    for (int y = 0; y < overlap; y++)
-                        if (previousHashes[(top + shift + y) * regions + region] != hashes[(top + y) * regions + region])
-                        { match = false; break; }
-                    if (!match || !HasDetail(hashes, top, overlap, region)) continue;
-                    if (shifts[region] != 0) ambiguous[region] = true;
-                    else shifts[region] = shift;
-                }
-            }
+            for (int region = 0; region < regions; region++)
+                shifts[region] = FindOverlap(previousHashes, hashes, top, contentRows, regions, region);
             int matchedShift = 0, votes = 0;
             for (int region = 0; region < regions; region++)
             {
-                if (ambiguous[region] || shifts[region] == 0) continue;
+                if (shifts[region] <= 0) continue;
                 if (matchedShift != 0 && matchedShift != shifts[region])
                     return Refused("The page overlap is repeated or ambiguous.");
                 matchedShift = shifts[region];
@@ -224,12 +210,36 @@ namespace Capsule
             return true;
         }
 
-        bool HasDetail(ulong[] hashes, int start, int count, int region)
+        internal static int FindOverlap(IList<ulong> previousRows, IList<ulong> nextRows, int start, int count, int stride, int region)
         {
+            if (count <= MinimumOverlap) return 0;
             // shortcut: sparse overlaps stop; revise only with fixtures that prove a safer confidence rule.
             var distinct = new HashSet<ulong>();
-            for (int y = start; y < start + count && distinct.Count < 4; y++) distinct.Add(hashes[y * regions + region]);
-            return distinct.Count >= 4;
+            int detailRows = 0;
+            while (detailRows < count && distinct.Count < 4)
+                distinct.Add(nextRows[(start + detailRows++) * stride + region]);
+            if (distinct.Count < 4) return 0;
+
+            // Prefix links skip already compared rows, including long repeated runs.
+            var prefix = new int[count];
+            for (int y = 1; y < count; y++)
+            {
+                int length = prefix[y - 1];
+                ulong value = nextRows[(start + y) * stride + region];
+                while (length > 0 && value != nextRows[(start + length) * stride + region]) length = prefix[length - 1];
+                if (value == nextRows[(start + length) * stride + region]) length++;
+                prefix[y] = length;
+            }
+            int overlap = 0;
+            for (int y = 1; y < count; y++)
+            {
+                ulong value = previousRows[(start + y) * stride + region];
+                while (overlap > 0 && value != nextRows[(start + overlap) * stride + region]) overlap = prefix[overlap - 1];
+                if (value == nextRows[(start + overlap) * stride + region]) overlap++;
+            }
+            int minimum = Math.Max(MinimumOverlap, detailRows);
+            if (overlap < minimum) return 0;
+            return prefix[overlap - 1] >= minimum ? -1 : count - overlap;
         }
     }
 }
