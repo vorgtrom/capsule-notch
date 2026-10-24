@@ -75,10 +75,12 @@ namespace Capsule
             Content = root;
             Zoom = 1;
             RefreshImage();
-            scroll.SizeChanged += delegate { if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight); };
+            scroll.SizeChanged += delegate { ClearPendingCrop(); if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight); };
             scroll.ScrollChanged += delegate(object sender, ScrollChangedEventArgs e)
             {
-                if (fit && (e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0)) Fit(scroll.ViewportWidth, scroll.ViewportHeight);
+                if (e.ViewportWidthChange == 0 && e.ViewportHeightChange == 0) return;
+                ClearPendingCrop();
+                if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight);
             };
             scroll.PreviewMouseWheel += delegate(object sender, MouseWheelEventArgs e)
             {
@@ -94,10 +96,7 @@ namespace Capsule
                 Dispatcher.BeginInvoke(new Action(delegate
                 {
                     if (IsReleased) return;
-                    dragging = false;
-                    canvas.ReleaseMouseCapture();
-                    cropArea = new RECT();
-                    selection.Visibility = Visibility.Collapsed;
+                    ClearPendingCrop();
                     if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight);
                     else ResizeImage();
                 }));
@@ -142,15 +141,22 @@ namespace Capsule
         void ResizeImage()
         {
             if (IsReleased) return;
+            ClearPendingCrop();
             canvas.Width = image.Width = CurrentImage.Width * ViewScale;
             canvas.Height = image.Height = CurrentImage.Height * ViewScale;
+        }
+
+        void ClearPendingCrop()
+        {
+            dragging = false;
+            canvas.ReleaseMouseCapture();
+            cropArea = new RECT();
             selection.Visibility = Visibility.Collapsed;
         }
 
         void RefreshImage()
         {
             image.Source = Bitmap(CurrentImage);
-            cropArea = new RECT();
             ResizeImage();
             if (fit) Fit(scroll.ViewportWidth, scroll.ViewportHeight);
         }
@@ -295,14 +301,26 @@ namespace Capsule
             var dialog = new SaveFileDialog { Title = "Save capture", Filter = "PNG image (*.png)|*.png", DefaultExt = ".png", AddExtension = true,
                 OverwritePrompt = true, FileName = "Capture.png" };
             if (dialog.ShowDialog(this) != true) return false;
+            return SavePng(frame, dialog.FileName);
+        }
+
+        internal static bool SavePng(CaptureFrame frame, string path, Func<string, Stream> open = null)
+        {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(Bitmap(frame)));
-            // Encode before opening the destination, so an encoding failure cannot truncate an existing file.
-            using (var data = new MemoryStream())
+            string staging = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)), ".capsule-" + Guid.NewGuid().ToString("N") + ".tmp");
+            try
             {
-                encoder.Save(data);
-                using (var file = new FileStream(dialog.FileName, FileMode.Create, FileAccess.Write)) data.WriteTo(file);
+                using (var data = new MemoryStream())
+                {
+                    encoder.Save(data);
+                    using (var file = open == null ? new FileStream(staging, FileMode.CreateNew, FileAccess.Write) : open(staging)) data.WriteTo(file);
+                }
+                // Commit only after the PNG and staging stream close successfully.
+                if (File.Exists(path)) File.Replace(staging, path, null);
+                else File.Move(staging, path);
             }
+            finally { if (File.Exists(staging)) File.Delete(staging); }
             return true;
         }
 

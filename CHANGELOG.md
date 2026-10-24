@@ -7,6 +7,8 @@ download for each one. A release takes its notes from its section here.
 
 - Capture a visible rectangle or a scrolling webpage in Edge or Chrome. Open Capture from the panel, menu, or
   Ctrl+Alt+S. Inspect the preview, crop or reset it, then explicitly Copy or Save PNG.
+- Failed PNG writes preserve the existing destination. Zoom, Fit, viewport resizing, and display-scale changes
+  clear a pending crop so Enter cannot apply an invisible selection.
 - Scrolling is visible. Moving the pointer outside the rectangle pauses it. Stop keeps a partial image.
   Escape, Cancel, or a target change discards the session. A partial notice explains uncertain matching or limits.
 - Capture stays local and does not enable clipboard history. Retained clipboard images now have pixel, PNG size,

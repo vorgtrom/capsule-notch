@@ -19,6 +19,8 @@ namespace Capsule
             Selection();
             Crop();
             PreviewActions();
+            SaveFiles();
+            PendingCropChanges();
             InitialFit();
             DpiTransition();
             Progress();
@@ -157,6 +159,126 @@ namespace Capsule
                 TestRunner.Check(releasedCrop.Pixels == null && source.Pixels != null, "close disposes crop and preserves caller source");
                 TestRunner.Eq(writes, copied + saved, "closed preview cannot export");
                 closed.Close();
+            }
+        }
+
+        sealed class FailingSaveStream : FileStream
+        {
+            readonly bool failClose;
+            public bool Wrote;
+            public FailingSaveStream(string path, bool failClose) : base(path, FileMode.Create, FileAccess.Write)
+            { this.failClose = failClose; }
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                base.Write(buffer, offset, failClose ? count : Math.Min(count, 16));
+                Wrote = true;
+                if (!failClose) throw new IOException("Synthetic failure after a partial write.");
+            }
+            protected override void Dispose(bool disposing)
+            {
+                base.Dispose(disposing);
+                if (disposing && failClose) throw new IOException("Synthetic close failure.");
+            }
+        }
+
+        static void SaveFiles()
+        {
+            string directory = TestRunner.NewTempDir();
+            string path = Path.Combine(directory, "capture.png");
+            byte[] previous = new byte[] { 7, 11, 23, 47 };
+            try
+            {
+                using (CaptureFrame source = Image())
+                {
+                    foreach (string failure in new[] { "write", "close", "replace" })
+                    {
+                        File.WriteAllBytes(path, previous);
+                        FailingSaveStream stream = null;
+                        var preview = new CapturePreviewWindow(new CaptureResult { Image = source }, delegate { return false; },
+                            delegate(CaptureFrame frame)
+                            {
+                                return CapturePreviewWindow.SavePng(frame, path, failure == "replace" ? null :
+                                    new Func<string, Stream>(delegate(string staging) { return stream = new FailingSaveStream(staging, failure == "close"); }));
+                            });
+                        TestRunner.Check(File.ReadAllBytes(path).Length == previous.Length && Directory.GetFiles(directory).Length == 1,
+                            failure + " preview does not export before Save");
+                        using (var locked = failure == "replace" ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read) : null)
+                            preview.SaveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        TestRunner.Check(failure == "replace" || stream != null && stream.Wrote, failure + " reaches the file operation");
+                        TestRunner.Check(preview.StatusText.Contains("could not be saved") && !preview.IsReleased && Object.ReferenceEquals(source, preview.CurrentImage),
+                            failure + " failure keeps usable preview");
+                        TestRunner.Check(Convert.ToBase64String(previous) == Convert.ToBase64String(File.ReadAllBytes(path)),
+                            failure + " failure preserves existing destination bytes");
+                        TestRunner.Eq(1, Directory.GetFiles(directory).Length, failure + " failure removes staging file");
+                        preview.ApplyCrop(new RECT { Left = 10, Top = 20, Right = 30, Bottom = 50 });
+                        TestRunner.Eq(20, preview.CurrentImage.Width, failure + " failure leaves crop usable");
+                        preview.Close();
+                    }
+                    foreach (bool existing in new[] { true, false })
+                    {
+                        if (!existing) File.Delete(path);
+                        var preview = new CapturePreviewWindow(new CaptureResult { Image = source }, delegate { return false; },
+                            delegate(CaptureFrame frame) { return CapturePreviewWindow.SavePng(frame, path); });
+                        preview.SaveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        TestRunner.Eq("Saved PNG.", preview.StatusText, "explicit Save succeeds for " + (existing ? "existing" : "new") + " destination");
+                        using (var file = File.OpenRead(path))
+                        {
+                            var png = new System.Windows.Media.Imaging.PngBitmapDecoder(file, System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                            byte[] actual = new byte[source.Pixels.Length];
+                            png.Frames[0].CopyPixels(actual, source.Width * 4, 0);
+                            TestRunner.Check(png.Frames[0].PixelWidth == source.Width && png.Frames[0].PixelHeight == source.Height &&
+                                Convert.ToBase64String(actual) == Convert.ToBase64String(source.Pixels), "saved PNG retains exact source pixels");
+                        }
+                        TestRunner.Eq(1, Directory.GetFiles(directory).Length, "successful Save leaves no staging file");
+                        preview.Close();
+                    }
+                }
+            }
+            finally { Directory.Delete(directory, true); }
+        }
+
+        static void PendingCropChanges()
+        {
+            using (CaptureFrame source = Image())
+            {
+                int exports = 0;
+                var preview = new CapturePreviewWindow(new CaptureResult { Image = source }, delegate { exports++; return false; }, delegate { exports++; return false; });
+                var content = (DockPanel)preview.Content;
+                var scroll = (ScrollViewer)content.Children[1];
+                var canvas = (Canvas)scroll.Content;
+                var selection = (System.Windows.Shapes.Rectangle)canvas.Children[1];
+                preview.Content = null;
+                var host = new Grid { Width = 920, Height = 650 };
+                host.Children.Add(content);
+                Action layout = delegate
+                {
+                    host.Measure(new Size(host.Width, host.Height));
+                    host.Arrange(new Rect(0, 0, host.Width, host.Height));
+                    host.UpdateLayout();
+                    Dispatcher.CurrentDispatcher.Invoke(new Action(delegate { }), DispatcherPriority.ContextIdle);
+                };
+                layout();
+                foreach (string change in new[] { "Zoom in", "Zoom out", "100%", "Fit", "keyboard zoom", "Fit viewport", "fixed viewport" })
+                {
+                    if (change == "Fit viewport") preview.Fit(scroll.ViewportWidth, scroll.ViewportHeight);
+                    if (change == "fixed viewport") preview.SetZoom(1);
+                    foreach (Button button in preview.ActionButtons)
+                        if (AutomationProperties.GetName(button) == "Crop") button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    typeof(CapturePreviewWindow).GetField("cropArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                        .SetValue(preview, new RECT { Left = 10, Top = 20, Right = 30, Bottom = 50 });
+                    selection.Visibility = Visibility.Visible;
+                    if (change.Contains("viewport")) { host.Height -= 20; layout(); }
+                    else if (change == "keyboard zoom") preview.HandleKey(Key.OemPlus);
+                    else foreach (Button button in preview.ActionButtons)
+                        if (AutomationProperties.GetName(button) == change) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    TestRunner.Eq(Visibility.Collapsed, selection.Visibility, change + " cancels visible pending crop");
+                    preview.HandleKey(Key.Enter);
+                    TestRunner.Check(Object.ReferenceEquals(source, preview.CurrentImage), change + " cannot apply an invisible crop");
+                    TestRunner.Eq(0, exports, change + " does not export");
+                    preview.ResetCrop();
+                }
+                preview.Close();
             }
         }
 

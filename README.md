@@ -120,6 +120,8 @@ Scrolling results carry a **Partial capture** notice. A page that stops moving m
 blocked scrolling. Capsule cannot prove which. Repeated or blank sections, changing content, an uncertain seam,
 failure to reach the top, and capture limits can also stop capture. Sticky bars and lazy content can affect matching.
 Check the notice and inspect seams at **100%** before using the image. Escape cancels a pending crop first in preview.
+Zoom, Fit, viewport resizing, and display-scale changes cancel a pending crop. Draw it again before pressing Enter.
+Save PNG replaces an existing file only after the new PNG finishes writing and closing in the same folder.
 
 One session can run at a time. Output is limited to **32 million pixels**, **32,000 rows**, **120 accepted frames**,
 and **90 seconds**, including pauses. Selection stays within one physical monitor. Scrolling is vertical at the
