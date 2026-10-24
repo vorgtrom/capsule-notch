@@ -20,6 +20,7 @@ namespace Capsule
             Lifecycle();
             Disposal();
             RetakeAndLateResult();
+            EscapeCancels();
             Shortcuts();
             SelectionCancellation();
             ReadHooks();
@@ -112,6 +113,29 @@ namespace Capsule
             CaptureResult abandoned = Result(); late.SetResult(abandoned); Pump();
             TestRunner.Check(shown == 0 && abandoned.Image.Pixels == null && !c.Busy, "late capture result after disposal is discarded without a preview");
             TestRunner.Check(visibility.SequenceEqual(new[] { true, false }), "late result cannot restore visibility twice");
+        }
+        static void EscapeCancels()
+        {
+            var visibility = new List<bool>();
+            var c = Coordinator(visibility);
+            Action escape = null;
+            c.WatchEscape = pressed => { escape = pressed; return null; };
+            var running = new TaskCompletionSource<CaptureResult>();
+            int shown = 0;
+            c.ShowWindow = delegate { shown++; };
+            c.Capture = delegate(CaptureRequest request, CancellationToken token)
+            {
+                c.CancelOnEscape();
+                token.Register(delegate { running.TrySetCanceled(); });
+                return running.Task;
+            };
+            c.Open(); Pump();
+            TestRunner.Check(escape != null && c.Busy, "a scrolling capture listens for Esc");
+            if (escape != null) escape();
+            Pump();
+            TestRunner.Check(running.Task.IsCanceled && !c.Busy && shown == 0, "a quick Esc press cancels the capture, with no preview");
+            TestRunner.Check(visibility.SequenceEqual(new[] { true, false }), "Esc brings the capsule back");
+            c.Dispose();
         }
         static void Shortcuts()
         {

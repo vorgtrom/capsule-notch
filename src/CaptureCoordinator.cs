@@ -25,6 +25,7 @@ namespace Capsule
         internal Func<CaptureResult, CapturePreviewWindow> CreatePreview;
         internal Action<Window> ShowWindow;
         internal Action<string> ShowError;
+        internal Func<Action, IDisposable> WatchEscape;   // calls its action when Esc is pressed, until disposed
         internal Action WaitForComposition = delegate
         {
             if (DwmFlush() != 0) throw new InvalidOperationException("The desktop composition did not finish.");
@@ -53,6 +54,21 @@ namespace Capsule
             CreatePreview = r => new CapturePreviewWindow(r);
             ShowWindow = w => w.Show();
             ShowError = text => MessageBox.Show(text, "Capture", MessageBoxButton.OK, MessageBoxImage.Information);
+            WatchEscape = pressed =>
+            {
+                var escape = new GlobalHotkey();
+                escape.Pressed += pressed;
+                if (escape.Register(0, 0x1B)) return escape;
+                escape.Dispose();   // another app has Esc: the session still sees it held down
+                return null;
+            };
+        }
+
+        // Esc cancels a scrolling capture. The session only sees Esc while it's held down, which misses a quick tap, so
+        // for the capture's length Esc is a shortcut of Capsule's (and the page doesn't get it).
+        internal IDisposable CancelOnEscape()
+        {
+            return WatchEscape(delegate { if (active != null) active.Cancel(); });
         }
 
         public bool RegisterShortcut(string text)
@@ -139,6 +155,7 @@ namespace Capsule
                 session.Progress += progress.Update;
                 ShowWindow(progress);
             }
+            IDisposable escape = request.Mode == CaptureMode.Scrolling ? CancelOnEscape() : null;
             CaptureProgressWindow display = progress;
             EventHandler closed = delegate { if (active != null) active.Cancel(); };
             if (display != null) display.Closed += closed;
@@ -146,6 +163,7 @@ namespace Capsule
             try { return await Task.Run(() => session.RunAsync(request, cancel)); }
             finally
             {
+                if (escape != null) escape.Dispose();
                 if (display != null)
                 {
                     display.Closed -= closed;

@@ -62,6 +62,19 @@ namespace Capsule
             window.ShowInTaskbar = false;
             window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
+
+        // A window that opens while another app is in front (from the shortcut, or after a scrolling capture left the
+        // browser there): above everything when it appears, then given the keyboard. stayOnTop keeps it above other
+        // windows until it closes.
+        internal static void Forward(Window window, bool stayOnTop)
+        {
+            window.Topmost = true;
+            window.ContentRendered += delegate
+            {
+                window.Activate();
+                if (!stayOnTop) window.Topmost = false;
+            };
+        }
     }
 
     public sealed class CaptureChooser : Window
@@ -73,6 +86,7 @@ namespace Capsule
         public CaptureChooser()
         {
             CaptureControls.Window(this, "Capture", 360, 260);
+            CaptureControls.Forward(this, true);
             ResizeMode = ResizeMode.NoResize;
             var panel = new StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(CaptureControls.Text("Choose a capture mode", 18));

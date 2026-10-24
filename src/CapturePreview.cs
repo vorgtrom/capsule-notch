@@ -46,6 +46,7 @@ namespace Capsule
             this.copy = copy ?? CopyDefault;
             this.save = save ?? SaveDefault;
             CaptureControls.Window(this, "Capture preview", 960, 720);
+            CaptureControls.Forward(this, false);
             MinWidth = 640;
             MinHeight = 400;
             var root = new DockPanel { Margin = new Thickness(12), LastChildFill = true };

@@ -39,6 +39,7 @@ namespace Capsule
             foreach (Key key in new[] { Key.S, Key.W, Key.Escape })
             {
                 var chooser = new CaptureChooser();
+                TestRunner.Check(chooser.Topmost, "the chooser opens above the app in front (the shortcut opens it from the background)");
                 int chosen = 0, cancelled = 0;
                 CaptureMode mode = CaptureMode.Screenshot;
                 chooser.Chosen += delegate(CaptureMode value) { chosen++; mode = value; };
