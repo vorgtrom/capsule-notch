@@ -18,7 +18,7 @@ namespace Capsule
     public sealed class Controller : IDisposable
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
-        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11, CmdFocus = 12;
+        const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11, CmdFocus = 12, CmdCapture = 13;
 
         readonly Application app;
         Config config;
@@ -38,6 +38,8 @@ namespace Capsule
         HoverCard card;
         PanelWindow panel;
         GlobalHotkey shortcut;
+        CaptureCoordinator capture;
+        bool captureHidden;
         Tray tray;
         MenuOwner menuOwner;
         PromptBroker prompts;        // the requests held, and their rules
@@ -142,9 +144,9 @@ namespace Capsule
 
             // Capsule steps aside while the Claude app's window is in front, and while the capsule is hidden (turned off,
             // or under a fullscreen app): the card can't be seen then, and holding would only delay the app's own prompt.
-            prompts = new PromptBroker(() => !config.RingOn("claude") || !notch.IsVisible || ClaudeApp.IsInFront());
+            prompts = new PromptBroker(() => captureHidden || !config.RingOn("claude") || !notch.IsVisible || ClaudeApp.IsInFront());
             prompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
-            codexPrompts = new PromptBroker(() => !config.RingOn("codex") || !notch.IsVisible || CodexApp.IsInFront());
+            codexPrompts = new PromptBroker(() => captureHidden || !config.RingOn("codex") || !notch.IsVisible || CodexApp.IsInFront());
             codexPrompts.Changed += delegate { Guard("prompts", OnPromptsChanged); };
 
             menuOwner = new MenuOwner();
@@ -191,11 +193,13 @@ namespace Capsule
             panel.View.SettingsClicked += delegate
             {
                 panel.View.ShowRings(config);
-                panel.View.ShowSettings(SecretStore.Exists(Paths.NotionSecretFile), config.NotionDatabase, config.Hotkey);
+                panel.View.ShowSettings(SecretStore.Exists(Paths.NotionSecretFile), config.NotionDatabase, config.Hotkey, config.CaptureHotkey, capture.ShortcutRegistered);
                 panel.View.ShowGoogle(calendar.Settings());
             };
             panel.View.NotionSaved += OnNotionSaved;
             panel.View.ShortcutChosen += OnShortcutChosen;
+            panel.View.CaptureClicked += delegate { capture.Open(); };
+            panel.View.CaptureShortcutChosen += OnCaptureShortcutChosen;
             panel.View.GoogleSignInClicked += delegate(string id, string secret) { Guard("calendar sign-in", delegate { calendar.SignIn(id, secret); }); };
             panel.View.GoogleSignInCancelled += delegate
             {
@@ -229,6 +233,12 @@ namespace Capsule
             shortcut = new GlobalHotkey();
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
             RegisterShortcut(config.Hotkey);
+            capture = new CaptureCoordinator(CaptureVisibilityChanged);
+            if (!capture.RegisterShortcut(config.CaptureHotkey))
+            {
+                Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
+                tray.Balloon("Capsule", config.CaptureHotkey + " is already used by another app. Pick another capture shortcut in Capsule's settings (⚙ in the panel).");
+            }
             if (sessions.HooksConnected && HookSetup.NeedsUpdate(Paths.ClaudeSettings))
             {
                 // Its permission hook is stopped after 5 s: a request would leave the card before it could be answered.
@@ -737,14 +747,16 @@ namespace Capsule
 
         // The clipboard changed: what is on it now joins the history, unless it is private or was put back from the tile.
         // Nothing about it is logged but the type of a failure.
-        void ReadClipboard()
+        void ReadClipboard() { ReadClipboard(ClipboardHistory.Read); }
+
+        internal void ReadClipboard(Func<long, ClipItem> read)
         {
             if (linkWatch && CatchCalendarLink()) return;
             if (!config.ClipboardHistory) return;
             long now = Clock.NowMs();
             if (now < clipIgnoreUntil) return;
             ClipItem item;
-            try { item = ClipboardHistory.Read(now); }
+            try { item = read(now); }
             catch (Exception e)
             {
                 // Another app still holds it: try again a little later, a few times.
@@ -831,6 +843,7 @@ namespace Capsule
         // Beside the capsule, wherever it is (even hidden under a fullscreen app, for the shortcut).
         void OpenPanel(bool byShortcut)
         {
+            if (captureHidden) return;
             HideCard();
             RECT capsule;
             Native.GetWindowRect(notch.Handle, out capsule);
@@ -1153,6 +1166,17 @@ namespace Capsule
             panel.View.ShowShortcutResult(false, config.Hotkey, text + " is used by another app. Try another.");
         }
 
+        void OnCaptureShortcutChosen(string text)
+        {
+            if (capture.RegisterShortcut(text))
+            {
+                config.CaptureHotkey = text;
+                bool saved = config.Save(Paths.ConfigFile);
+                panel.View.ShowCaptureShortcutResult(saved, text, saved ? "Saved" : "Works now, but could not save the shortcut.");
+            }
+            else panel.View.ShowCaptureShortcutResult(false, config.CaptureHotkey, text + " is unavailable. Try another shortcut.");
+        }
+
         // The configured shortcut, registered with Windows. A balloon says so when another app has it.
         bool RegisterShortcut(string text)
         {
@@ -1327,6 +1351,7 @@ namespace Capsule
             items.AddRange(new List<MenuItemSpec>
             {
                 new MenuItemSpec { Id = CmdRefresh, Text = "Refresh now" },
+                new MenuItemSpec { Id = CmdCapture, Text = "Capture..." },
                 new MenuItemSpec { Id = CmdShow, Text = "Show notch", Checked = config.ShowNotch },
                 new MenuItemSpec { Separator = true },
                 new MenuItemSpec { Id = CmdHooks, Text = HookSetup.MenuText(sessions.HooksConnected, reconnect) },
@@ -1346,6 +1371,9 @@ namespace Capsule
             finally { menuOpen = false; }
             switch (choice)
             {
+                case CmdCapture:
+                    capture.Open();
+                    break;
                 case CmdRefresh:
                     RefreshAll();
                     break;
@@ -1455,9 +1483,25 @@ namespace Capsule
             ApplyVisibility();
         }
 
+        internal bool CapsuleVisible { get { return config.ShowNotch && !fullscreen && !captureHidden; } }
+
+        internal void CaptureVisibilityChanged(bool hidden)
+        {
+            captureHidden = hidden;
+            if (hidden)
+            {
+                panel.Dismiss();
+                panel.Hide();
+                HideCard();
+                prompts.ReleaseAll();
+                codexPrompts.ReleaseAll();
+            }
+            if (!disposed) ApplyVisibility();
+        }
+
         void ApplyVisibility()
         {
-            bool visible = config.ShowNotch && !fullscreen;
+            bool visible = CapsuleVisible;
             if (visible && !notch.IsVisible)
             {
                 notch.Show();
@@ -1468,7 +1512,7 @@ namespace Capsule
             {
                 HideCard();
                 notch.Hide();
-                Log.Info("notch hidden (" + (config.ShowNotch ? "fullscreen" : "turned off") + ")");
+                Log.Info("notch hidden (" + (captureHidden ? "capture" : config.ShowNotch ? "fullscreen" : "turned off") + ")");
             }
         }
 
@@ -1567,6 +1611,7 @@ namespace Capsule
             if (disposed) return;
             disposed = true;
             foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd }) if (timer != null) timer.Stop();
+            if (capture != null) capture.Dispose();
             if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening

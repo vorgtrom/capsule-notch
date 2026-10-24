@@ -47,6 +47,7 @@ namespace Capsule
             SaveUsage(dir, "", en);
             SaveMusic(dir, "", claude, codex, now, en);
             SaveFocusClipboard(dir, "", claude, codex, now, en);
+            SaveCapture(dir, "");
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
@@ -57,6 +58,7 @@ namespace Capsule
             SaveUsage(dir, "-light", en);
             SaveMusic(dir, "-light", claude, codex, now, en);
             SaveFocusClipboard(dir, "-light", claude, codex, now, en);
+            SaveCapture(dir, "-light");
             Theme.Use(Theme.For(false, false));
         }
 
@@ -475,6 +477,47 @@ namespace Capsule
             SavePng(host, Path.Combine(dir, name));
         }
 
+        // Synthetic pixels only. These are the actual controls, rendered without opening a desktop window.
+        static void SaveCapture(string dir, string suffix)
+        {
+            const int width = 640, height = 1300;
+            byte[] pixels = new byte[width * height * 4];
+            for (int y = 0; y < height; y++) for (int x = 0; x < width; x++)
+            {
+                int p = (y * width + x) * 4;
+                bool header = y < 120, block = x > 40 && x < 600 && y % 180 > 40 && y % 180 < 130;
+                pixels[p] = (byte)(header ? 100 : block ? 215 : 242);
+                pixels[p + 1] = (byte)(header ? 70 : block ? 223 : 242);
+                pixels[p + 2] = (byte)(header ? 45 : block ? 228 : 242);
+                pixels[p + 3] = 255;
+            }
+            using (var frame = new CaptureFrame(width, height, pixels))
+            {
+                var preview = new CapturePreviewWindow(new CaptureResult { Image = frame, Partial = true, Notice = "Capture stopped. The image contains the verified portion." }, delegate { return false; }, delegate { return false; });
+                SaveCaptureContent(preview, dir, "capture-preview" + suffix + ".png", 920, 650);
+                var chooser = new CaptureChooser();
+                SaveCaptureContent(chooser, dir, "capture-chooser" + suffix + ".png", 340, 210);
+                var progress = new CaptureProgressWindow();
+                progress.Update(new CaptureProgress { FrameCount = 7, Rows = 2400, Paused = true, Status = "Move the pointer inside the selected area." });
+                SaveCaptureContent(progress, dir, "capture-progress" + suffix + ".png", 360, 130);
+            }
+        }
+
+        static void SaveCaptureContent(Window window, string dir, string name, double width, double height)
+        {
+            var content = (FrameworkElement)window.Content;
+            window.Content = null;
+            var host = new Border { Width = width, Height = height, Background = window.Background, Child = content };
+            try
+            {
+                host.Measure(new Size(width, height));
+                host.Arrange(new Rect(0, 0, width, height));
+                host.UpdateLayout();
+                window.Dispatcher.Invoke(new Action(delegate { }), System.Windows.Threading.DispatcherPriority.ContextIdle);
+                SavePng(host, Path.Combine(dir, name));
+            }
+            finally { window.Close(); }
+        }
         static void SavePng(FrameworkElement element, string path)
         {
             element.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
