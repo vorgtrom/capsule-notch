@@ -68,7 +68,20 @@ namespace Capsule
             RECT bounds;
             if (!Native.GetWindowRect(request.Target, out bounds)) return false;
             return WindowMatches(request, IsWindow(request.Target), IsWindowVisible(request.Target), IsIconic(request.Target),
-                Native.Foreground(), bounds, BrowserWindow(request.Target));
+                Native.Foreground(), bounds, SameBrowser(request, ProcessOf(request.Target)));
+        }
+
+        // Checked many times a second while scrolling, so only the window's process id is read and compared with the one
+        // found when the request was made: looking a process up by id walks every process on the PC.
+        internal static bool SameBrowser(CaptureRequest request, uint process)
+        {
+            return request.Process != 0 && process == request.Process;
+        }
+
+        static uint ProcessOf(IntPtr window)
+        {
+            uint process;
+            return GetWindowThreadProcessId(window, out process) == 0 ? 0 : process;
         }
 
         internal static bool WindowMatches(CaptureRequest request, bool exists, bool visible, bool minimized, IntPtr foreground, RECT bounds, bool browser)
@@ -79,10 +92,9 @@ namespace Capsule
                 Contains(bounds, request.Area);
         }
 
-        static bool BrowserWindow(IntPtr window)
+        static bool BrowserProcess(uint process)
         {
-            uint process;
-            if (GetWindowThreadProcessId(window, out process) == 0 || process == 0) return false;
+            if (process == 0) return false;
             try
             {
                 using (Process target = Process.GetProcessById((int)process))
@@ -102,10 +114,11 @@ namespace Capsule
             request = null;
             if (!OrdinaryDesktop() || !SelectionValid(area) || !Contains(area, selectedPoint)) return false;
             IntPtr window = GetAncestor(WindowFromPoint(selectedPoint), 2);
+            uint process = ProcessOf(window);
             RECT bounds;
-            if (window == IntPtr.Zero || !IsWindowVisible(window) || IsIconic(window) || !BrowserWindow(window) ||
+            if (window == IntPtr.Zero || !IsWindowVisible(window) || IsIconic(window) || !BrowserProcess(process) ||
                 !Native.GetWindowRect(window, out bounds) || !Contains(bounds, area) || !Native.GiveForegroundTo(window)) return false;
-            var selected = new CaptureRequest { Mode = CaptureMode.Scrolling, Area = area, Target = window, TargetBounds = bounds };
+            var selected = new CaptureRequest { Mode = CaptureMode.Scrolling, Area = area, Target = window, TargetBounds = bounds, Process = process };
             if (!new CaptureDesktop().TargetValid(selected)) return false;
             request = selected;
             return true;
@@ -132,7 +145,14 @@ namespace Capsule
         public bool PointerInside(RECT area)
         {
             POINT point;
-            return Native.GetCursorPos(out point) && Contains(area, point);
+            return Native.GetCursorPos(out point) && OnArea(area, point);
+        }
+
+        // Inside the area or on its right or bottom edge: a drag ends with the pointer just past the last pixel it
+        // selected, and a scrolling capture shouldn't start paused because of that.
+        internal static bool OnArea(RECT area, POINT point)
+        {
+            return point.X >= area.Left && point.X <= area.Right && point.Y >= area.Top && point.Y <= area.Bottom;
         }
 
         internal Action BeforeRead, AfterRead;

@@ -87,6 +87,22 @@ namespace Capsule
             }
         }
 
+        // Passes everything to the fake desktop, and reports the process id each target check is asked about.
+        sealed class ProcessCheck : ICaptureDesktop
+        {
+            readonly Desktop inner;
+            readonly Action<uint> seen;
+            public ProcessCheck(Desktop inner, Action<uint> seen) { this.inner = inner; this.seen = seen; }
+            public long NowMs { get { return inner.NowMs; } }
+            public bool EscapePressed { get { return inner.EscapePressed; } }
+            public bool ModifiersPressed { get { return inner.ModifiersPressed; } }
+            public bool TargetValid(CaptureRequest request) { seen(request.Process); return inner.TargetValid(request); }
+            public bool PointerInside(RECT area) { return inner.PointerInside(area); }
+            public CaptureFrame ReadFrame(RECT area) { return inner.ReadFrame(area); }
+            public bool Scroll(CaptureRequest request, int direction) { return inner.Scroll(request, direction); }
+            public Task WaitAsync(int milliseconds, CancellationToken cancel) { return inner.WaitAsync(milliseconds, cancel); }
+        }
+
         static CaptureResult Run(Desktop desktop, CaptureRequest request = null)
         {
             return new CaptureSession(desktop).RunAsync(request ?? Request(CaptureMode.Scrolling), CancellationToken.None).GetAwaiter().GetResult();
@@ -320,6 +336,22 @@ namespace Capsule
             changed = request.TargetBounds; changed.Right++;
             TestRunner.Check(!CaptureDesktop.WindowMatches(request, true, true, false, request.Target, changed, true), "window resize invalidates target");
             TestRunner.Check(!CaptureDesktop.WindowMatches(request, true, true, false, request.Target, request.TargetBounds, false), "non-browser process is ineligible");
+            var browser = new CaptureRequest { Process = 4321 };
+            TestRunner.Check(CaptureDesktop.SameBrowser(browser, 4321), "the window still belongs to the browser found at the start");
+            TestRunner.Check(!CaptureDesktop.SameBrowser(browser, 99) && !CaptureDesktop.SameBrowser(browser, 0), "another process, or none, is not the browser");
+            TestRunner.Check(!CaptureDesktop.SameBrowser(new CaptureRequest(), 0), "a request without a browser process matches nothing");
+            var dragged = new RECT { Left = 10, Top = 20, Right = 110, Bottom = 220 };
+            TestRunner.Check(CaptureDesktop.OnArea(dragged, new POINT { X = 110, Y = 220 }), "the pointer where the drag ended counts as inside");
+            TestRunner.Check(CaptureDesktop.OnArea(dragged, new POINT { X = 10, Y = 20 }) && CaptureDesktop.OnArea(dragged, new POINT { X = 60, Y = 100 }), "the area's corner and middle are inside");
+            TestRunner.Check(!CaptureDesktop.OnArea(dragged, new POINT { X = 111, Y = 100 }) && !CaptureDesktop.OnArea(dragged, new POINT { X = 60, Y = 221 }) &&
+                !CaptureDesktop.OnArea(dragged, new POINT { X = 9, Y = 100 }), "a pixel past any edge is outside");
+            uint seen = 0;
+            var tracked = new Desktop { Bottom = 0 };
+            CaptureRequest withProcess = Request(CaptureMode.Scrolling);
+            withProcess.Process = 4321;
+            CaptureSession checker = new CaptureSession(new ProcessCheck(tracked, p => seen = p));
+            using (checker.RunAsync(withProcess, System.Threading.CancellationToken.None).GetAwaiter().GetResult().Image) { }
+            TestRunner.Eq(4321u, seen, "the session checks the target with the browser process it was given");
         }
 
         static void BoundaryChanges()

@@ -5,14 +5,12 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
-- Capture a visible rectangle or a scrolling webpage in Edge or Chrome. Open Capture from the panel, menu, or
-  Ctrl+Alt+S. Inspect the preview, crop or reset it, then explicitly Copy or Save PNG.
-- Failed PNG writes preserve the existing destination. Zoom, Fit, viewport resizing, and display-scale changes
-  clear a pending crop so Enter cannot apply an invisible selection.
-- Scrolling is visible. Moving the pointer outside the rectangle pauses it. Stop keeps a partial image.
-  Escape, Cancel, or a target change discards the session. A partial notice explains uncertain matching or limits.
-- Capture stays local and does not enable clipboard history. Retained clipboard images now have pixel, PNG size,
-  total size, and count limits. Native browser and display validation remains limited.
+- **Screenshots and whole webpages.** Capture an area of the screen, or a whole scrolling page in Chrome or Edge,
+  from the panel's camera button, Capsule's menu or **Ctrl+Alt+S**. Check and crop it in the preview, then
+  **Copy** or **Save PNG**. A fixed header or footer appears once, and a page you're far down is captured from where
+  it is. Move the pointer off the page to pause; **Stop** keeps what's captured so far.
+- **Images in the clipboard history stay small.** Up to 5 images and 32 MiB in all; a copied image over 16 million
+  pixels isn't kept. Thumbnails no longer hold on to the full-size image.
 
 ## v1.7.2
 

@@ -234,7 +234,11 @@ namespace Capsule
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
-            capture.RegisterShortcut(config.CaptureHotkey);
+            if (!capture.RegisterShortcut(config.CaptureHotkey))
+            {
+                Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
+                tray.Balloon("Capsule", config.CaptureHotkey + " is already used by another app. Pick another capture shortcut in Capsule's settings (⚙ in the panel).");
+            }
             if (sessions.HooksConnected && HookSetup.NeedsUpdate(Paths.ClaudeSettings))
             {
                 // Its permission hook is stopped after 5 s: a request would leave the card before it could be answered.

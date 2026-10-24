@@ -9,10 +9,6 @@ namespace Capsule
         public const int MaxRows = 32000;
         public const int MaxFrames = 120;
         public const int MaxDurationMilliseconds = 90000;
-        public const int ClipboardMaxPixels = 16000000;
-        public const int ClipboardMaxPngBytes = 8 * 1024 * 1024;
-        public const int ClipboardTotalPngBytes = 32 * 1024 * 1024;
-        public const int ClipboardMaxImages = 5;
     }
 
     public sealed class CaptureFrame : IDisposable

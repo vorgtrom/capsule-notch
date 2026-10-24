@@ -12,6 +12,7 @@ namespace Capsule
         public RECT Area;
         public IntPtr Target;
         public RECT TargetBounds;
+        public uint Process;   // the browser's process id, found once when the request is made
     }
 
     public sealed class CaptureResult
@@ -73,7 +74,7 @@ namespace Capsule
                 throw new ArgumentException("The selected area exceeds the capture limits.", "request");
             if (Interlocked.CompareExchange(ref running, 1, 0) != 0)
                 throw new InvalidOperationException("A capture is already running.");
-            this.request = new CaptureRequest { Mode = request.Mode, Area = request.Area, Target = request.Target, TargetBounds = request.TargetBounds };
+            this.request = new CaptureRequest { Mode = request.Mode, Area = request.Area, Target = request.Target, TargetBounds = request.TargetBounds, Process = request.Process };
             this.cancel = cancel;
             started = desktop.NowMs;
             stopped = frameCount = rows = 0;
