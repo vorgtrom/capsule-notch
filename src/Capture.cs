@@ -67,7 +67,9 @@ namespace Capsule
         readonly int width, height, regions;
         CaptureFrame previous;
         ulong[] previousHashes;
-        int rows, header, footer;
+        int rows;       // the image's height so far: the parts, then previous's rows from covered down
+        int covered;    // previous's rows above this are in the parts; the rest are added by Build (or the next frame)
+        int header, footer;   // the smallest fixed bands seen so far
         bool bandsKnown, closed;
 
         // Takes ownership of first. A successful Append transfers its input and releases older full buffers.
@@ -80,6 +82,7 @@ namespace Capsule
             previousHashes = HashRows(first);
             previous = first;
             rows = height;
+            covered = height;
             parts.Add(new Part { Frame = first, Start = 0, Rows = height });
         }
 
@@ -91,57 +94,84 @@ namespace Capsule
                 return Refused("The capture dimensions changed.");
 
             ulong[] hashes = HashRows(next);
+            // Rows that are the same at the same place in both frames: a fixed header or footer, or plain rows that just
+            // happen to line up. A band can only shrink: a real fixed bar is at least as tall in every pair, so a
+            // coincidence that made one pair's band taller is dropped by the next pair, not held against it, and a
+            // later coincidence can't grow the band and squeeze the rows the join is matched on.
             int top = 0, bottom = 0;
             while (top < height && SameRow(next, hashes, top, top)) top++;
             if (top == height) return new StitchResult(0, true, true, "The page did not change.");
             while (bottom < height - top && SameRow(next, hashes, height - bottom - 1, height - bottom - 1)) bottom++;
             if (bandsKnown)
             {
-                if (top < header || bottom < footer) return Refused("A fixed page band changed.");
-                top = header;
-                bottom = footer;
+                top = Math.Min(top, header);
+                bottom = Math.Min(bottom, footer);
             }
 
             int contentRows = height - top - bottom;
             var shifts = new int[regions];
             for (int region = 0; region < regions; region++)
                 shifts[region] = FindOverlap(previousHashes, hashes, top, contentRows, regions, region);
-            int matchedShift = 0, votes = 0;
+            int matchedShift = 0, votes = 0, plain = 0;
             for (int region = 0; region < regions; region++)
             {
-                if (shifts[region] <= 0) continue;
+                if (shifts[region] <= 0)
+                {
+                    if (Plain(previousHashes, top, contentRows, regions, region) && Plain(hashes, top, contentRows, regions, region)) plain++;
+                    continue;
+                }
                 if (matchedShift != 0 && matchedShift != shifts[region])
                     return Refused("The page overlap is repeated or ambiguous.");
                 matchedShift = shifts[region];
                 votes++;
             }
-            if (votes < Math.Min(2, regions)) return Refused("The page overlap could not be verified.");
+            // Two regions must agree, or one when the others are plain in both frames, like the blank margins beside a
+            // centred page: they can't confirm a join, and the full rows below still have to match.
+            if (votes == 0 || (votes < Math.Min(2, regions) && votes + plain < regions)) return Refused("The page overlap could not be verified.");
             for (int y = 0; y < contentRows - matchedShift; y++)
                 if (!SameRow(next, hashes, top + matchedShift + y, top + y))
                     return Refused("The page overlap changed.");
             if (parts.Count >= CaptureLimits.MaxFrames) return Refused("The capture reached the frame limit.");
-            long nextRows = (long)rows + matchedShift;
+
+            // The first frame's bottom band stays out of the image for now: it may be a fixed footer, which Build adds
+            // once at the end, and if it was only plain rows the next frame brings them back.
+            Part last = parts[parts.Count - 1];
+            int keepRows = parts.Count == 1 ? Math.Min(last.Rows, height - bottom) : last.Rows;
+            int keptOf = parts.Count == 1 ? keepRows : covered;   // previous's rows now in the image
+            int from = keptOf - matchedShift;                      // next's first row not yet in the image
+            int end = Math.Max(from, height - bottom);
+            if (from < top) return Refused("The page overlap could not be verified.");
+            long partRows = (long)rows - (height - covered) - (last.Rows - keepRows) + (end - from);
+            long nextRows = partRows + height - end;
             if (nextRows > CaptureLimits.MaxRows) return Refused("The capture reached the row limit.");
             if (nextRows * width > CaptureLimits.MaxPixels) return Refused("The capture reached the pixel limit.");
 
-            Part last = parts[parts.Count - 1];
-            int keepRows = last.Rows - (bandsKnown ? 0 : bottom);
-            byte[] retained = new byte[keepRows * width * 4];
-            Buffer.BlockCopy(last.Frame.Pixels, last.Start * width * 4, retained, 0, retained.Length);
-            var strip = new CaptureFrame(width, keepRows, retained);
-            try { parts.Add(new Part { Frame = next, Start = height - bottom - matchedShift, Rows = matchedShift }); }
-            catch { strip.Dispose(); throw; }
+            CaptureFrame strip = null;
+            if (keepRows > 0)
+            {
+                byte[] retained = new byte[keepRows * width * 4];
+                Buffer.BlockCopy(last.Frame.Pixels, last.Start * width * 4, retained, 0, retained.Length);
+                strip = new CaptureFrame(width, keepRows, retained);
+            }
+            try { parts.Add(new Part { Frame = next, Start = from, Rows = end - from }); }
+            catch { if (strip != null) strip.Dispose(); throw; }
             last.Frame.Dispose();
-            last.Frame = strip;
-            last.Start = 0;
-            last.Rows = keepRows;
+            if (strip == null) parts.Remove(last);   // a frame that added no rows
+            else
+            {
+                last.Frame = strip;
+                last.Start = 0;
+                last.Rows = keepRows;
+            }
+            int added = (int)nextRows - rows;
             header = top;
             footer = bottom;
             bandsKnown = true;
             previous = next;
             previousHashes = hashes;
+            covered = end;
             rows = (int)nextRows;
-            return new StitchResult(matchedShift, true, false, "");
+            return new StitchResult(added, true, false, "");
         }
 
         // Returns an independent buffer owned by the caller, then releases all accepted sources.
@@ -156,8 +186,8 @@ namespace Capsule
                 Buffer.BlockCopy(part.Frame.Pixels, part.Start * width * 4, pixels, offset, bytes);
                 offset += bytes;
             }
-            if (footer > 0)
-                Buffer.BlockCopy(previous.Pixels, (height - footer) * width * 4, pixels, offset, footer * width * 4);
+            if (covered < height)   // the last frame's rows below the image so far: a fixed footer, or the page's end
+                Buffer.BlockCopy(previous.Pixels, covered * width * 4, pixels, offset, (height - covered) * width * 4);
             var result = new CaptureFrame(width, rows, pixels);
             Dispose();
             return result;
@@ -184,6 +214,14 @@ namespace Capsule
         }
 
         static StitchResult Refused(string notice) { return new StitchResult(0, false, false, notice); }
+
+        // Fewer than 4 different rows in a region of the window: blank margin or a flat colour.
+        static bool Plain(IList<ulong> rows, int start, int count, int stride, int region)
+        {
+            var distinct = new HashSet<ulong>();
+            for (int y = 0; y < count && distinct.Count < 4; y++) distinct.Add(rows[(start + y) * stride + region]);
+            return distinct.Count < 4;
+        }
 
         ulong[] HashRows(CaptureFrame frame)
         {

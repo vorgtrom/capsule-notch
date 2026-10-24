@@ -130,9 +130,17 @@ namespace Capsule
             TestRunner.Eq(0, failed.Down, "failed upward input prevents downward input");
             result.Image.Dispose();
             Released(failed);
-            var distant = new Desktop { Offset = 100000 };
+            var distant = new Desktop { Offset = 100000, Bottom = 100120 };
             result = Run(distant);
-            TestRunner.Check(result.Partial && distant.Up <= 20 && distant.Down == 0, "upward positioning is bounded");
+            TestRunner.Check(result.Partial && distant.Up <= CaptureSession.PositionSteps * CaptureSession.PositionNotches, "upward positioning is bounded");
+            TestRunner.Check(distant.Down > 0 && result.Image.Height > 120 && result.Notice.Contains("top could not be reached"),
+                "a page too far down to reach its top is still captured from where it is, and says so");
+            using (CaptureFrame expected = Page(3, 100000 - distant.Up * distant.Step, result.Image.Height))
+            {
+                bool same = expected.Pixels.Length == result.Image.Pixels.Length;
+                for (int i = 0; same && i < expected.Pixels.Length; i++) same = expected.Pixels[i] == result.Image.Pixels[i];
+                TestRunner.Check(same, "the capture from below the top keeps every row in order");
+            }
             result.Image.Dispose();
             Released(distant);
         }

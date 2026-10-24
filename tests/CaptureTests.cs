@@ -9,6 +9,8 @@ namespace Capsule
             KnownRows();
             RefusedJoins();
             FixedBands();
+            CentredColumn();
+            CoincidentalBands();
             Validation();
             Ownership();
             BoundedStorage();
@@ -145,6 +147,59 @@ namespace Capsule
             using (var bottom = Page(30, 60000, footer + 1))
                 Buffer.BlockCopy(bottom.Pixels, 0, frame.Pixels, (120 - footer) * 120, footer * 120);
             return frame;
+        }
+
+        // A centred page column: the left and right thirds are blank margin in every frame.
+        static CaptureFrame Centred(int start, int rows = 120)
+        {
+            var frame = Page(30, start, rows);
+            for (int y = 0; y < rows; y++)
+            {
+                Array.Clear(frame.Pixels, y * 120, 40);
+                Array.Clear(frame.Pixels, y * 120 + 80, 40);
+            }
+            return frame;
+        }
+
+        static void CentredColumn()
+        {
+            using (var stitcher = new CaptureStitcher(Centred(0)))
+            {
+                StitchResult next = stitcher.Append(Centred(60));
+                TestRunner.Check(next.Matched && next.AddedRows == 60, "blank margins beside a centred column don't block the join");
+                TestRunner.Eq(7, stitcher.Append(Centred(67)).AddedRows, "a centred column's short final scroll");
+                Same(Centred(0, 187), stitcher.Build(), "a centred column stitches whole");
+            }
+            // A margin with detail of its own that doesn't scroll with the column still refuses the join.
+            var first = Centred(0);
+            var next2 = Centred(60);
+            using (var other = Page(30, 5000, 120))
+                for (int y = 0; y < 120; y++) Buffer.BlockCopy(other.Pixels, y * 120, next2.Pixels, y * 120, 40);
+            Refused(first, next2, "a detailed margin that disagrees with the centre");
+        }
+
+        // A page with plain rows at 0-4 and 60-64 (lined up at the top of its first two frames) and at 115-119 and
+        // 175-179 (lined up at their bottom). They look like a fixed header and footer in that pair only.
+        static CaptureFrame Gaps(int start, int rows = 120)
+        {
+            var frame = Page(30, start, rows);
+            for (int y = 0; y < rows; y++)
+            {
+                int p = start + y;
+                if (p < 5 || (p >= 60 && p < 65) || (p >= 115 && p < 120) || (p >= 175 && p < 180)) Array.Clear(frame.Pixels, y * 120, 120);
+            }
+            return frame;
+        }
+
+        static void CoincidentalBands()
+        {
+            using (var stitcher = new CaptureStitcher(Gaps(0)))
+            {
+                TestRunner.Eq(60, stitcher.Append(Gaps(60)).AddedRows, "plain rows lined up in one pair join normally");
+                StitchResult third = stitcher.Append(Gaps(120));
+                TestRunner.Check(third.Matched && third.AddedRows == 60, "lined-up plain rows aren't kept as a fixed band for the next frame");
+                Same(Gaps(0, 240), stitcher.Build(), "lined-up plain rows: every page row once, in order");
+            }
         }
 
         static void FixedBands()

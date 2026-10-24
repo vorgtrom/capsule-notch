@@ -43,6 +43,9 @@ namespace Capsule
 
     public sealed class CaptureSession
     {
+        // Finding the top: up to 30 steps of 10 wheel notches (about 30,000 px in a browser) within 15 s. Past that, the
+        // capture starts where the page is.
+        internal const int PositionSteps = 30, PositionNotches = 10, PositionMs = 15000;
         readonly ICaptureDesktop desktop;
         CaptureRequest request;
         CancellationToken cancel;
@@ -95,16 +98,19 @@ namespace Capsule
                 Report(false, "Finding the top of the page.");
                 long positioning = desktop.NowMs;
                 bool positioned = false;
-                for (int step = 0; step < 20 && desktop.NowMs - positioning < 5000; step++)
+                for (int step = 0; step < PositionSteps && desktop.NowMs - positioning < PositionMs; step++)
                 {
-                    if (!await ScrollAsync(1).ConfigureAwait(false)) break;
+                    bool moved = true;
+                    for (int notch = 0; notch < PositionNotches && moved; notch++) moved = await ScrollAsync(1).ConfigureAwait(false);
+                    if (!moved) break;
                     CaptureFrame next = await StableFrameAsync(current).ConfigureAwait(false);
                     if (next == null) break;
                     if (Same(current, next)) { next.Dispose(); positioned = true; break; }
                     current.Dispose();
                     current = next;
                 }
-                if (notice.Length == 0 && !positioned) notice = "The page top could not be reached within the positioning limit.";
+                // Too far down to reach the top in time: the image starts where the page is, and says so.
+                string opening = notice.Length == 0 && !positioned ? "The page top could not be reached, so the image starts where the page was." : "";
                 if (notice.Length == 0)
                 {
                     stitcher = new CaptureStitcher(current);
@@ -135,7 +141,7 @@ namespace Capsule
                 CheckCancellation();
                 CaptureFrame image = current;
                 current = null;
-                return new CaptureResult { Image = image, Partial = true, Notice = notice };
+                return new CaptureResult { Image = image, Partial = true, Notice = opening.Length == 0 ? notice : notice.Length == 0 ? opening : opening + " " + notice };
             }
             finally
             {
