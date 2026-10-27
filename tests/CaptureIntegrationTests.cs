@@ -114,28 +114,63 @@ namespace Capsule
             TestRunner.Check(shown == 0 && abandoned.Image.Pixels == null && !c.Busy, "late capture result after disposal is discarded without a preview");
             TestRunner.Check(visibility.SequenceEqual(new[] { true, false }), "late result cannot restore visibility twice");
         }
+        sealed class EscapeWatch : IDisposable
+        {
+            public int Released;
+            public void Dispose() { Released++; }
+        }
+        static Task<CaptureRequest> Scrolling() { return Task.FromResult(new CaptureRequest { Mode = CaptureMode.Scrolling, Area = new RECT { Right = 2, Bottom = 2 } }); }
+        // Esc is taken by Open itself around the capture, so these go through the same path as a real scrolling capture.
         static void EscapeCancels()
         {
             var visibility = new List<bool>();
             var c = Coordinator(visibility);
             Action escape = null;
-            c.WatchEscape = pressed => { escape = pressed; return null; };
+            int taken = 0;
+            var watch = new EscapeWatch();
+            c.WatchEscape = pressed => { taken++; escape = pressed; return watch; };
+            c.SelectRequest = delegate { return Scrolling(); };
             var running = new TaskCompletionSource<CaptureResult>();
             int shown = 0;
             c.ShowWindow = delegate { shown++; };
             c.Capture = delegate(CaptureRequest request, CancellationToken token)
             {
-                c.CancelOnEscape();
                 token.Register(delegate { running.TrySetCanceled(); });
                 return running.Task;
             };
             c.Open(); Pump();
-            TestRunner.Check(escape != null && c.Busy, "a scrolling capture listens for Esc");
+            TestRunner.Check(taken == 1 && watch.Released == 0 && c.Busy, "a scrolling capture holds Esc while it runs");
             if (escape != null) escape();
             Pump();
             TestRunner.Check(running.Task.IsCanceled && !c.Busy && shown == 0, "a quick Esc press cancels the capture, with no preview");
+            TestRunner.Check(watch.Released == 1, "Esc is let go when a cancelled capture ends");
             TestRunner.Check(visibility.SequenceEqual(new[] { true, false }), "Esc brings the capsule back");
             c.Dispose();
+
+            var done = Coordinator(new List<bool>());
+            var held = new EscapeWatch();
+            bool releasedFirst = false;
+            CapturePreviewWindow preview = null;
+            done.WatchEscape = pressed => held;
+            done.SelectRequest = delegate { return Scrolling(); };
+            done.ShowWindow = w => { releasedFirst = held.Released == 1; preview = (CapturePreviewWindow)w; };
+            done.Open(); Pump();
+            TestRunner.Check(preview != null && releasedFirst, "a finished scrolling capture lets Esc go before its preview opens");
+            if (preview != null) preview.Close();
+            Pump();
+            TestRunner.Eq(1, held.Released, "Esc is let go once");
+            done.Dispose();
+
+            int shots = 0;
+            var screenshot = Coordinator(new List<bool>());
+            screenshot.WatchEscape = pressed => { shots++; return new EscapeWatch(); };
+            CapturePreviewWindow shotPreview = null;
+            screenshot.ShowWindow = w => shotPreview = (CapturePreviewWindow)w;
+            screenshot.Open(); Pump();
+            TestRunner.Check(shotPreview != null && shots == 0, "a screenshot leaves Esc alone");
+            if (shotPreview != null) shotPreview.Close();
+            Pump();
+            screenshot.Dispose();
         }
         static void Shortcuts()
         {

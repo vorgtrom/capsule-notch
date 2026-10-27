@@ -137,22 +137,18 @@ namespace Capsule
             return inner.Left >= outer.Left && inner.Top >= outer.Top && inner.Right <= outer.Right && inner.Bottom <= outer.Bottom && inner.Width > 0 && inner.Height > 0;
         }
 
-        static bool Contains(RECT area, POINT point)
+        internal static bool Contains(RECT area, POINT point)
         {
             return point.X >= area.Left && point.X < area.Right && point.Y >= area.Top && point.Y < area.Bottom;
         }
 
+        // Strictly inside the captured pixels. The pixel just past the right or bottom edge, where a drag ends, can belong
+        // to the window next door, and wheel input goes to the window under the pointer. So a capture can start paused,
+        // and its progress window asks to move the pointer inside.
         public bool PointerInside(RECT area)
         {
             POINT point;
-            return Native.GetCursorPos(out point) && OnArea(area, point);
-        }
-
-        // Inside the area or on its right or bottom edge: a drag ends with the pointer just past the last pixel it
-        // selected, and a scrolling capture shouldn't start paused because of that.
-        internal static bool OnArea(RECT area, POINT point)
-        {
-            return point.X >= area.Left && point.X <= area.Right && point.Y >= area.Top && point.Y <= area.Bottom;
+            return Native.GetCursorPos(out point) && Contains(area, point);
         }
 
         internal Action BeforeRead, AfterRead;

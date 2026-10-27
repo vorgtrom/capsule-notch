@@ -66,7 +66,7 @@ namespace Capsule
 
         // Esc cancels a scrolling capture. The session only sees Esc while it's held down, which misses a quick tap, so
         // for the capture's length Esc is a shortcut of Capsule's (and the page doesn't get it).
-        internal IDisposable CancelOnEscape()
+        IDisposable CancelOnEscape()
         {
             return WatchEscape(delegate { if (active != null) active.Cancel(); });
         }
@@ -93,7 +93,8 @@ namespace Capsule
                 visibility(true);
                 CaptureRequest request = await SelectRequest(source.Token);
                 source.Token.ThrowIfCancellationRequested();
-                result = await Capture(request, source.Token);
+                using (request != null && request.Mode == CaptureMode.Scrolling ? CancelOnEscape() : null)
+                    result = await Capture(request, source.Token);
                 source.Token.ThrowIfCancellationRequested();
                 RestoreVisibility();
                 preview = CreatePreview(result);
@@ -155,7 +156,6 @@ namespace Capsule
                 session.Progress += progress.Update;
                 ShowWindow(progress);
             }
-            IDisposable escape = request.Mode == CaptureMode.Scrolling ? CancelOnEscape() : null;
             CaptureProgressWindow display = progress;
             EventHandler closed = delegate { if (active != null) active.Cancel(); };
             if (display != null) display.Closed += closed;
@@ -163,7 +163,6 @@ namespace Capsule
             try { return await Task.Run(() => session.RunAsync(request, cancel)); }
             finally
             {
-                if (escape != null) escape.Dispose();
                 if (display != null)
                 {
                     display.Closed -= closed;

@@ -341,10 +341,11 @@ namespace Capsule
             TestRunner.Check(!CaptureDesktop.SameBrowser(browser, 99) && !CaptureDesktop.SameBrowser(browser, 0), "another process, or none, is not the browser");
             TestRunner.Check(!CaptureDesktop.SameBrowser(new CaptureRequest(), 0), "a request without a browser process matches nothing");
             var dragged = new RECT { Left = 10, Top = 20, Right = 110, Bottom = 220 };
-            TestRunner.Check(CaptureDesktop.OnArea(dragged, new POINT { X = 110, Y = 220 }), "the pointer where the drag ended counts as inside");
-            TestRunner.Check(CaptureDesktop.OnArea(dragged, new POINT { X = 10, Y = 20 }) && CaptureDesktop.OnArea(dragged, new POINT { X = 60, Y = 100 }), "the area's corner and middle are inside");
-            TestRunner.Check(!CaptureDesktop.OnArea(dragged, new POINT { X = 111, Y = 100 }) && !CaptureDesktop.OnArea(dragged, new POINT { X = 60, Y = 221 }) &&
-                !CaptureDesktop.OnArea(dragged, new POINT { X = 9, Y = 100 }), "a pixel past any edge is outside");
+            TestRunner.Check(!CaptureDesktop.Contains(dragged, new POINT { X = 110, Y = 220 }) && !CaptureDesktop.Contains(dragged, new POINT { X = 110, Y = 100 }) &&
+                !CaptureDesktop.Contains(dragged, new POINT { X = 60, Y = 220 }), "the pixel past the right or bottom edge, where a drag ends, is outside: it can be another window's");
+            TestRunner.Check(CaptureDesktop.Contains(dragged, new POINT { X = 10, Y = 20 }) && CaptureDesktop.Contains(dragged, new POINT { X = 109, Y = 219 }) &&
+                CaptureDesktop.Contains(dragged, new POINT { X = 60, Y = 100 }), "the first, last and middle captured pixels are inside");
+            TestRunner.Check(!CaptureDesktop.Contains(dragged, new POINT { X = 9, Y = 100 }) && !CaptureDesktop.Contains(dragged, new POINT { X = 60, Y = 19 }), "a pixel before the left or top edge is outside");
             uint seen = 0;
             var tracked = new Desktop { Bottom = 0 };
             CaptureRequest withProcess = Request(CaptureMode.Scrolling);
