@@ -16,6 +16,23 @@ namespace Capsule
             // A copy of this exe renamed Capsule.exe, started by the hook tests as a stand-in Capsule (see PromptHookTests).
             if (args.Length == 3 && args[0] == "--fake-capsule") return PromptHookTests.FakeCapsule(args[1], args[2]);
             if (args.Length == 1 && args[0] == "--music-smoke") return MusicTests.Smoke();
+            if (args.Length == 1 && args[0] == "--capture-view")
+            {
+                Run("CaptureView", CaptureViewTests.Run);
+                Console.WriteLine(passed + " passed, " + failed + " failed");
+                return failed == 0 ? 0 : 1;
+            }
+            if (args.Length == 1 && args[0] == "--capture-integration")
+            {
+                Environment.SetEnvironmentVariable("CAPSULE_DATA", NewTempDir());
+                Environment.SetEnvironmentVariable("CAPSULE_PIPE", "capsule-integration-" + Guid.NewGuid().ToString("N"));
+                Run("CaptureIntegration", CaptureIntegrationTests.Run);
+                Run("PanelView", PanelViewTests.Run);
+                Run("Hotkey", HotkeyTests.Run);
+                Run("RingsFocusClipboard", RingsFocusClipboardTests.Run);
+                Console.WriteLine(passed + " passed, " + failed + " failed");
+                return failed == 0 ? 0 : 1;
+            }
             groups = (args.Length == 1 && args[0] == "--groups") || Environment.GetEnvironmentVariable("CI") == "true";
             // The hook's client only talks to a server that is Capsule.exe: for the tests, that is this process.
             PipePeer.ExpectedImageForTests = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
@@ -35,6 +52,10 @@ namespace Capsule
             Run("CardView", CardViewTests.Run);
             Run("Layout", LayoutTests.Run);
             Run("Native", NativeTests.Run);
+            Run("Capture", CaptureTests.Run);
+            Run("CaptureSession", CaptureSessionTests.Run);
+            Run("CaptureView", CaptureViewTests.Run);
+            Run("CaptureIntegration", CaptureIntegrationTests.Run);
             Run("GlassShape", GlassShapeTests.Run);
             Run("Theme", ThemeTests.Run);
             Run("Tray", TrayTests.Run);

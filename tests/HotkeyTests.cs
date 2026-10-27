@@ -12,7 +12,27 @@ namespace Capsule
             RefusalsSayWhy();
             WritesShortcuts();
             ConfigKeepsTheShortcut();
+            CaptureConfig();
             ReadsKeyPresses();
+        }
+
+        static void CaptureConfig()
+        {
+            var field = typeof(Config).GetField("CaptureHotkey");
+            TestRunner.Check(field != null, "capture shortcut has its own config field");
+            if (field == null) return;
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            File.WriteAllText(path, "{\"hotkey\":\"Win+Q\",\"clipboard_history\":false}");
+            Config c = Config.Load(path);
+            TestRunner.Eq("Ctrl+Alt+S", field.GetValue(c), "missing capture shortcut migrates to Ctrl+Alt+S");
+            TestRunner.Eq("Win+Q", c.Hotkey, "migration preserves Ideas shortcut");
+            TestRunner.Check(!c.ClipboardHistory, "migration leaves clipboard history off");
+            field.SetValue(c, "Ctrl+Shift+S");
+            TestRunner.Check(c.Save(path), "capture config saves");
+            TestRunner.Check(File.ReadAllText(path).Contains("capture_hotkey"), "capture shortcut uses capture_hotkey JSON key");
+            TestRunner.Eq("Ctrl+Shift+S", field.GetValue(Config.Load(path)), "capture shortcut round trips");
+            File.WriteAllText(path, "{\"capture_hotkey\":\"Alt+F4\"}");
+            TestRunner.Eq("Ctrl+Alt+S", field.GetValue(Config.Load(path)), "invalid capture shortcut uses default");
         }
 
         static void ReadsKeyPresses()

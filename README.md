@@ -94,6 +94,31 @@ the same music controls. No extra sign-in or API key is needed.
 - Music needs Windows 10 version 1809 or later. Track metadata and artwork stay in memory; Capsule does not save
   listening history or contact Spotify or YouTube itself.
 
+## Screenshots and scrolling webpages
+
+Click the camera in the panel, choose **Capture...** in Capsule's menu, or press **Ctrl+Alt+S**. You can change the
+shortcut under **Capture shortcut** in ⚙.
+
+1. Choose **Screenshot** for an area of the screen, or **Scrolling webpage** for a whole page in Chrome or Edge.
+2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
+3. For a webpage, keep the pointer over the page while it scrolls. Moving it away pauses. **Stop** keeps what's
+   captured so far; **Esc** or **Cancel** throws it away.
+4. In the preview, zoom in to check it, crop it if you like (**Crop**, drag, then Enter), and click **Copy** or
+   **Save PNG**. **Retake** starts again.
+
+- A scrolling capture goes to the top of the page first, then scrolls down to the end, joining the screenshots where
+  they overlap. A fixed header or footer appears once. If the page is too far down to reach the top in time, the
+  image starts where the page was, and the preview says so.
+- The preview says how the capture ended. Capsule can't tell the real end of a page from one that stopped
+  scrolling, and it stops early at content that changes while it scrolls (a video or an animation), or that repeats
+  so exactly it can't tell where two screenshots overlap. Check the joins at **100%**.
+- Switching to another window, or moving, resizing or closing the browser, cancels a scrolling capture.
+- Limits: one capture at a time, up to 32,000 rows and 32 million pixels, 120 screenshots and 90 seconds. The area
+  stays on one monitor, and the page scrolls at its current width and zoom.
+- Captures stay on your PC, in memory until the preview closes. Capsule only writes a file when you click
+  **Save PNG**, and only changes the clipboard when you click **Copy**. With clipboard history on, a copied capture
+  joins it like any other image, if it's under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
+
 ## Focus timer, clipboard and your rings
 
 | The Focus ring | Focus and Clipboard tiles | Choose your rings |
@@ -583,6 +608,9 @@ anywhere else.
 - **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
   Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
   managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
+- **Capture** reads only the area you select, and keeps it in memory until you close the preview. It saves a file
+  or changes the clipboard only when you click **Save PNG** or **Copy**. Nothing about a capture is logged or sent
+  anywhere.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only

@@ -32,7 +32,8 @@ namespace Capsule
     public sealed class ClipboardHistory
     {
         public const int MaxItems = 25, MaxImages = 5, MaxTextChars = 100000, PreviewChars = 120;
-        const double ThumbHeight = 36;
+        public const int MaxImagePixels = 16000000, MaxImageBytes = 8 * 1024 * 1024, MaxTotalImageBytes = 32 * 1024 * 1024;
+        const double ThumbWidth = 96, ThumbHeight = 36;
 
         static readonly Regex Hex = new Regex(@"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$");
         static readonly Regex Rgb = new Regex(@"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(,\s*[\d.]+%?\s*)?\)$", RegexOptions.IgnoreCase);
@@ -45,14 +46,24 @@ namespace Capsule
         // True when the list changed.
         public bool Add(ClipItem item)
         {
-            if (item == null) return false;
+            if (item == null || (item.Kind == ClipKind.Image && (item.Png == null || item.Png.Length == 0 || item.Png.Length > MaxImageBytes))) return false;
             if (items.Count > 0 && items[0].Key == item.Key) return false;   // copied again: already on top
             items.RemoveAll(i => i.Key == item.Key);
             items.Insert(0, item);
             int images = 0;
-            for (int i = 0; i < items.Count; i++)
+            long imageBytes = 0;
+            foreach (ClipItem kept in items)
             {
-                if (items[i].Kind == ClipKind.Image && ++images > MaxImages) items.RemoveAt(i--);
+                if (kept.Kind != ClipKind.Image) continue;
+                images++;
+                imageBytes += kept.Png.Length;
+            }
+            for (int i = items.Count - 1; i >= 0 && (images > MaxImages || imageBytes > MaxTotalImageBytes); i--)
+            {
+                if (items[i].Kind != ClipKind.Image) continue;
+                imageBytes -= items[i].Png.Length;
+                images--;
+                items.RemoveAt(i);
             }
             if (items.Count > MaxItems) items.RemoveRange(MaxItems, items.Count - MaxItems);
             return true;
@@ -116,19 +127,25 @@ namespace Capsule
 
         public static ClipItem FromImage(BitmapSource image, long now)
         {
-            if (image == null || image.PixelWidth == 0 || image.PixelHeight == 0) return null;
+            if (image == null || image.PixelWidth == 0 || image.PixelHeight == 0 || (long)image.PixelWidth * image.PixelHeight > MaxImagePixels) return null;
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
             byte[] png;
             using (var stream = new MemoryStream())
             {
                 encoder.Save(stream);
+                if (stream.Length > MaxImageBytes) return null;
                 png = stream.ToArray();
             }
             string key;
             using (var sha = SHA1.Create()) key = "i:" + Convert.ToBase64String(sha.ComputeHash(png));
-            double scale = Math.Min(1, ThumbHeight * 2 / image.PixelHeight);   // twice the drawn height: sharp on a 200% screen
-            var thumb = new TransformedBitmap(image, new ScaleTransform(scale, scale));
+            double scale = Math.Min(1, Math.Min(ThumbWidth * 2 / image.PixelWidth, ThumbHeight * 2 / image.PixelHeight));
+            int width = Math.Max(1, (int)Math.Ceiling(image.PixelWidth * scale));
+            int height = Math.Max(1, (int)Math.Ceiling(image.PixelHeight * scale));
+            var visual = new DrawingVisual();
+            using (DrawingContext drawing = visual.RenderOpen()) drawing.DrawImage(image, new Rect(0, 0, width, height));
+            var thumb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            thumb.Render(visual);   // independent pixels, so history never retains the full-size source
             thumb.Freeze();
             return new ClipItem
             {

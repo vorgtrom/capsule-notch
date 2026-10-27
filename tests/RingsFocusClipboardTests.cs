@@ -226,7 +226,7 @@ namespace Capsule
             for (int i = 0; i < 40; i++) h.Add(ClipboardHistory.FromText("n" + i, Now));
             TestRunner.Eq(ClipboardHistory.MaxItems, h.Items.Count, "at most 25 kept");
             TestRunner.Eq("n39", h.Items[0].Text, "newest first");
-            for (int i = 0; i < 8; i++) h.Add(new ClipItem { Kind = ClipKind.Image, Key = "i:" + i, Preview = "img" });
+            for (int i = 0; i < 8; i++) h.Add(new ClipItem { Kind = ClipKind.Image, Key = "i:" + i, Preview = "img", Png = new byte[1] });
             TestRunner.Eq(ClipboardHistory.MaxImages, h.Items.Count(i => i.Kind == ClipKind.Image), "at most 5 images");
             TestRunner.Eq("i:7", h.Items[0].Key, "the newest images stay");
             TestRunner.Eq(ClipboardHistory.MaxImages, h.Filtered(ClipKind.Image).Count, "filtered by kind");
@@ -247,12 +247,43 @@ namespace Capsule
             for (int i = 0; i < pixels.Length; i += 4) { pixels[i] = 200; pixels[i + 3] = 255; }
             BitmapSource image = BitmapSource.Create(8, 6, 96, 96, PixelFormats.Bgra32, null, pixels, 8 * 4);
             ClipItem shot = ClipboardHistory.FromImage(image, Now);
+            var wide = BitmapSource.Create(10000, 1, 96, 96, PixelFormats.Bgra32, null, new byte[40000], 40000);
+            var wideThumb = (BitmapSource)ClipboardHistory.FromImage(wide, Now).Thumb;
+            TestRunner.Check(wideThumb.PixelWidth <= 192 && wideThumb.PixelHeight <= 72, "extreme aspect ratio thumbnail fits both panel dimensions");
+            TestRunner.Check(!(shot.Thumb is TransformedBitmap), "thumbnail does not retain a full-size transformed source");
+            var large = BitmapSource.Create(4001, 4000, 96, 96, PixelFormats.Bgra32, null, new byte[4001 * 4000 * 4], 4001 * 4);
+            TestRunner.Check(ClipboardHistory.FromImage(large, Now) == null, "over sixteen million pixels is not retained");
+            var budget = new ClipboardHistory();
+            for (int i = 0; i < 5; i++) budget.Add(new ClipItem { Kind = ClipKind.Image, Key = "budget" + i, Png = new byte[8 * 1024 * 1024] });
+            TestRunner.Eq(4, budget.Items.Count, "image history evicts oldest at thirty-two MiB");
+            TestRunner.Eq("budget4", budget.Items[0].Key, "byte eviction preserves newest image");
+            TestRunner.Check(!budget.Add(new ClipItem { Kind = ClipKind.Image, Key = "oversize", Png = new byte[8 * 1024 * 1024 + 1] }), "PNG over eight MiB is refused before insertion");
+            TestRunner.Eq(4, budget.Items.Count, "refused PNG leaves history unchanged");
+            var uneven = new ClipboardHistory();
+            int[] sizes = { 1, 2, 7, 8, 8, 8 };
+            for (int i = 0; i < sizes.Length; i++) uneven.Add(new ClipItem { Kind = ClipKind.Image, Key = "uneven" + i, Png = new byte[sizes[i] * 1024 * 1024] });
+            TestRunner.Check(uneven.Items.Count == 4 && !uneven.Items.Any(i => i.Key == "uneven0" || i.Key == "uneven1"), "uneven PNG budgets evict oldest images in order rather than retain a smaller older image");
+            var noise = new byte[1800 * 1800 * 4];
+            new Random(73).NextBytes(noise);
+            for (int i = 3; i < noise.Length; i += 4) noise[i] = 255;
+            var noisyImage = BitmapSource.Create(1800, 1800, 96, 96, PixelFormats.Bgra32, null, noise, 1800 * 4);
+            TestRunner.Check(ClipboardHistory.FromImage(noisyImage, Now) == null, "PNG encoder output over eight MiB is not admitted");
+            var detached = IndependentImage();
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            TestRunner.Check(!detached.Item2.IsAlive && detached.Item1.Thumb != null, "retained thumbnail releases the original BitmapSource");
             TestRunner.Eq(ClipKind.Image, shot.Kind, "an image");
             TestRunner.Eq("8 × 6", shot.Preview, "named by its size");
             TestRunner.Check(shot.Png.Length > 0 && shot.Thumb != null && shot.Thumb.IsFrozen, "kept as PNG with a frozen thumbnail");
             BitmapSource back = ClipboardHistory.Decode(shot.Png);
             TestRunner.Check(back.PixelWidth == 8 && back.PixelHeight == 6, "decodes to the same size");
             TestRunner.Eq(shot.Key, ClipboardHistory.FromImage(image, Now).Key, "the same image again has the same key");
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static Tuple<ClipItem, WeakReference> IndependentImage()
+        {
+            var source = BitmapSource.Create(800, 600, 96, 96, PixelFormats.Bgra32, null, new byte[800 * 600 * 4], 800 * 4);
+            return Tuple.Create(ClipboardHistory.FromImage(source, Now), new WeakReference(source));
         }
 
         static void Panel()

@@ -3,6 +3,15 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## Unreleased
+
+- **Screenshots and whole webpages.** Capture an area of the screen, or a whole scrolling page in Chrome or Edge,
+  from the panel's camera button, Capsule's menu or **Ctrl+Alt+S**. Check and crop it in the preview, then
+  **Copy** or **Save PNG**. A fixed header or footer appears once, and a page you're far down is captured from where
+  it is. Move the pointer off the page to pause; **Stop** keeps what's captured so far.
+- **Images in the clipboard history stay small.** Up to 5 images and 32 MiB in all; a copied image over 16 million
+  pixels isn't kept. Thumbnails no longer hold on to the full-size image.
+
 ## v1.7.2
 
 - **Connecting Google Calendar is quicker.** Click **Get link** in Settings: Google Calendar opens, and Capsule saves
