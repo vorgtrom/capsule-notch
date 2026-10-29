@@ -9,6 +9,10 @@ download for each one. A release takes its notes from its section here.
   from the panel's camera button, Capsule's menu or **Ctrl+Alt+S**. Check and crop it in the preview, then
   **Copy** or **Save PNG**. A fixed header or footer appears once, and a page you're far down is captured from where
   it is. Move the pointer off the page to pause; **Stop** keeps what's captured so far.
+- **Context and cache for each session.** Every live Claude Code session in the card and the panel now shows how full
+  its context window is and how long its prompt cache stays warm: "Opus 4.8 · 1.2M tokens · ctx 64% · cache 41m". The
+  context turns amber from 80%; the cache shows "cache cold" once it has likely expired. The cache time is an
+  estimate (an hour on a Claude plan, 5 minutes with an API key); hover it for how it's worked out.
 - **Images in the clipboard history stay small.** Up to 5 images and 32 MiB in all; a copied image over 16 million
   pixels isn't kept. Thumbnails no longer hold on to the full-size image.
 

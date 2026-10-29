@@ -4,11 +4,23 @@ using System.IO;
 
 namespace Capsule
 {
-    // A session's model and token use so far, for its row: "Opus 4.8 · 1.2M tokens".
+    // A session's model and token use so far, for its row: "Opus 4.8 · 1.2M tokens", then how full its context window
+    // is and how long its prompt cache is likely to stay warm: "ctx 64%", "cache 41m" (SessionContext).
     public sealed class SessionUse
     {
         public string Model = "";   // the model of its latest reply
         public long Tokens;         // input, output and cache writes, as the Usage page counts them: no cache reads
+        public long Context;        // the latest reply's input, cache writes and cache reads
+        public long LastReplyMs;    // when the latest reply was written; 0 before one
+        public long CacheTtlMs;     // the cache lifetime the session's writes used, or 0 when they haven't said
+        public long FallbackTtlMs = SessionContext.HourMs;   // when they haven't: an hour on a Claude plan, 5 minutes with an API key
+        public bool LongContext;    // the configured model is a 1M-context one
+        public long WindowLimit;    // an auto-compact window, or 0
+
+        public int ContextPercent { get { return SessionContext.Percent(Context, SessionContext.WindowFor(Model, Context, LongContext, WindowLimit)); } }
+        public string ContextText { get { int p = ContextPercent; return p < 0 ? "" : "ctx " + p + "%"; } }
+        public bool ContextHigh { get { return ContextPercent >= SessionContext.WarnPercent; } }
+        public string CacheText(long now) { return SessionContext.CacheText(LastReplyMs, CacheTtlMs > 0 ? CacheTtlMs : FallbackTtlMs, now); }
 
         public string Text
         {
@@ -29,6 +41,7 @@ namespace Capsule
     {
         public const long EveryMs = 10 * 1000;
         const long BudgetBytes = 8L * 1024 * 1024;   // per read: a long session's first read takes a few turns of this
+        const long SettingsEveryMs = 60 * 1000;
 
         sealed class Entry
         {
@@ -38,11 +51,20 @@ namespace Capsule
             public readonly SessionUse Use = new SessionUse();
         }
 
-        readonly string projectsDir;
+        readonly string projectsDir, settingsPath;
         readonly Dictionary<string, Entry> entries = new Dictionary<string, Entry>();
         readonly object gate = new object();
+        bool longContext;
+        long windowLimit, settingsReadAtMs = -SettingsEveryMs;
 
-        public SessionTally(string claudeDir) { projectsDir = Path.Combine(claudeDir, "projects"); }
+        // False when Claude Code is used with an API key rather than a Claude plan: its cache lasts 5 minutes, not an hour.
+        public volatile bool Subscription = true;
+
+        public SessionTally(string claudeDir)
+        {
+            projectsDir = Path.Combine(claudeDir, "projects");
+            settingsPath = Path.Combine(claudeDir, "settings.json");
+        }
 
         public SessionUse For(string sessionId)
         {
@@ -50,7 +72,12 @@ namespace Capsule
             {
                 Entry e;
                 if (sessionId == null || !entries.TryGetValue(sessionId, out e)) return null;
-                return new SessionUse { Model = e.Use.Model, Tokens = e.Use.Tokens };
+                return new SessionUse
+                {
+                    Model = e.Use.Model, Tokens = e.Use.Tokens, Context = e.Use.Context, LastReplyMs = e.Use.LastReplyMs, CacheTtlMs = e.Use.CacheTtlMs,
+                    FallbackTtlMs = Subscription ? SessionContext.HourMs : SessionContext.FiveMinutesMs,
+                    LongContext = longContext, WindowLimit = windowLimit,
+                };
             }
         }
 
@@ -58,6 +85,21 @@ namespace Capsule
         public bool Update(IList<SessionStatus> sessions, long now)
         {
             bool changed = false;
+            if (now - settingsReadAtMs >= SettingsEveryMs)
+            {
+                settingsReadAtMs = now;
+                bool wasLong = longContext;
+                long wasLimit = windowLimit;
+                try
+                {
+                    bool l; long w;
+                    SessionContext.ReadSettings(File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null,
+                        Environment.GetEnvironmentVariable("CLAUDE_CODE_AUTO_COMPACT_WINDOW"), out l, out w);
+                    lock (gate) { longContext = l; windowLimit = w; }
+                }
+                catch (Exception) { }   // unreadable now: keep what was read before
+                changed |= wasLong != longContext || wasLimit != windowLimit;
+            }
             var live = new HashSet<string>();
             foreach (SessionStatus s in sessions)
             {
@@ -97,6 +139,9 @@ namespace Capsule
                     e.Keys.Clear();
                     e.Use.Tokens = 0;
                     e.Use.Model = "";
+                    e.Use.Context = 0;
+                    e.Use.LastReplyMs = 0;
+                    e.Use.CacheTtlMs = 0;
                 }
             }
             bool changed = false;
@@ -114,6 +159,9 @@ namespace Capsule
                         if (u == null || !e.Keys.Add(u.Key)) continue;
                         e.Use.Tokens += u.Tokens;
                         e.Use.Model = u.Model;
+                        e.Use.Context = u.Context;
+                        e.Use.LastReplyMs = u.AtMs;
+                        if (u.CacheTtlMs > 0) e.Use.CacheTtlMs = u.CacheTtlMs;
                         changed = true;
                     }
                 }

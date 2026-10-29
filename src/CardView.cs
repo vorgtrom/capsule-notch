@@ -330,14 +330,33 @@ namespace Capsule
             var both = new StackPanel { Margin = new Thickness(0, 1, 0, 3) };
             line.Margin = new Thickness(0);
             both.Children.Add(line);
-            // The prompt and last action on the left, cut with "…"; the model and tokens on the right, always whole.
+            // The prompt and last action, cut with "…", then the model, tokens, context and cache on a line of their own,
+            // always whole. Without a prompt or action, the usage takes the second line.
             var second = new DockPanel { LastChildFill = true };
             if (s.Usage != "")
             {
                 TextBlock usage = MakeText(s.Usage, 11, Palette.Secondary, FontWeights.Normal);
-                usage.Margin = new Thickness(s.Detail == "" ? 0 : 8, 0, 0, 0);
-                DockPanel.SetDock(usage, s.Detail == "" ? Dock.Left : Dock.Right);
-                second.Children.Add(usage);
+                if (s.Context != "")
+                {
+                    usage.Inlines.Add(new System.Windows.Documents.Run(" · "));
+                    var context = new System.Windows.Documents.Run(s.Context);
+                    if (s.ContextHigh) context.Foreground = NotchView.Brush(Palette.Amber);
+                    usage.Inlines.Add(context);
+                }
+                if (s.Cache != "") usage.Inlines.Add(new System.Windows.Documents.Run(" · " + s.Cache));
+                if (s.Context != "" || s.Cache != "") usage.ToolTip = SessionContext.Tip;
+                if (s.Detail == "")
+                {
+                    DockPanel.SetDock(usage, Dock.Left);
+                    second.Children.Add(usage);
+                }
+                else
+                {
+                    second.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
+                    both.Children.Add(second);
+                    both.Children.Add(usage);
+                    return both;
+                }
             }
             if (s.Detail != "") second.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
             both.Children.Add(second);
