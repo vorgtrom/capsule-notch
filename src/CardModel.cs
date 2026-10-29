@@ -22,6 +22,9 @@ namespace Capsule
         public string Color = Palette.Secondary;
         public string Detail = "";   // "“fix the auth bug…” · Edited middleware.ts", or 
         public string Usage = "";    // "Opus 4.8 · 1.2M tokens", or "" before its transcript is read
+        public string Context = "";  // "ctx 64%", or ""
+        public bool ContextHigh;     // 80% or more: amber
+        public string Cache = "";    // "cache 41m", "cache cold", or ""
 
         // The rows the card and the panel show: waiting first, then working, then recently done or idle, at most
         // Sessions.MaxRows of them. more: how many didn't fit.
@@ -36,7 +39,13 @@ namespace Capsule
                 line.Color = s.State == States.Waiting ? Palette.Amber : s.State == States.Working ? Palette.Text : Palette.Secondary;
                 line.Detail = DetailFor(s);
                 SessionUse u = use != null ? use(s.SessionId) : null;
-                if (u != null) line.Usage = u.Text;
+                if (u != null)
+                {
+                    line.Usage = u.Text;
+                    line.Context = u.ContextText;
+                    line.ContextHigh = u.ContextHigh;
+                    line.Cache = u.CacheText(now);
+                }
                 rows.Add(line);
             }
             return rows;

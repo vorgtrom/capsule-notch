@@ -13,6 +13,8 @@ namespace Capsule
         public string Model = "";
         public long Tokens;
         public long CacheRead;
+        public long Context;          // Claude: the reply's input, cache writes and cache reads, how full its window was
+        public long CacheTtlMs;       // Claude: the cache lifetime its writes used (1 h or 5 min), or 0 when it doesn't say
     }
 
     // What a Codex log has told us so far: the model of the current turn, the last running total (so a repeated total
@@ -57,6 +59,9 @@ namespace Capsule
                 Model = model,
                 Tokens = N(usage, "input_tokens") + N(usage, "cache_creation_input_tokens") + N(usage, "output_tokens"),
                 CacheRead = N(usage, "cache_read_input_tokens"),
+                Context = N(usage, "input_tokens") + N(usage, "cache_creation_input_tokens") + N(usage, "cache_read_input_tokens"),
+                CacheTtlMs = N(Json.Get(usage, "cache_creation"), "ephemeral_1h_input_tokens") > 0 ? SessionContext.HourMs
+                    : N(Json.Get(usage, "cache_creation"), "ephemeral_5m_input_tokens") > 0 ? SessionContext.FiveMinutesMs : 0,
             };
         }
 

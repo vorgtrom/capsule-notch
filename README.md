@@ -33,8 +33,11 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 - **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
   50%, red from 70%.
 - **Hover a ring** for every limit, when each resets, and your live Claude Code sessions: each with the start of your
-  last prompt, what Claude did last ("“fix the auth bug…” · Edited middleware.ts"), and its model and tokens so far
-  ("Opus 4.8 · 1.2M tokens"). Under each limit, its pace:
+  last prompt, what Claude did last ("“fix the auth bug…” · Edited middleware.ts"), and its model and tokens so far,
+  how full its context window is, and how long its prompt cache stays warm ("Opus 4.8 · 1.2M tokens · ctx 64% ·
+  cache 41m"). The context is measured against the model's window (200K, or 1M for models that have it) and turns
+  amber from 80%. The cache time is an estimate, counted from the latest reply: an hour
+  on a Claude plan, 5 minutes with an API key; Claude doesn't publish the exact expiry. Under each limit, its pace:
   "At this pace: full at 4:10 PM · locked 41 min" (amber, before the reset) or "about 64% at reset". Until there's a
   pace to go on, how your use compares with an even spread: "81% of the window gone · 1.1× even pace".
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.

@@ -405,6 +405,7 @@ namespace Capsule
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
             PlayCue(cues.Next(ClaudeSessionsForCues()));
+            tally.Subscription = claude.Current == null || claude.Current.Plan != "" || claude.Current.Status != "signin";   // signed in to a plan, or not known yet
             UpdateTally();
             Render();
         }

@@ -62,12 +62,15 @@ namespace Capsule
             Theme.Use(Theme.For(false, false));
         }
 
+        static long SampleNow() { return Clock.ToMs(DateTime.Today.AddHours(10).AddMinutes(40).ToUniversalTime()); }   // the previews' clock
+
         // Made-up model and token use for the sample sessions.
         static SessionUse SampleUse(string sessionId)
         {
             int n = 0;
             foreach (char c in sessionId ?? "") n += c;
-            return new SessionUse { Model = n % 2 == 0 ? "claude-opus-4-8" : "claude-sonnet-4-5-20250929", Tokens = 180000 + (n % 7) * 310000 };
+            return new SessionUse { Model = n % 2 == 0 ? "claude-opus-4-8" : "claude-sonnet-4-5-20250929", Tokens = 180000 + (n % 7) * 310000,
+                Context = 40000 + (n % 5) * 31000, LastReplyMs = SampleNow() - (n % 4) * 9 * 60 * 1000, CacheTtlMs = SessionContext.HourMs };
         }
 
         // v1.7.0: the Focus ring counting down under the others, the panel with its Focus and Clipboard tiles, and
