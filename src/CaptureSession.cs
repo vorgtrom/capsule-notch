@@ -44,9 +44,13 @@ namespace Capsule
 
     public sealed class CaptureSession
     {
-        // Finding the top: up to 30 steps of 10 wheel notches (about 30,000 px in a browser) within 15 s. Past that, the
+        // Finding the top: up to 30 steps of 20 wheel notches (about 60,000 px in a browser) within 15 s. Past that, the
         // capture starts where the page is.
-        internal const int PositionSteps = 30, PositionNotches = 10, PositionMs = 15000;
+        internal const int PositionSteps = 30, PositionNotches = 20, PositionMs = 15000;
+        // Going down, each step scrolls about this share of the selection, so the next screenshot still overlaps the last
+        // by more than half: as many notches as that takes, once a step has shown how far one notch goes.
+        internal const double StepShare = 0.4;
+        internal const int MaxStepNotches = 8;
         readonly ICaptureDesktop desktop;
         CaptureRequest request;
         CancellationToken cancel;
@@ -117,10 +121,13 @@ namespace Capsule
                     stitcher = new CaptureStitcher(current);
                     CaptureFrame previous = current;
                     current = null;
+                    int notches = 1;
                     while (await ReadyAsync().ConfigureAwait(false))
                     {
                         if (frameCount >= CaptureLimits.MaxFrames) { notice = "The capture reached the frame limit."; break; }
-                        if (!await ScrollAsync(-1).ConfigureAwait(false)) break;
+                        bool moved = true;
+                        for (int notch = 0; notch < notches && moved; notch++) moved = await ScrollAsync(-1).ConfigureAwait(false);
+                        if (!moved) break;
                         CaptureFrame next = await StableFrameAsync(previous).ConfigureAwait(false);
                         if (next == null) break;
                         try
@@ -130,6 +137,7 @@ namespace Capsule
                             if (!added.Matched) { notice = added.Notice; break; }
                             rows += added.AddedRows;
                             frameCount++;
+                            notches = NotchesFor(added.AddedRows, notches, request.Area.Height);
                             previous = next;
                             next = null;
                         }
@@ -151,6 +159,15 @@ namespace Capsule
                 this.request = null;
                 Interlocked.Exchange(ref running, 0);
             }
+        }
+
+        // How many notches the next step down takes: enough to move about StepShare of the selection's height, judged
+        // by how far the last step's notches moved the page, from 1 to MaxStepNotches.
+        internal static int NotchesFor(int movedRows, int notchesUsed, int height)
+        {
+            if (movedRows <= 0 || notchesUsed <= 0 || height <= 0) return 1;
+            double perNotch = (double)movedRows / notchesUsed;
+            return Math.Max(1, Math.Min(MaxStepNotches, (int)(height * StepShare / perNotch)));
         }
 
         void CheckCancellation()
