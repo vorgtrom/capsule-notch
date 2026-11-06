@@ -230,6 +230,7 @@ namespace Capsule
             panel.View.GoogleLinkSaved += delegate(string text) { Guard("calendar link", delegate { if (calendar.SaveLink(text)) panel.View.LinkKept(); }); };
             panel.View.GoogleLinkRemoved += delegate { Guard("calendar link", calendar.RemoveLink); };
             panel.View.GoogleLinkFetch += delegate { Guard("calendar link", StartLinkWatch); };
+            panel.View.GoogleQuickSignIn += delegate { Guard("calendar sign-in", delegate { calendar.SignInWithCapsule(); }); };
             panel.View.GoogleClientDraft += delegate(string id, string secret) { Guard("calendar client", delegate { calendar.KeepClient(id, secret); }); };
             shortcut = new GlobalHotkey();
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
