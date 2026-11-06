@@ -1306,7 +1306,16 @@ namespace Capsule
             if (broker.Current != null)
                 card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             else
-                card.ShowBeside(shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w), tally.For), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+            {
+                CardModel model = shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w), tally.For);
+                CodexChat chat = codexActivity.Latest;   // Codex's latest chat and its context, for its card
+                if (shown[cell] == codex && chat != null)
+                {
+                    model.SessionsTitle = "Latest chat";
+                    model.SessionRows = new List<SessionRow> { SessionRow.ForCodex(chat, now) };
+                }
+                card.ShowBeside(model, notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+            }
             NotchOnTop();
         }
 

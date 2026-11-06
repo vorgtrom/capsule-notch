@@ -188,7 +188,7 @@ namespace Capsule
 
             if (m.SessionRows != null)
             {
-                TextBlock header = MakeText("Sessions", 11, Palette.Secondary, FontWeights.SemiBold);
+                TextBlock header = MakeText(m.SessionsTitle, 11, Palette.Secondary, FontWeights.SemiBold);
                 header.Margin = new Thickness(0, 4, 0, 4);
                 content.Children.Add(header);
                 if (m.SessionsHint != "") content.Children.Add(Wrap(MakeText(m.SessionsHint, 12, Palette.Secondary, FontWeights.Normal)));

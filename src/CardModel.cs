@@ -51,6 +51,29 @@ namespace Capsule
             return rows;
         }
 
+        // The Codex card's line for its latest chat: "Codex · working", then "GPT-5 Codex · ctx 34%".
+        public static SessionRow ForCodex(CodexChat c, long now)
+        {
+            var line = new SessionRow();
+            line.Project = "Codex";
+            line.Status = c.Working ? "working" : Ago(now - c.AtMs);
+            line.Color = c.Working ? Palette.Text : Palette.Secondary;
+            line.Usage = UsageModel.ModelName(c.Model != "" ? c.Model : "codex");
+            int percent = c.Percent;
+            if (percent >= 0)
+            {
+                line.Context = "ctx " + percent + "%";
+                line.ContextHigh = percent >= SessionContext.WarnPercent;
+            }
+            return line;
+        }
+
+        static string Ago(long ms)
+        {
+            long minutes = Math.Max(0, ms) / 60000;
+            return minutes < 1 ? "just now" : minutes + " min ago";
+        }
+
         // Your last prompt, quoted, then what Claude did last, each when known.
         public static string DetailFor(SessionStatus s)
         {
@@ -70,7 +93,8 @@ namespace Capsule
         public string Title = "";
         public string Plan = "";
         public List<CardRow> Rows = new List<CardRow>();
-        public List<SessionRow> SessionRows;   // null for Codex
+        public List<SessionRow> SessionRows;   // Claude's sessions; for Codex its latest chat, or null
+        public string SessionsTitle = "Sessions";
         public int MoreSessions;
         public string SessionsHint = "";
         public string Footer = "";

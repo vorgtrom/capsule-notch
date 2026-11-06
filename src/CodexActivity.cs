@@ -8,8 +8,19 @@ namespace Capsule
     // Whether Codex is working (polish spec §3): a turn has started in one of its session logs and not ended. Codex writes
     // each session to %CODEX_HOME%\sessions\YYYY\MM\DD\rollout-*.jsonl, a JSON object a line; a turn's start and end are
     // lines whose payload.type is task_started (or turn_started), task_complete (or turn_complete) or turn_aborted.
-    // These files hold your prompts and Codex's replies: only those five names are looked for, and nothing else from them
-    // is kept, shown or logged. Not thread-safe: one Check at a time.
+    // These files hold your prompts and Codex's replies: only those five names, the model (turn_context) and the token
+    // counts (token_count) are looked for, and nothing else from them is kept, shown or logged. Not thread-safe: one
+    // Check at a time; Latest may be read from any thread.
+    // The Codex chat written to most recently: its model, how full its context window is, and whether a turn runs.
+    public sealed class CodexChat
+    {
+        public string Model = "";
+        public long Context, Window, AtMs;
+        public bool Working;
+
+        public int Percent { get { return SessionContext.Percent(Context, Window); } }
+    }
+
     public sealed class CodexActivity
     {
         public const long RecentMs = 60 * 60 * 1000;   // files written in the last hour are looked at
@@ -27,7 +38,12 @@ namespace Capsule
             public long Length;
             public DateTime WrittenUtc;
             public bool Started;   // its latest turn event is a start
+            public string Model = "";
+            public long Context, Window;   // the latest turn's tokens in the context window, and the window's size
         }
+
+        // The chat written to most recently, for the Codex card: its model and how full its context window is.
+        public CodexChat Latest { get; private set; }
 
         readonly string home;
         readonly Dictionary<string, Seen> files = new Dictionary<string, Seen>(StringComparer.OrdinalIgnoreCase);
@@ -84,6 +100,15 @@ namespace Capsule
                         if (seen == null) seen = new Seen();
                         string latest = LatestTurnEvent(tail);
                         if (latest != null) seen.Started = Starts.Contains(latest);   // none in the tail: what was known stands
+                        string model;
+                        long context, window;
+                        ReadContext(tail, out model, out context, out window);
+                        if (model != null) seen.Model = model;
+                        if (window > 0)
+                        {
+                            seen.Context = context;
+                            seen.Window = window;
+                        }
                         seen.Length = length;
                         seen.WrittenUtc = written;
                         files[path] = seen;
@@ -92,6 +117,14 @@ namespace Capsule
                 if (seen != null && seen.Started && age <= SilentMs) working = true;
             }
             foreach (string gone in files.Keys.Where(p => !listed.Contains(p)).ToList()) files.Remove(gone);
+            CodexChat chat = null;
+            foreach (Seen s in files.Values)
+            {
+                if (s.Window <= 0 || (chat != null && Clock.ToMs(s.WrittenUtc) <= chat.AtMs)) continue;
+                long at = Clock.ToMs(s.WrittenUtc);
+                chat = new CodexChat { Model = s.Model, Context = s.Context, Window = s.Window, AtMs = at, Working = s.Started && now - at <= SilentMs };
+            }
+            Latest = chat;
             return working;
         }
 
@@ -137,6 +170,49 @@ namespace Capsule
                 return true;
             }
             catch (Exception) { return false; }
+        }
+
+        // From a piece of a log: the latest model (turn_context), and the latest token count's tokens in the context window
+        // (the last turn's total, less its reasoning, which isn't kept) with the window's size (model_context_window). null
+        // and 0 for what the piece doesn't have. Only lines naming those two events are parsed.
+        public static void ReadContext(string text, out string model, out long context, out long window)
+        {
+            model = null;
+            context = window = 0;
+            if (text == null) return;
+            string[] lines = text.Split('\n');
+            for (int i = lines.Length - 1; i >= 0 && (model == null || window == 0); i--)
+            {
+                string line = lines[i];
+                if (model == null && line.IndexOf("\"turn_context\"", StringComparison.Ordinal) >= 0)
+                {
+                    object o = Json.TryParse(line);
+                    if (Json.Str(Json.Get(o, "type")) == "turn_context")
+                    {
+                        string m = Json.Str(Json.Get(o, "payload", "model"));
+                        if (!string.IsNullOrEmpty(m)) model = m;
+                    }
+                }
+                else if (window == 0 && line.IndexOf("\"token_count\"", StringComparison.Ordinal) >= 0)
+                {
+                    object o = Json.TryParse(line);
+                    if (Json.Str(Json.Get(o, "payload", "type")) != "token_count") continue;
+                    object info = Json.Get(o, "payload", "info");
+                    object last = Json.Get(info, "last_token_usage");
+                    long size = Count(Json.Get(info, "model_context_window"));
+                    if (size <= 0 || Json.Obj(last) == null) continue;
+                    long total = Count(Json.Get(last, "total_tokens"));
+                    if (total == 0) total = Count(Json.Get(last, "input_tokens")) + Count(Json.Get(last, "output_tokens"));
+                    context = Math.Max(0, total - Count(Json.Get(last, "reasoning_output_tokens")));
+                    window = size;
+                }
+            }
+        }
+
+        static long Count(object value)
+        {
+            double? n = Json.Num(value);
+            return n.HasValue && n.Value > 0 ? (long)n.Value : 0;
         }
 
         // The latest turn event in a piece of a log, or null when it has none.
