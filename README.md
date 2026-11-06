@@ -40,6 +40,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
   on a Claude plan, 5 minutes with an API key; Claude doesn't publish the exact expiry. Under each limit, its pace:
   "At this pace: full at 4:10 PM · locked 41 min" (amber, before the reset) or "about 64% at reset". Until there's a
   pace to go on, how your use compares with an even spread: "81% of the window gone · 1.1× even pace".
+- **Hover the Codex ring** for your latest Codex chat too: its model and how full its context window is
+  ("GPT-5 Codex · ctx 34%"), exact from Codex's own logs, amber from 80%.
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
   When Capsule holds a Codex / Work request, the Codex ring pulses amber.
 - **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses

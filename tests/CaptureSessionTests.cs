@@ -12,6 +12,7 @@ namespace Capsule
             Screenshot();
             KnownOffsets();
             NoMovementAndFailures();
+            BiggerSteps();
             Stability();
             Cancellation();
             PauseAndModifiers();
@@ -131,6 +132,32 @@ namespace Capsule
                 TestRunner.Check(result.Partial && !String.IsNullOrEmpty(result.Notice), "no movement cannot prove document completion");
                 Released(desktop, result.Image);
             }
+        }
+
+        // Going down, a page that moves little per notch gets more notches a step: fewer screenshots, the same image.
+        static void BiggerSteps()
+        {
+            TestRunner.Eq(3, CaptureSession.NotchesFor(100, 1, 900), "100 px a notch, a 900 px selection: 3 notches (about 40%)");
+            TestRunner.Eq(8, CaptureSession.NotchesFor(10, 1, 900), "at most 8 notches a step");
+            TestRunner.Eq(1, CaptureSession.NotchesFor(400, 1, 900), "a big notch: one at a time");
+            TestRunner.Eq(3, CaptureSession.NotchesFor(300, 3, 900), "judged per notch, from however many the last step took");
+            TestRunner.Eq(1, CaptureSession.NotchesFor(0, 2, 900), "a step that added nothing: back to one");
+
+            var desktop = new Desktop { Step = 20, Bottom = 600 };
+            var offsets = new List<int>();
+            desktop.OnRead = d => { if (offsets.Count == 0 || offsets[offsets.Count - 1] != d.Offset) offsets.Add(d.Offset); };
+            CaptureResult result = Run(desktop);
+            using (result.Image)
+            using (CaptureFrame expected = Page(3, 0, 720))
+            {
+                bool same = result.Image.Pixels.Length == expected.Pixels.Length;
+                for (int i = 0; same && i < expected.Pixels.Length; i++) same = expected.Pixels[i] == result.Image.Pixels[i];
+                TestRunner.Check(same, "bigger steps keep every row of the page, in order");
+            }
+            int widest = 0;
+            for (int i = 1; i < offsets.Count; i++) widest = Math.Max(widest, offsets[i] - offsets[i - 1]);
+            TestRunner.Eq(40, widest, "after the first step, two 20 px notches a step (40% of 120 rows is 48)");
+            Released(desktop);
         }
 
         static void NoMovementAndFailures()
@@ -303,7 +330,7 @@ namespace Capsule
             }
             var frames = new Desktop { Step = 20, Bottom = 1000000 };
             result = Run(frames);
-            TestRunner.Eq(2500, result.Image.Height, "120 accepted frames retain 120 + 119 * 20 rows");
+            TestRunner.Eq(4860, result.Image.Height, "120 accepted frames: 120 rows, one 20-row notch, then 118 steps of two notches (40 rows), not 120 + 119 * 20");
             TestRunner.Check(result.Partial && result.Notice.Contains("frame limit"), "accepted frame count is bounded at 120");
             result.Image.Dispose();
             Released(frames);

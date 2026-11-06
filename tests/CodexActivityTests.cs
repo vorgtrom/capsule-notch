@@ -31,6 +31,41 @@ namespace Capsule
             ALengthChangeWithTheSameWriteTimeIsRead();
             ACutInsideAMultiByteCharacterIsHarmless();
             TheFullScanStopsAtNinetyDays();
+            LatestChatsContext();
+        }
+
+        static string TurnContext(string model)
+        {
+            return "{\"timestamp\":\"2026-10-03T03:58:00.000Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"" + model + "\"}}";
+        }
+
+        static string TokenCount(long total, long reasoning, long window)
+        {
+            return "{\"timestamp\":\"2026-10-03T03:58:40.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"input_tokens\":900000,\"output_tokens\":9000,\"total_tokens\":909000},"
+                + "\"last_token_usage\":{\"input_tokens\":" + (total - 2000) + ",\"cached_input_tokens\":1000,\"output_tokens\":2000,\"reasoning_output_tokens\":" + reasoning + ",\"total_tokens\":" + total + "}"
+                + (window > 0 ? ",\"model_context_window\":" + window : "") + "}}}";
+        }
+
+        // The Codex card's latest chat: its model and how full its window is, from the newest log's latest token count.
+        static void LatestChatsContext()
+        {
+            string model; long context, window;
+            CodexActivity.ReadContext(TurnContext("gpt-5-codex") + "\n" + TokenCount(90000, 3000, 272000) + "\n", out model, out context, out window);
+            TestRunner.Check(model == "gpt-5-codex" && context == 87000 && window == 272000, "the latest turn's tokens less its reasoning, over the model's window");
+            CodexActivity.ReadContext(TokenCount(90000, 0, 0) + "\n" + Message("user", "token_count turn_context") + "\n", out model, out context, out window);
+            TestRunner.Check(model == null && window == 0, "no window in the count, and words in a message, give nothing");
+
+            string home = TestRunner.NewTempDir();
+            Log(home, Noon, "old", 20, Meta(), TurnContext("gpt-5"), TokenCount(50000, 0, 272000), Event("task_complete"));
+            Log(home, Noon, "new", 2, Meta(), TurnContext("gpt-5-codex"), Event("task_started"), TokenCount(250000, 5000, 272000));
+            var reader = new CodexActivity(home);
+            reader.Check(Now);
+            CodexChat chat = reader.Latest;
+            TestRunner.Check(chat != null && chat.Model == "gpt-5-codex" && chat.Working, "the newest log is the latest chat, still working");
+            TestRunner.Eq(90, chat == null ? -1 : chat.Percent, "245K of 272K is 90%");
+            SessionRow row = SessionRow.ForCodex(chat, Now);
+            TestRunner.Check(row.Usage == "GPT-5 Codex" && row.Context == "ctx 90%" && row.ContextHigh && row.Status == "working", "the card's line: model, context in amber, working");
+            TestRunner.Check(new CodexActivity(TestRunner.NewTempDir()).Latest == null, "no logs: no latest chat");
         }
 
         // The scan of every day folder only looks back 90 days (by the folder's date), so its cost stops growing with the

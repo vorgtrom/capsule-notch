@@ -8,6 +8,11 @@ download for each one. A release takes its notes from its section here.
 - **Heads-ups from your sessions.** A notification when a Claude Code session's context passes 90%, before Claude
   compacts it, and when a session waiting on your answer has 5 minutes left on its prompt cache, so you can answer
   before it has to re-read everything. Both follow the **Limit alerts** switch and wait while you focus.
+- **Codex's context, too.** The Codex card now shows your latest Codex chat, its model and how full its context
+  window is ("GPT-5 Codex · ctx 34%"), taken from the window size Codex records itself.
+- **Longer page captures.** A scrolling capture now scrolls further between screenshots (about 40% of the area you
+  selected each time, instead of one wheel notch), so the same 120 screenshots cover pages several times longer, and
+  it gets there sooner. It also goes back to the top in bigger steps.
 
 ## v1.8.0
 
