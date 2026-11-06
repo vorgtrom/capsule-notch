@@ -53,6 +53,7 @@ namespace Capsule
         long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
         int clipRetries;        // reads tried again while another app held the clipboard
         SessionTally tally;     // each session's model and tokens, from its transcript
+        readonly SessionAlerts sessionAlerts = new SessionAlerts();   // context nearly full, a waiting session's cache nearly cold
         int heldNeeds, heldDone;                              // sounds held while you focus
         readonly List<string> heldAlerts = new List<string>();   // limit alerts held while you focus
         bool tallyBusy;
@@ -407,6 +408,7 @@ namespace Capsule
             PlayCue(cues.Next(ClaudeSessionsForCues()));
             tally.Subscription = claude.Current == null || claude.Current.Plan != "" || claude.Current.Status != "signin";   // signed in to a plan, or not known yet
             UpdateTally();
+            Guard("session alerts", delegate { CheckSessionAlerts(now); });
             Render();
         }
 
@@ -1008,6 +1010,26 @@ namespace Capsule
             }
             if (changed) samples.Save(Paths.UsageSamplesFile);
             ShowUsageIfOpen();
+        }
+
+        // A session's context nearly full, or a waiting session's cache nearly cold: a balloon, under the Limit alerts
+        // switch, held for the break while you focus. Nothing about the session but its project's name is shown or logged.
+        void CheckSessionAlerts(long now)
+        {
+            if (!config.RingOn("claude") || !sessions.HooksConnected) return;
+            List<string> texts = sessionAlerts.Check(sessions.All, tally.For, now);
+            if (!config.LimitAlerts) return;   // still checked, so turning alerts on doesn't replay old ones
+            foreach (string text in texts)
+            {
+                if (Quiet)
+                {
+                    Log.Info("sessions: alert held for the break");
+                    heldAlerts.Add(text);
+                    continue;
+                }
+                Log.Info("sessions: alert shown");
+                tray.Balloon("Capsule", text);
+            }
         }
 
         Forecast PaceFor(Reading r, LimitWindow w) { return Pace.Shown(samples, r, w, Clock.NowMs()); }

@@ -60,6 +60,7 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
 - **Your token use**: click the Claude or Codex tile for the [Usage page](#usage-history-and-limit-alerts): a heatmap of tokens per
   day by model, for a week, a month or a year.
 - **Limit alerts**: a notification at 80% and 95% of a limit, and when you're on pace to run out before it resets.
+  Also when a session's context passes 90%, and when a session waiting on you is about to lose its prompt cache.
 - **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
   its events and tasks, and add, edit or delete one.
 - **A focus timer and your clipboard**: see [below](#focus-timer-clipboard-and-your-rings).
@@ -178,8 +179,11 @@ stays blank for an unused limit and in the first 5% of a window.
 - "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)
 - "At this pace you'll hit Claude's 5-hour limit at 4:10 PM, 41 min before it resets." (from 30% used, once two
   checks in a row agree)
+- "capsule is at 91% of its context. Claude Code will compact it soon." (once; again only after it drops under 80%)
+- "capsule is waiting on you, and its prompt cache goes cold in about 5 min." (for a session waiting on your answer
+  or permission, with an hour-long cache: once per reply. An answer after that re-reads the whole conversation.)
 
-To turn them off, untick **Limit alerts** in Capsule's menu.
+To turn them off, untick **Limit alerts** in Capsule's menu. While you focus, they wait for your break.
 
 **Sounds.** A short chime when a Claude Code session starts waiting on you or a Codex request arrives, and a softer
 one when a Claude session or a Codex turn finishes. Capsule makes them itself; they play at Windows' volume, at most one

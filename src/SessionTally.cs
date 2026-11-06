@@ -20,7 +20,8 @@ namespace Capsule
         public int ContextPercent { get { return SessionContext.Percent(Context, SessionContext.WindowFor(Model, Context, LongContext, WindowLimit)); } }
         public string ContextText { get { int p = ContextPercent; return p < 0 ? "" : "ctx " + p + "%"; } }
         public bool ContextHigh { get { return ContextPercent >= SessionContext.WarnPercent; } }
-        public string CacheText(long now) { return SessionContext.CacheText(LastReplyMs, CacheTtlMs > 0 ? CacheTtlMs : FallbackTtlMs, now); }
+        public long CacheTtlUsedMs { get { return CacheTtlMs > 0 ? CacheTtlMs : FallbackTtlMs; } }
+        public string CacheText(long now) { return SessionContext.CacheText(LastReplyMs, CacheTtlUsedMs, now); }
 
         public string Text
         {

@@ -95,6 +95,7 @@ namespace Capsule
             Run("UsageView", UsageViewTests.Run);
             Run("SessionRows", SessionRowsTests.Run);
             Run("SessionContext", SessionContextTests.Run);
+            Run("SessionAlerts", SessionAlertsTests.Run);
             Run("Sounds", SoundsTests.Run);
             Run("ReviewCard", ReviewCardTests.Run);
             Run("RingsFocusClipboard", RingsFocusClipboardTests.Run);

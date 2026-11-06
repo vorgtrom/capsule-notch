@@ -3,6 +3,12 @@
 Each version's notes, newest first. The [Releases page](https://github.com/vorgtrom/capsule-notch/releases) has the
 download for each one. A release takes its notes from its section here.
 
+## Unreleased
+
+- **Heads-ups from your sessions.** A notification when a Claude Code session's context passes 90%, before Claude
+  compacts it, and when a session waiting on your answer has 5 minutes left on its prompt cache, so you can answer
+  before it has to re-read everything. Both follow the **Limit alerts** switch and wait while you focus.
+
 ## v1.8.0
 
 - **Screenshots and whole webpages.** Capture an area of the screen, or a whole scrolling page in Chrome or Edge,
