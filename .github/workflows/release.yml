@@ -35,6 +35,23 @@ jobs:
           $text = [IO.File]::ReadAllText($file)
           if (-not $text.Contains('"dev"')) { throw 'src\Version.cs has no "dev" version to replace' }
           [IO.File]::WriteAllText($file, $text.Replace('"dev"', '"' + $env:VERSION + '"'), (New-Object Text.UTF8Encoding $false))
+      - name: Stamp Capsule's Google client
+        # One-click Google sign-in: Capsule's own OAuth client, from the repository's secrets, written into the release
+        # build only (the source keeps placeholders). Without both secrets the release has no built-in client and offers
+        # the calendar link and your own client, as a source build does. GitHub masks the values in the log.
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.CAPSULE_GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.CAPSULE_GOOGLE_CLIENT_SECRET }}
+        run: |
+          if (-not $env:GOOGLE_CLIENT_ID -or -not $env:GOOGLE_CLIENT_SECRET) { Write-Host "No Google client secrets: built without one-click sign-in."; exit 0 }
+          $id = $env:GOOGLE_CLIENT_ID.Trim(); $secret = $env:GOOGLE_CLIENT_SECRET.Trim()
+          foreach ($v in $id, $secret) { if ($v -notmatch '^[A-Za-z0-9._-]+$') { throw 'A Google client secret has characters a client ID or secret never has' } }
+          $file = Join-Path $PWD 'src\BuiltInGoogle.cs'
+          $text = [IO.File]::ReadAllText($file)
+          foreach ($p in '@CAPSULE_GOOGLE_CLIENT_ID@', '@CAPSULE_GOOGLE_CLIENT_SECRET@') { if (-not $text.Contains($p)) { throw "src\BuiltInGoogle.cs has no $p to replace" } }
+          [IO.File]::WriteAllText($file, $text.Replace('@CAPSULE_GOOGLE_CLIENT_ID@', $id).Replace('@CAPSULE_GOOGLE_CLIENT_SECRET@', $secret), (New-Object Text.UTF8Encoding $false))
+          Write-Host "Built with Capsule's Google client."
       - name: Use a time zone other than UTC
         # GitHub's machines run on UTC, where a local date and a UTC date are always the same day, so the checks that
         # Capsule uses the local one (Codex's day folders) couldn't run. UTC+8, without daylight saving.

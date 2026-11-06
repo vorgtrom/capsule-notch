@@ -85,6 +85,7 @@ namespace Capsule
         public event Action<string> GoogleLinkSaved;       // what was pasted as the calendar's iCal address; LinkKept follows once it is kept
         public event Action<string, string> GoogleClientDraft;   // what is in the client's fields as the settings close, or a client file pasted whole
         public event Action GoogleLinkRemoved;
+        public event Action GoogleQuickSignIn;             // Sign in with Google, with Capsule's own client
         public event Action GoogleLinkFetch;               // Get link: Google Calendar's settings open, and the iCal address is saved when it's copied
         public event Action Resized;                       // the content changed size outside Update
         public event Action<string> FocusCommand;          // "start", "pause", "resume", "skip" or "stop"
@@ -251,7 +252,7 @@ namespace Capsule
             ideaHint.FontFamily = ideaBox.FontFamily;
             shortcutText.Foreground = NotchView.Brush(Palette.Text);
             captureShortcutText.Foreground = NotchView.Brush(Palette.Text);
-            foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
+            foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint, builtInHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
             googleAccount.Foreground = NotchView.Brush(Palette.Text);
 
             header.Children.Clear();
@@ -653,6 +654,9 @@ namespace Capsule
 
         // ---- Google Calendar settings (calendar spec §2) ----
 
+        readonly StackPanel builtInBlock = new StackPanel();        // Sign in with Google, when this build has Capsule's own client
+        readonly Border builtInButtonHost = new Border();
+        readonly TextBlock builtInHint = new TextBlock();
         readonly StackPanel calendarLinkBlock = new StackPanel();   // the calendar's iCal address: the quick way, read-only
         readonly PasswordBox calendarLinkBox = new PasswordBox();   // write-only: the address is a secret
         readonly TextBlock calendarLinkHint = new TextBlock();
@@ -682,6 +686,14 @@ namespace Capsule
         {
             var g = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 6) };
             g.Children.Add(Section("Google Calendar"));
+            builtInButtonHost.HorizontalAlignment = HorizontalAlignment.Left;
+            builtInBlock.Children.Add(builtInButtonHost);
+            builtInHint.FontSize = 11;
+            builtInHint.TextWrapping = TextWrapping.Wrap;
+            builtInHint.Margin = new Thickness(0, 3, 0, 10);
+            builtInHint.Text = "All your calendars, your events and tasks, and adding and editing them. Google opens in your browser.";
+            builtInBlock.Children.Add(builtInHint);
+            g.Children.Add(builtInBlock);
             calendarLinkBlock.Children.Add(Label("Calendar link"));
             Plain(calendarLinkBox);
             var calendarLinkField = new Border();
@@ -749,7 +761,7 @@ namespace Capsule
             google = s;
             if (clientIdFresh)
             {
-                clientIdBox.Text = s.ClientId;
+                clientIdBox.Text = s.UsingBuiltIn ? "" : s.ClientId;   // Capsule's own client is never shown as yours
                 clientIdFresh = false;
             }
             RenderGoogle();
@@ -805,7 +817,13 @@ namespace Capsule
                 remove.Margin = new Thickness(8, 0, 0, 0);
                 calendarLinkButtons.Children.Add(remove);
             }
-            bool ownClient = google.SignedIn || google.SigningIn || clientOpen || google.ClientId != "" || google.SecretSaved;
+            // Capsule's own client first, when this build has one: one click. Signed in or signing in with it, your own
+            // client's fields stay folded away until Change client.
+            builtInBlock.Visibility = google.BuiltInAvailable && !google.SignedIn && !clientOpen ? Visibility.Visible : Visibility.Collapsed;
+            builtInButtonHost.Child = google.SigningIn && google.UsingBuiltIn
+                ? PillButton("Cancel", delegate { if (GoogleSignInCancelled != null) GoogleSignInCancelled(); })
+                : PillButton("Sign in with Google", delegate { if (GoogleQuickSignIn != null) GoogleQuickSignIn(); });
+            bool ownClient = clientOpen || !google.UsingBuiltIn && (google.SignedIn || google.SigningIn || google.ClientId != "" || google.SecretSaved);
             ownClientHost.Child = ownClient ? null : LinkButton("Use your own Google client instead", delegate
             {
                 clientOpen = true;

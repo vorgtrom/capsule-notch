@@ -381,6 +381,8 @@ namespace Capsule
     {
         public string ClientId = "";
         public bool SecretSaved;
+        public bool BuiltInAvailable;   // this build has Capsule's own client: one-click Sign in with Google
+        public bool UsingBuiltIn;       // signed in (or signing in) with it
         public bool SignedIn;
         public bool SigningIn;          // waiting for the browser
         public string Account = "";     // the account's email, once read; "" until then
@@ -425,6 +427,7 @@ namespace Capsule
         int generation;          // a sign-in or sign-out since a pass began makes that pass's result stale
         int passId;              // the latest pass started: only its result is applied
         GoogleAuth signingIn;    // the sign-in waiting for the browser, or null
+        bool signingWithBuiltIn; // that sign-in uses Capsule's own client
         string lastLogged = "";
 
         public Func<string, string, GoogleAuth> NewAuth = (id, secret) => new GoogleAuth(id, secret);   // tests swap in fakes
@@ -503,7 +506,7 @@ namespace Capsule
                 return;
             }
             string refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
-            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            string secret = ClientSecret(clientId());
             if (refresh == null || secret == null || clientId() == "")
             {
                 SetProblem(refresh == null ? "Can't read the saved sign-in. Sign in again in ⚙" : "Can't read the saved client. Enter it again in ⚙");
@@ -676,7 +679,7 @@ namespace Capsule
                 Raise();
                 return false;
             }
-            string secret = given != "" ? given : SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            string secret = given != "" ? given : ClientSecret(id);
             if (secret == null)
             {
                 status = "Enter your OAuth client's secret";
@@ -686,12 +689,34 @@ namespace Capsule
             CancelSignIn();
             GoogleAuth auth = NewAuth(id, secret);
             signingIn = auth;
+            signingWithBuiltIn = BuiltInGoogle.Available && id == BuiltInGoogle.Id;
             status = "Waiting for you in the browser…";
             int run = ++generation;
             Raise();
             string keep = given != "" ? given : null;
             LastSignIn = Task.Run(() => auth.SignIn(GoogleAuth.SignInTimeoutMs, Clock.NowMs())).ContinueWith(t => FinishSignIn(t, auth, run, id, keep), ui);
             return true;
+        }
+
+        // Sign in with Capsule's own client, when this build has one: nothing to set up. Its secret comes from the build
+        // and is never saved, so the next release's secret is the one used.
+        public bool SignInWithCapsule()
+        {
+            if (!BuiltInGoogle.Available)
+            {
+                status = "This build of Capsule has no built-in Google client. Use the calendar link or your own client.";
+                Raise();
+                return false;
+            }
+            pendingId = null;
+            pendingSecret = null;
+            return SignIn(BuiltInGoogle.Id, "");
+        }
+
+        // The client secret for a client ID: the built-in client's from the build, any other the one saved for it.
+        string ClientSecret(string id)
+        {
+            return BuiltInGoogle.SecretFor(id, BuiltInGoogle.Id, BuiltInGoogle.Secret, () => SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose));
         }
 
         // newSecret: the client secret to keep, when the sign-in brought a new one; null to keep the saved one.
@@ -764,7 +789,7 @@ namespace Capsule
             pendingId = null;
             pendingSecret = null;
             string refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
-            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose) ?? "";
+            string secret = ClientSecret(clientId()) ?? "";
             Forget();
             status = "";
             Log.Info("calendar: signed out");
@@ -974,7 +999,7 @@ namespace Capsule
                 return;
             }
             string refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
-            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            string secret = ClientSecret(clientId());
             if (refresh == null || secret == null)
             {
                 monthBusy = false;
@@ -1312,7 +1337,7 @@ namespace Capsule
         {
             auth = null;
             refresh = SecretStore.Load(tokenPath, SecretStore.GoogleTokenPurpose);
-            string secret = SecretStore.Load(secretPath, SecretStore.GoogleClientPurpose);
+            string secret = ClientSecret(clientId());
             if (refresh == null || secret == null) return false;
             auth = NewAuth(clientId(), secret);
             return true;
@@ -1400,6 +1425,9 @@ namespace Capsule
             {
                 ClientId = pendingId ?? clientId(),
                 SecretSaved = SecretStore.Exists(secretPath),
+                BuiltInAvailable = BuiltInGoogle.Available,
+                UsingBuiltIn = BuiltInGoogle.Available && (pendingId ?? clientId()) == BuiltInGoogle.Id
+                    || signingIn != null && signingWithBuiltIn,
                 SecretPending = pendingSecret != null,
                 SignedIn = signedIn,
                 SigningIn = signingIn != null,

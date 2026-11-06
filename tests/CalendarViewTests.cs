@@ -24,6 +24,7 @@ namespace Capsule
             TileShowsTodayAndTomorrow();
             SettingsSignInAndOut();
             SettingsCalendarLink();
+            SettingsBuiltInClient();
             SettingsKeepTheClientWhenClosed();
             TheTileOpensTheMonth();
             TheMonthPageShowsAMonth();
@@ -593,6 +594,52 @@ namespace Capsule
         }
 
         // The quick way (link spec): paste the calendar's secret iCal address. It is write-only, like the secrets.
+        static int Count(DependencyObject root, string text)
+        {
+            var e = root as UIElement;
+            if (e != null && e.Visibility != Visibility.Visible) return 0;
+            var t = root as TextBlock;
+            int n = t != null && t.Text == text ? 1 : 0;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) n += Count(VisualTreeHelper.GetChild(root, i), text);
+            return n;
+        }
+
+        // A build with Capsule's own Google client: Sign in with Google first, in one click, and your own client never
+        // shows Capsule's.
+        static void SettingsBuiltInClient()
+        {
+            TestRunner.Check(!BuiltInGoogle.IsSet("@CAPSULE_GOOGLE_CLIENT_ID@") && !BuiltInGoogle.IsSet("") && BuiltInGoogle.IsSet("123-abc.apps.googleusercontent.com"), "a placeholder or nothing isn't a client; a stamped ID is");
+            TestRunner.Eq("built-in secret", BuiltInGoogle.SecretFor("capsule-id", "capsule-id", "built-in secret", () => "saved"), "Capsule's client uses the secret from the build");
+            TestRunner.Eq("saved", BuiltInGoogle.SecretFor("my-id", "capsule-id", "built-in secret", () => "saved"), "your own client uses the secret you saved");
+            TestRunner.Eq("saved", BuiltInGoogle.SecretFor("capsule-id", "@CAPSULE_GOOGLE_CLIENT_ID@", "@CAPSULE_GOOGLE_CLIENT_SECRET@", () => "saved"), "a source build has no built-in client to use");
+
+            var view = new PanelView();
+            view.Update(Model(null));
+            view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowGoogle(new GoogleSettings());
+            Lay(view);
+            TestRunner.Check(!HasText(view, "Sign in with Google"), "a build without the client: no one-click sign-in");
+
+            view.ShowGoogle(new GoogleSettings { BuiltInAvailable = true });
+            Lay(view);
+            TestRunner.Eq(1, Count(view, "Sign in with Google"), "with it: one Sign in with Google, before the link");
+            TestRunner.Check(HasText(view, "Calendar link") && HasText(view, "Use your own Google client instead") && !HasText(view, "Client ID"), "the link and your own client stay as other ways");
+
+            view.ShowGoogle(new GoogleSettings { BuiltInAvailable = true, UsingBuiltIn = true, SigningIn = true, ClientId = "capsule-id" });
+            Lay(view);
+            TestRunner.Check(HasText(view, "Cancel") && !HasText(view, "Client ID"), "signing in with it: Cancel, and no client fields");
+
+            view.ShowGoogle(new GoogleSettings { BuiltInAvailable = true, UsingBuiltIn = true, SignedIn = true, ClientId = "capsule-id", Account = "you@example.com" });
+            Lay(view);
+            TestRunner.Check(HasText(view, "Signed in as you@example.com") && HasText(view, "Sign out") && !HasText(view, "Sign in with Google") && !HasText(view, "Client ID"), "signed in with it: the account and Sign out, nothing to set up");
+
+            var fresh = new PanelView();
+            fresh.Update(Model(null));
+            fresh.ShowSettings(false, "", "Ctrl+Alt+N");
+            fresh.ShowGoogle(new GoogleSettings { BuiltInAvailable = true, UsingBuiltIn = true, SignedIn = true, ClientId = "capsule-id" });
+            TestRunner.Eq("", fresh.ClientIdBox.Text, "Capsule's client ID never fills your client's box");
+        }
+
         static void SettingsCalendarLink()
         {
             var view = new PanelView();
