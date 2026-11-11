@@ -19,19 +19,24 @@ The Clipboard tile's filter chips become, in this order: **All**, **Links**, **I
 Code detection is a pure function, `ClipboardHistory.LooksLikeCode(string)`. Classify text as code when any of
 these holds:
 1. It contains a fenced block (a line starting with three backticks).
-2. It has two or more non-empty lines, and at least half of them look like code. A code line does at least one of:
-   - ends with `;`, `{`, `}`, `)`, `]`, `,` or `:`;
-   - starts with indentation (a tab or two or more spaces) followed by a non-space character;
-   - starts with a keyword: `def`, `class`, `function`, `const`, `let`, `var`, `import`, `from`, `export`, `return`,
+2. At least two lines look like code, and they make up more than half of the non-empty lines. Count a line if it meets
+   any of these conditions.
+   - It ends with `;`, `{`, `}`, `)` or `]`.
+   - It starts with a tab or at least two spaces, followed by a non-space character.
+   - It starts with a keyword: `def`, `class`, `function`, `const`, `let`, `var`, `import`, `from`, `export`, `return`,
      `if`, `for`, `while`, `public`, `private`, `using`, `namespace`, `package`, `fn`, `#include`, `select`,
      `insert`, `update`, `delete from`, `<?`, or an HTML tag (`<` followed by a letter).
-3. It's one line and either:
-   - starts with a common command: `git`, `npm`, `npx`, `pnpm`, `yarn`, `pip`, `python`, `node`, `dotnet`, `cargo`,
-     `go`, `docker`, `kubectl`, `curl`, `winget`, `scoop`, `gh`, `cd`, `ls`, `cat`, `echo`, or a PowerShell
-     `Verb-Noun` cmdlet; or
-   - contains `=>`, `();`, `::`, `!=`, `===`, or both `{` and `}`.
+3. It is one line and meets any of these conditions.
+   - It starts with a lowercase command: `git`, `npm`, `npx`, `pnpm`, `yarn`, `dotnet`, `cargo`, `docker`, `kubectl`, `curl`,
+     `winget`, `scoop`, or `gh`. The lowercase commands `go`, `cat`, `echo`, `cd`, `ls`, `python`, `node`, and `pip`
+     also need an argument containing `-`, `/`, `\`, `.`, `=`, or a quote.
+   - It starts with a case-sensitive PowerShell `Verb-Noun` cmdlet, using the verb's standard capitalisation and a
+     capitalised noun, such as `Get-ChildItem`.
+   - It starts with a SQL SELECT and has a FROM clause. Both keywords must be uppercase unless the line contains
+     `*` or ends with `;`.
+   - It contains `=>`, `();`, `::`, `!=`, `===`, or both `{` and `}`.
 
-Keyword and command matches ignore case and need a word boundary after the word.
+Multi-line keyword matches ignore case. Keywords and command names need a word boundary.
 
 Prose isn't code. Tests must cover at least:
 
@@ -43,6 +48,11 @@ Prose isn't code. Tests must cover at least:
 | two-line C# method with braces | Code |
 | Python `def` with an indented body | Code |
 | `SELECT * FROM users WHERE id = 1` | Code |
+| `go build ./...`, `cat file.txt`, `python -m venv .venv` | Code |
+| A shopping list, street address, or email with a salutation and sign-off | Text |
+| `Go home now`, `Cat food is out of stock`, `Python is great`, `echo hello` | Text |
+| `NPM install`, `sort-object`, `Set-up the meeting`, `Get-together tonight` | Text |
+| `Select one from the list` | Text |
 | `Meeting at 3pm; bring notes.` | Text |
 | `Let's go for lunch` | Text |
 | a short email of three sentences | Text |
@@ -98,7 +108,7 @@ A **Weather** tile in the panel, off until the user picks a place in Settings.
 
 ### Data
 - Forecast request, made off the UI thread with `Http.Get`:
-  `https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,apparent_temperature,weather_code,is_day&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto&temperature_unit=<celsius|fahrenheit>`
+  `https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,apparent_temperature,weather_code,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto&temperature_unit=<celsius|fahrenheit>`
 - Refresh every 30 minutes while a place is set, and when the panel opens if the data is over 15 minutes old.
   Also refresh after the PC wakes and when the network comes back, as the calendar does. Never more than once a
   minute.
@@ -112,7 +122,8 @@ A **Weather** tile in the panel, off until the user picks a place in Settings.
 - Header **Weather** with the place's name.
 - Now: the current temperature, large, with a condition glyph and words ("Partly cloudy"), "Feels like …", and
   today's high and low.
-- Next 6 hours: hour, glyph, temperature and chance of rain. Show the chance only when it's 20% or more.
+- Next 6 hours: hour, glyph, temperature and chance of rain. Use each hour's `is_day` to choose its glyph.
+  Show the chance only when it's 20% or more.
 - Next 4 days: weekday (short, in the user's culture), glyph, high and low.
 - Times use the user's 12- or 24-hour clock, as the calendar does.
 - Map WMO weather codes to these groups: clear, mainly clear, partly cloudy, overcast, fog, drizzle, freezing
@@ -128,6 +139,7 @@ A **Weather** tile in the panel, off until the user picks a place in Settings.
   (the place name you search for) and `api.open-meteo.com` (the saved latitude and longitude), only once a place
   is set.
 - privacy.html: the same hosts and data. No sign-in, no API key, no device location. Off by default.
+  Set the policy's effective date to the date of the Weather change, 12 November 2026.
 - CHANGELOG under Unreleased.
 
 ## Delivery

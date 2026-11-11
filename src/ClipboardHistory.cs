@@ -43,15 +43,17 @@ namespace Capsule
         static readonly Regex CodeLineStart = new Regex(
             @"^(?:(?:def|class|function|const|let|var|import|from|export|return|if|for|while|public|private|using|namespace|package|fn|#include|select|insert|update|delete[ \t]+from)\b|<(?:\?|[a-z]))", CodeOptions);
         static readonly Regex ShellCommand = new Regex(
-            @"^(?:git|npm|npx|pnpm|yarn|pip|python|node|dotnet|cargo|go|docker|kubectl|curl|winget|scoop|gh|cd|ls|cat|echo)\b", CodeOptions);
+            @"^(?:git|npm|npx|pnpm|yarn|dotnet|cargo|docker|kubectl|curl|winget|scoop|gh)\b");
+        static readonly Regex ShellCommandWithArgument = new Regex(
+            @"^(?:go|cat|echo|cd|ls|python|node|pip)[ \t].*[-/\\.='""]");
         static readonly Regex PowerShellCommand = new Regex(
             @"^(?:Add|Approve|Assert|Backup|Block|Build|Checkpoint|Clear|Close|Compare|Complete|Compress|Confirm|Connect|Convert|" +
             @"ConvertFrom|ConvertTo|Copy|Debug|Deny|Deploy|Disable|Disconnect|Dismount|Edit|Enable|Enter|Exit|Expand|Export|Find|" +
             @"ForEach|Format|Get|Grant|Group|Hide|Import|Initialize|Install|Invoke|Join|Limit|Lock|Measure|Merge|Mount|Move|New|Open|Optimize|" +
             @"Out|Ping|Pop|Protect|Publish|Push|Read|Receive|Redo|Register|Remove|Rename|Repair|Request|Reset|Resize|Resolve|Restart|" +
             @"Restore|Resume|Revoke|Save|Search|Select|Send|Set|Show|Skip|Sort|Split|Start|Step|Stop|Submit|Suspend|Switch|Sync|Tee|Test|Trace|" +
-            @"Unblock|Undo|Uninstall|Unlock|Unprotect|Unpublish|Unregister|Update|Use|Wait|Watch|Where|Write)-[a-z][a-z0-9]*\b", CodeOptions);
-        static readonly Regex SqlSelect = new Regex(@"^select[ \t]+.+[ \t]+from\b", CodeOptions);
+            @"Unblock|Undo|Uninstall|Unlock|Unprotect|Unpublish|Unregister|Update|Use|Wait|Watch|Where|Write)-[A-Z][A-Za-z0-9]*\b");
+        static readonly Regex SqlSelect = new Regex(@"^(select)[ \t]+\S.*?[ \t](from)\b", CodeOptions);
         static readonly string[] CodeOperators = { "=>", "();", "::", "!=", "===" };
 
         readonly List<ClipItem> items = new List<ClipItem>();
@@ -142,13 +144,17 @@ namespace Capsule
                 if (line.Length == 0) continue;
                 lines++;
                 last = line;
-                if (";{}]),:".IndexOf(line[line.Length - 1]) >= 0 ||
+                if (";{}])".IndexOf(line[line.Length - 1]) >= 0 ||
                     raw[0] == '\t' || raw.StartsWith("  ", StringComparison.Ordinal) || CodeLineStart.IsMatch(line))
                     codeLines++;
             }
-            if (lines > 1) return codeLines >= (lines + 1) / 2;
-            return ShellCommand.IsMatch(last) || PowerShellCommand.IsMatch(last) || SqlSelect.IsMatch(last) ||
-                Array.Exists(CodeOperators, marker => last.Contains(marker)) || (last.Contains("{") && last.Contains("}"));
+            if (lines > 1) return codeLines >= 2 && codeLines > lines / 2;
+            if (ShellCommand.IsMatch(last) || ShellCommandWithArgument.IsMatch(last) || PowerShellCommand.IsMatch(last) ||
+                Array.Exists(CodeOperators, marker => last.Contains(marker)) || (last.Contains("{") && last.Contains("}"))) return true;
+
+            Match sql = SqlSelect.Match(last);
+            return sql.Success && ((sql.Groups[1].Value == "SELECT" && sql.Groups[2].Value == "FROM") ||
+                last.Contains("*") || last.EndsWith(";", StringComparison.Ordinal));
         }
 
         // #RGB, #RRGGBB, #RRGGBBAA or rgb()/rgba() as #RRGGBB; null for anything else.

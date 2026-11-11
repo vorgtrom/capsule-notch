@@ -211,7 +211,8 @@ namespace Capsule
             TestRunner.Check(ClipboardHistory.Colour("rgb(300,0,0)") == null, "not a colour past 255");
             TestRunner.Check(ClipboardHistory.Colour("#12345") == null, "not a colour with 5 digits");
 
-            ClipItem text = ClipboardHistory.FromText("line one\r\n\r\n line two", Now);
+            ClipItem text = ClipboardHistory.FromText("line one\r\n\r\n   line two", Now);
+            TestRunner.Eq(ClipKind.Text, text.Kind, "one indented prose line does not make code");
             TestRunner.Eq("line one line two", text.Preview, "text is one line in the list");
             TestRunner.Check(ClipboardHistory.FromText("   ", Now) == null, "blank: not kept");
             TestRunner.Check(ClipboardHistory.FromText(new string('x', ClipboardHistory.MaxTextChars + 1), Now) == null, "too long: not kept");
@@ -293,17 +294,44 @@ namespace Capsule
             {
                 new[] { "git commit -m \"fix\"", "Code" },
                 new[] { "Get-ChildItem -Recurse", "Code" },
-                new[] { "sort-object -Descending", "Code" },
+                new[] { "sort-object -Descending", "Text" },
+                new[] { "Sort-Object -Descending", "Code" },
                 new[] { "Where-Object -Property Name", "Code" },
+                new[] { "Set-up the meeting", "Text" },
+                new[] { "Get-together tonight", "Text" },
+                new[] { "get-ChildItem", "Text" },
                 new[] { "const x = () => 1;", "Code" },
                 new[] { "int Value() {\nreturn 1; }", "Code" },
                 new[] { "def greet():\r\n  print('hello')", "Code" },
                 new[] { "SELECT * FROM users WHERE id = 1", "Code" },
+                new[] { "SELECT id FROM users", "Code" },
+                new[] { "select * from users", "Code" },
+                new[] { "select id from users;", "Code" },
+                new[] { "Select one from the list", "Text" },
+                new[] { "SELECT id from users", "Text" },
+                new[] { "select id FROM users", "Text" },
                 new[] { "example\n```text\n", "Code" },
-                new[] { "plain line\r  indented line", "Code" },
-                new[] { "plain line\nPUBLIC static int x", "Code" },
+                new[] { "Shopping list:\nmilk, eggs", "Text" },
+                new[] { "Address:\n12 Main St", "Text" },
+                new[] { "Name:\nAddress:", "Text" },
+                new[] { "Hi Sam,\nThanks for the samples.\nBest,", "Text" },
+                new[] { "plain line\r  indented line", "Text" },
+                new[] { "plain line\nPUBLIC static int x\nreturn x\nordinary note", "Text" },
+                new[] { "plain line\nPUBLIC static int x\nreturn x", "Code" },
                 new[] { "plain line\nprivateer info", "Text" },
-                new[] { "NPM install", "Code" },
+                new[] { "NPM install", "Text" },
+                new[] { "npm install", "Code" },
+                new[] { "Go home now", "Text" },
+                new[] { "Cat food is out of stock", "Text" },
+                new[] { "Python is great", "Text" },
+                new[] { "go home now", "Text" },
+                new[] { "echo hello", "Text" },
+                new[] { "echo \"hello\"", "Code" },
+                new[] { "go build ./...", "Code" },
+                new[] { "cat file.txt", "Code" },
+                new[] { "python -m venv .venv", "Code" },
+                new[] { "cd folder\\subfolder", "Code" },
+                new[] { "node mode=debug", "Code" },
                 new[] { "dockerized apps are common", "Text" },
                 new[] { "Meeting at 3pm; bring notes.", "Text" },
                 new[] { "Let's go for lunch", "Text" },
