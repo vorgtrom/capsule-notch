@@ -156,10 +156,10 @@ the Windows temporary folder.
 - **Quiet while focusing.** During focus, Capsule's own chimes and limit alerts wait for the break, then come as one
   note, such as "While you focused: 2 requests needed you, 1 session finished." The rings still glow and spin, so you
   can look up any time. Turn it off in Settings, under Focus lengths.
-- **Clipboard history.** The Clipboard tile lists your last 25 copies, newest first: text, links (by host and path,
-  without the part after `?`), colours (`#30D158`, `rgb(255, 69, 58)`) with a swatch, and up to 5 screenshots with a
-  thumbnail. Copying something again moves it to the top. Filter by kind, click one to put it back on the clipboard,
-  or **Clear** them all.
+- **Clipboard history.** The Clipboard tile lists your last 25 copies, newest first. Filter with **All**, **Links**,
+  **Images**, **Code**, or **Text**. Colours such as `#30D158` keep their swatches under **Text** and **All**.
+  Code shows its first non-empty line in monospace. Links show the host and path without the query. Up to 5
+  images have thumbnails. Click a row to copy the full item again, or choose **Clear** to empty the list.
 - **Your rings.** Settings (⚙ in the panel) has a switch for Claude, Codex, Calendar, Music and Focus. A ring that's
   off leaves the capsule and the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that
   ring would hold goes straight to the Claude or Codex app. One ring always stays on.

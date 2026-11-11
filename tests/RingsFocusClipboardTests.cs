@@ -23,6 +23,7 @@ namespace Capsule
             Tally();
             Focus();
             Clipboard();
+            ClipboardCategories();
             Panel();
             Cells();
         }
@@ -210,7 +211,7 @@ namespace Capsule
             TestRunner.Check(ClipboardHistory.Colour("rgb(300,0,0)") == null, "not a colour past 255");
             TestRunner.Check(ClipboardHistory.Colour("#12345") == null, "not a colour with 5 digits");
 
-            ClipItem text = ClipboardHistory.FromText("line one\r\n\r\n   line two", Now);
+            ClipItem text = ClipboardHistory.FromText("line one\r\n\r\n line two", Now);
             TestRunner.Eq("line one line two", text.Preview, "text is one line in the list");
             TestRunner.Check(ClipboardHistory.FromText("   ", Now) == null, "blank: not kept");
             TestRunner.Check(ClipboardHistory.FromText(new string('x', ClipboardHistory.MaxTextChars + 1), Now) == null, "too long: not kept");
@@ -286,6 +287,45 @@ namespace Capsule
             return Tuple.Create(ClipboardHistory.FromImage(source, Now), new WeakReference(source));
         }
 
+        static void ClipboardCategories()
+        {
+            var cases = new[]
+            {
+                new[] { "git commit -m \"fix\"", "Code" },
+                new[] { "Get-ChildItem -Recurse", "Code" },
+                new[] { "const x = () => 1;", "Code" },
+                new[] { "int Value() {\nreturn 1; }", "Code" },
+                new[] { "def greet():\r\n  print('hello')", "Code" },
+                new[] { "SELECT * FROM users WHERE id = 1", "Code" },
+                new[] { "example\n```text\n", "Code" },
+                new[] { "plain line\r  indented line", "Code" },
+                new[] { "plain line\nPUBLIC static int x", "Code" },
+                new[] { "plain line\nprivateer info", "Text" },
+                new[] { "NPM install", "Code" },
+                new[] { "dockerized apps are common", "Text" },
+                new[] { "Meeting at 3pm; bring notes.", "Text" },
+                new[] { "Let's go for lunch", "Text" },
+                new[] { "Hi Sam. We have the samples. Please send the date.", "Text" },
+                new[] { "- First idea.\n- Second idea.", "Text" },
+                new[] { "Follow-up tomorrow.", "Text" },
+                new[] { "#FF5733", "Colour" },
+                new[] { "https://example.com/a", "Link" },
+            };
+            foreach (string[] sample in cases)
+                TestRunner.Eq(sample[1], ClipboardHistory.FromText(sample[0], Now).Kind.ToString(), "clipboard category for " + sample[0]);
+
+            const string code = "\r\n  def greet():\r\n    print('hello')";
+            var history = new ClipboardHistory();
+            ClipItem snippet = ClipboardHistory.FromText(code, Now);
+            TestRunner.Eq("def greet():", snippet.Preview, "code preview shows the first non-empty line");
+            TestRunner.Eq(code, snippet.Text, "code keeps the entire copy");
+            history.Add(snippet);
+            history.Add(ClipboardHistory.FromText("#FF5733", Now));
+            history.Add(ClipboardHistory.FromText("An ordinary note.", Now));
+            TestRunner.Eq("Text,Colour", string.Join(",", history.Filtered(ClipKind.Text).Select(item => item.Kind)),
+                "the Text filter keeps colour swatches and excludes code");
+        }
+
         static void Panel()
         {
             var codex = new Reading { Provider = "codex", Status = "ok", HeadlineId = "five_hour", DataAtMs = Now };
@@ -295,6 +335,8 @@ namespace Capsule
             var clips = new ClipboardTile();
             clips.Items.Add(ClipboardHistory.FromText("#30D158", Now));
             clips.Items.Add(ClipboardHistory.FromText("https://example.com/a?b=c", Now));
+            const string snippet = "def greet():\n    print('hello')";
+            clips.Items.Add(ClipboardHistory.FromText(snippet, Now));
             for (int i = 0; i < 6; i++) clips.Items.Add(ClipboardHistory.FromText("note " + i, Now));
             var view = new PanelView();
             view.Update(new PanelModel
@@ -309,8 +351,12 @@ namespace Capsule
             TestRunner.Check(!texts.Contains("Sessions"), "Claude off: no Sessions tile");
             TestRunner.Check(texts.Contains("Codex"), "Codex alone");
             TestRunner.Check(texts.Contains("Focus") && texts.Contains("25:00") && texts.Contains("Pause") && texts.Contains("Skip") && texts.Contains("Stop"), "a running Focus tile with its buttons");
-            TestRunner.Check(texts.Contains("Clipboard") && texts.Contains("Colours") && texts.Contains("example.com/a"), "the Clipboard tile, its filter and a link by host");
-            TestRunner.Check(texts.Contains("Show all 8") && !texts.Contains("note 5"), "5 rows, then Show all");
+            Border clipboard = FindTile(view, "Clipboard");
+            var chips = All(clipboard).OfType<WrapPanel>().First();
+            TestRunner.Eq("All,Links,Images,Code,Text", string.Join(",", chips.Children.OfType<Border>().Select(System.Windows.Automation.AutomationProperties.GetName)),
+                "Clipboard chips appear in the specified order");
+            TestRunner.Check(texts.Contains("Clipboard") && !texts.Contains("Colours") && texts.Contains("example.com/a"), "the Clipboard tile shows a link by host");
+            TestRunner.Check(texts.Contains("Show all 9") && !texts.Contains("note 5"), "5 rows, then Show all");
             Border codexTile = FindTile(view, "Codex");
             TestRunner.Eq(3, codexTile == null ? 0 : Grid.GetColumnSpan(codexTile), "Codex alone takes the whole row");
 
@@ -326,6 +372,19 @@ namespace Capsule
             Lay(view);
             texts = Texts(view);
             TestRunner.Check(texts.Contains("example.com/a") && !texts.Contains("note 0"), "the Links filter shows links only");
+            Click(view, "Code");
+            Lay(view);
+            TextBlock preview = All(view).OfType<TextBlock>().FirstOrDefault(t => t.Text == "def greet():" && Shown(t));
+            TestRunner.Check(preview != null && preview.FontFamily.Source == "Cascadia Mono, Consolas", "the code preview uses monospace");
+            TestRunner.Check(Texts(view).Contains("\uE943") && !Texts(view).Contains("example.com/a"), "the Code chip shows only code, with its glyph");
+            Click(view, "def greet():");
+            TestRunner.Eq(snippet, copied == null ? null : copied.Text, "a code row copies the entire snippet");
+            Click(view, "Text");
+            Lay(view);
+            TestRunner.Check(Texts(view).Contains("#30D158") && !Texts(view).Contains("def greet():"), "Text includes the colour row and excludes code");
+            Click(view, "Images");
+            Lay(view);
+            TestRunner.Check(Texts(view).Contains("None of this kind yet"), "an empty category has a placeholder");
 
             view.Update(new PanelModel { Codex = UsageTile.From(codex, Now, En), Ideas = new IdeasTile() });
             Lay(view);

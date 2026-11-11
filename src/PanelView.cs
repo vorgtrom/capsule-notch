@@ -22,7 +22,7 @@ namespace Capsule
         public const double ShadowMargin = 20;
         public const string IconFont = "Segoe Fluent Icons, Segoe MDL2 Assets";
         const string RefreshGlyph = "\uE72C", SettingsGlyph = "\uE713", BackGlyph = "\uE72B";   // U+E72C Refresh, U+E713 Settings, U+E72B Back: the icon fonts' glyphs, kept as escapes because the characters themselves are invisible and a rewrite can drop them
-        const string LinkGlyph = "\uE71B", TextGlyph = "\uE8A5", MinusSign = "\u2013";   // U+E71B Link and U+E8A5 Document in the icon fonts; an en dash
+        const string LinkGlyph = "\uE71B", TextGlyph = "\uE8A5", CodeGlyph = "\uE943", MinusSign = "\u2013";
         const string SecretSavedHint = "Saved. Paste a new one to replace it.";
         const string ClientSecretSavedHint = "Secret saved. Paste a new one to replace it.";
         const string ClientHint = "From your own Google Cloud OAuth client (Desktop app). Or paste its downloaded JSON into Client ID: it fills both.";
@@ -1437,12 +1437,12 @@ namespace Capsule
             }
             var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
             chips.Children.Add(Chip("All", null));
-            chips.Children.Add(Chip("Text", ClipKind.Text));
             chips.Children.Add(Chip("Links", ClipKind.Link));
-            chips.Children.Add(Chip("Colours", ClipKind.Colour));
             chips.Children.Add(Chip("Images", ClipKind.Image));
+            chips.Children.Add(Chip("Code", ClipKind.Code));
+            chips.Children.Add(Chip("Text", ClipKind.Text));
             box.Children.Add(chips);
-            List<ClipItem> list = t.Items.FindAll(i => !clipFilter.HasValue || i.Kind == clipFilter.Value);
+            List<ClipItem> list = t.Items.FindAll(i => ClipboardHistory.Matches(i.Kind, clipFilter));
             if (list.Count == 0) box.Children.Add(CardView.MakeText("None of this kind yet", 12, Palette.Secondary, FontWeights.Normal));
             for (int i = 0; i < list.Count && (clipExpanded || i < ClipRows); i++) box.Children.Add(ClipLine(list[i]));
             if (list.Count > ClipRows)
@@ -1487,7 +1487,7 @@ namespace Capsule
             else
                 mark = new TextBlock
                 {
-                    Text = item.Kind == ClipKind.Link ? LinkGlyph : TextGlyph,
+                    Text = item.Kind == ClipKind.Link ? LinkGlyph : item.Kind == ClipKind.Code ? CodeGlyph : TextGlyph,
                     FontFamily = new FontFamily(IconFont),
                     FontSize = 12,
                     Foreground = NotchView.Brush(Palette.Secondary),
@@ -1498,6 +1498,7 @@ namespace Capsule
             DockPanel.SetDock(mark, Dock.Left);
             line.Children.Add(mark);
             TextBlock text = CardView.MakeText(item.Preview, 12.5, Palette.Text, FontWeights.Normal);
+            if (item.Kind == ClipKind.Code) text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
             text.VerticalAlignment = VerticalAlignment.Center;
             line.Children.Add(text);
             Border row = Button(line, delegate { if (ClipCopyRequested != null) ClipCopyRequested(item); }, Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(4, 3, 4, 3));

@@ -5,6 +5,9 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Clipboard categories.** Filter copies with **All**, **Links**, **Images**, **Code**, or **Text**. Code has a
+  monospace preview, and colours keep their swatches under **Text** and **All**.
+
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.

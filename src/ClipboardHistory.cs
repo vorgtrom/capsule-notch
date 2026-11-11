@@ -12,7 +12,7 @@ using System.Windows.Media.Imaging;
 
 namespace Capsule
 {
-    public enum ClipKind { Text, Link, Colour, Image }
+    public enum ClipKind { Text, Link, Colour, Image, Code }
 
     // One copy. Kept in memory only: never written to disk, never logged.
     public sealed class ClipItem
@@ -38,6 +38,21 @@ namespace Capsule
         static readonly Regex Hex = new Regex(@"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$");
         static readonly Regex Rgb = new Regex(@"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(,\s*[\d.]+%?\s*)?\)$", RegexOptions.IgnoreCase);
         static readonly Regex Spaces = new Regex(@"\s+");
+        static readonly string[] LineBreaks = { "\r\n", "\n", "\r" };
+        const RegexOptions CodeOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+        static readonly Regex CodeLineStart = new Regex(
+            @"^(?:(?:def|class|function|const|let|var|import|from|export|return|if|for|while|public|private|using|namespace|package|fn|#include|select|insert|update|delete[ \t]+from)\b|<(?:\?|[a-z]))", CodeOptions);
+        static readonly Regex ShellCommand = new Regex(
+            @"^(?:git|npm|npx|pnpm|yarn|pip|python|node|dotnet|cargo|go|docker|kubectl|curl|winget|scoop|gh|cd|ls|cat|echo)\b", CodeOptions);
+        static readonly Regex PowerShellCommand = new Regex(
+            @"^(?:Add|Approve|Assert|Backup|Block|Build|Checkpoint|Clear|Close|Compare|Complete|Compress|Confirm|Connect|Convert|" +
+            @"ConvertFrom|ConvertTo|Copy|Debug|Deny|Deploy|Disable|Disconnect|Dismount|Edit|Enable|Enter|Exit|Expand|Export|Find|" +
+            @"Format|Get|Grant|Group|Hide|Import|Initialize|Install|Invoke|Join|Limit|Lock|Measure|Merge|Mount|Move|New|Open|Optimize|" +
+            @"Out|Ping|Pop|Protect|Publish|Push|Read|Receive|Redo|Register|Remove|Rename|Repair|Request|Reset|Resize|Resolve|Restart|" +
+            @"Restore|Resume|Revoke|Save|Search|Select|Send|Set|Show|Skip|Split|Start|Step|Stop|Submit|Suspend|Switch|Sync|Test|Trace|" +
+            @"Unblock|Undo|Uninstall|Unlock|Unprotect|Unpublish|Unregister|Update|Use|Wait|Watch|Write)-[a-z][a-z0-9]*\b", CodeOptions);
+        static readonly Regex SqlSelect = new Regex(@"^select[ \t]+.+[ \t]+from\b", CodeOptions);
+        static readonly string[] CodeOperators = { "=>", "();", "::", "!=", "===" };
 
         readonly List<ClipItem> items = new List<ClipItem>();
 
@@ -73,11 +88,15 @@ namespace Capsule
 
         public List<ClipItem> Filtered(ClipKind? kind)
         {
-            return kind.HasValue ? items.FindAll(i => i.Kind == kind.Value) : new List<ClipItem>(items);
+            return items.FindAll(i => Matches(i.Kind, kind));
         }
 
-        // Text as a link (http or https, nothing else on the line), a colour (#hex or rgb()), or plain text. Null when empty
-        // or too long to keep.
+        internal static bool Matches(ClipKind kind, ClipKind? filter)
+        {
+            return !filter.HasValue || kind == filter.Value || (filter.Value == ClipKind.Text && kind == ClipKind.Colour);
+        }
+
+        // A link, colour, code or plain text. Null when empty, private or too long to keep.
         public static ClipItem FromText(string text, long now)
         {
             if (text == null || text.Length > MaxTextChars) return null;
@@ -101,8 +120,35 @@ namespace Capsule
                 item.Preview = t;
                 return item;
             }
-            item.Preview = Shorten(Spaces.Replace(t, " "));
+            if (LooksLikeCode(text))
+            {
+                item.Kind = ClipKind.Code;
+                string first = Array.Find(text.Split(LineBreaks, StringSplitOptions.RemoveEmptyEntries), line => !string.IsNullOrWhiteSpace(line));
+                item.Preview = Shorten(first.Trim());
+            }
+            else item.Preview = Shorten(Spaces.Replace(t, " "));
             return item;
+        }
+
+        public static bool LooksLikeCode(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            int lines = 0, codeLines = 0;
+            string last = "";
+            foreach (string raw in text.Split(LineBreaks, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (raw.StartsWith("```", StringComparison.Ordinal)) return true;
+                string line = raw.Trim();
+                if (line.Length == 0) continue;
+                lines++;
+                last = line;
+                if (";{}]),:".IndexOf(line[line.Length - 1]) >= 0 ||
+                    raw[0] == '\t' || raw.StartsWith("  ", StringComparison.Ordinal) || CodeLineStart.IsMatch(line))
+                    codeLines++;
+            }
+            if (lines > 1) return codeLines >= (lines + 1) / 2;
+            return ShellCommand.IsMatch(last) || PowerShellCommand.IsMatch(last) || SqlSelect.IsMatch(last) ||
+                Array.Exists(CodeOperators, marker => last.Contains(marker)) || (last.Contains("{") && last.Contains("}"));
         }
 
         // #RGB, #RRGGBB, #RRGGBBAA or rgb()/rgba() as #RRGGBB; null for anything else.
