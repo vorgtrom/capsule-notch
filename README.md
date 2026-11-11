@@ -17,7 +17,9 @@ right on the capsule**, with the change shown line by line, without switching to
 your last prompt and what Claude did last, and a short **sound** tells you when one needs you or finishes. You can
 also connect Codex and local ChatGPT Work for command approvals and answers. And it shows what's playing in
 **Spotify** or **YouTube Music**, with pause, skip and a player switch, runs a **focus timer**, and keeps a short
-**clipboard history**. Each ring can be switched off in Settings.
+**clipboard history**. It takes **screenshots** of an area or a whole scrolling webpage, keeps files on a
+**shelf** to drag into other apps, and gathers everything that **needs you** in one tile: Claude and Codex requests,
+and failing checks on a GitHub repository. Each ring can be switched off in Settings.
 
 Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
@@ -55,7 +57,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
   - Hover it for the rest of today and tomorrow's first three events, and, signed in, the Google Tasks due on those
     days that aren't done.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
-- **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, and your ideas.
+- **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, your
+  clipboard, the [shelf](#shelf), your ideas, and [what needs you](#needs-you).
   Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
   after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
@@ -444,8 +447,8 @@ all your calendars show, changes come within 5 minutes, and you can add, edit an
 - Until Google finishes reviewing Capsule's sign-in, Google shows a warning that it hasn't verified the app. Click
   **Advanced**, then **Go to Capsule**. Google also limits an app under review to 100 users; if you hit that, use one of
   the ways below.
-- This button is in releases from the Releases page and Scoop. A build from source doesn't have it: use the link or
-  your own client.
+- This button isn't in a release yet: it comes in a later one. Until then, use the link or your own client. A build
+  from source never has it.
 
 **The quick way: your calendar's secret link (read-only)**
 
@@ -469,7 +472,7 @@ The capsule then gets a third cell, and the panel a Calendar tile.
 
 **Your own Google client (sign in; several calendars)**
 
-You only need this with a build from source, or to use your own Google Cloud app. It takes about ten minutes, once.
+Use this until one-click sign-in is in a release, with a build from source, or to use your own Google Cloud app. It takes about ten minutes, once.
 In return you sign in instead of pasting a link, choose which of your calendars
 show, get changes within 5 minutes, and can add, edit and delete events and tasks from the
 [month page](#the-month-page). Once you're signed in, it is used instead of the link.
