@@ -57,12 +57,15 @@ namespace Capsule
             view.Update(model);
             Lay(view);
             TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Claude").Y, "Calendar opens first when available");
+            var boardTiles = (Grid)ScrollOf(view).Content;
+            TestRunner.Check(HasText(boardTiles.Children[0], "Calendar"), "Calendar also comes first in the accessibility order");
             TestRunner.Near(Position(view, "Claude").Y, Position(view, "Codex").Y, "the usage tiles stay paired");
             TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y, "the other tiles keep their order");
             model.Calendar = null;
             view.Update(model);
             Lay(view);
             TestRunner.Check(Position(view, "Claude").Y < Position(view, "Clipboard").Y, "a hidden preferred section falls back to default order");
+            TestRunner.Check(HasText(boardTiles.Children[0], "Claude"), "falling back restores the accessibility order");
             model.PanelHome = "clipboard";
             view.Update(model);
             Lay(view);

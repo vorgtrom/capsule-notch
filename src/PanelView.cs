@@ -32,6 +32,8 @@ namespace Capsule
         readonly Grid tiles = new Grid();
         readonly Dictionary<Border, int> tileRows = new Dictionary<Border, int>();
         string panelHome = "default";
+        Border promotedTile;
+        int promotedIndex;
         readonly ComboBox panelHomeChoice = new ComboBox();
         readonly TextBlock panelHomeResult = new TextBlock();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
@@ -360,7 +362,24 @@ namespace Capsule
         void ReorderTiles()
         {
             Border first = panelHome == "calendar" ? calendarTile : panelHome == "clipboard" ? clipTile : null;
-            int firstRow = first != null && first.Visibility == Visibility.Visible ? tileRows[first] : 0;
+            if (first != null && first.Visibility != Visibility.Visible) first = null;
+            if (first != promotedTile)
+            {
+                // UI Automation follows the child order. Move only the promoted tile to keep Ideas in place.
+                if (promotedTile != null)
+                {
+                    tiles.Children.Remove(promotedTile);
+                    tiles.Children.Insert(promotedIndex, promotedTile);
+                }
+                promotedTile = first;
+                if (first != null)
+                {
+                    promotedIndex = tiles.Children.IndexOf(first);
+                    tiles.Children.Remove(first);
+                    tiles.Children.Insert(0, first);
+                }
+            }
+            int firstRow = first != null ? tileRows[first] : 0;
             foreach (var tile in tileRows)
             {
                 int row = tile.Value;
