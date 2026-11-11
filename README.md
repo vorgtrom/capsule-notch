@@ -109,8 +109,8 @@ shortcut under **Capture shortcut** in ⚙.
 2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
 3. For a webpage, keep the pointer over the page while it scrolls. Moving it away pauses. **Stop** keeps what's
    captured so far; **Esc** or **Cancel** throws it away.
-4. In the preview, zoom in to check it, crop it if you like (**Crop**, drag, then Enter), and click **Copy** or
-   **Save PNG**. **Retake** starts again.
+4. Check the image in the preview. To crop it, click **Crop**, drag over the area, then press Enter.
+5. Choose **Copy**, **Save PNG** or **Keep on shelf**. **Retake** starts again.
 
 - A scrolling capture goes to the top of the page first, then scrolls down to the end, joining the screenshots where
   they overlap. A fixed header or footer appears once. If the page is too far down to reach the top in time, the
@@ -121,9 +121,22 @@ shortcut under **Capture shortcut** in ⚙.
 - Switching to another window, or moving, resizing or closing the browser, cancels a scrolling capture.
 - Limits: one capture at a time, up to 32,000 rows and 32 million pixels, 120 screenshots and 90 seconds. The area
   stays on one monitor, and the page scrolls at its current width and zoom.
-- Captures stay on your PC, in memory until the preview closes. Capsule only writes a file when you click
-  **Save PNG**, and only changes the clipboard when you click **Copy**. With clipboard history on, a copied capture
-  joins it like any other image, if it's under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
+- Capsule keeps capture pixels in memory until you close the preview. **Save PNG** writes to your chosen location.
+  **Keep on shelf** writes a temporary PNG. **Copy** changes the clipboard. With clipboard history on, a copied
+  capture joins it like any other image if it is under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
+
+## Shelf
+
+1. Drag files from File Explorer over the capsule to open the panel.
+2. Move the pointer to the **Shelf** tile and drop the files there. Capsule keeps references to the original files.
+3. Drag a file row or **Drag all files** to another app. The shelf offers a copy. Windows can block drops into apps
+   running as administrator. A canceled or rejected drop shows this as a possible cause.
+
+The shelf holds up to 12 entries and clears when Capsule exits. **Keep on shelf** in Capture Preview adds a PNG
+of the current image, including any crop. Capsule stages up to 12 captures and 64 MiB of generated PNGs per session.
+**Remove** clears a row. Staged PNGs still count toward those limits and remain available until Capsule exits.
+Capsule deletes the PNGs it staged on normal exit. A crash or a file still open in another app can leave PNGs in
+the Windows temporary folder.
 
 ## Focus timer, clipboard and your rings
 
@@ -652,9 +665,11 @@ anywhere else.
 - **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
   Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
   managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
-- **Capture** reads only the area you select, and keeps it in memory until you close the preview. It saves a file
-  or changes the clipboard only when you click **Save PNG** or **Copy**. Nothing about a capture is logged or sent
-  anywhere.
+- **Capture** reads only the area you select. **Copy** changes the clipboard, **Save PNG** writes to the location
+  you choose, and **Keep on shelf** stages a PNG in the Windows temporary folder. Capsule does not log or upload
+  capture content.
+- **Shelf** keeps file paths in memory. Capsule gives the selected paths to the local app where you drop them.
+  Capsule leaves your original files in place and removes its own staged PNGs on normal exit.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only

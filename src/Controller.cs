@@ -50,6 +50,7 @@ namespace Capsule
         bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
+        readonly Shelf shelf = new Shelf();
         ClipboardWatcher clipWatcher;
         long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
         int clipRetries;        // reads tried again while another app held the clipboard
@@ -187,6 +188,12 @@ namespace Capsule
             panel.View.ReviewRequested += delegate(PendingReview row) { Guard("review", delegate { ReviewPending(row); }); };
             panel.View.GitHubRunOpened += delegate(string repo, long run) { Guard("GitHub run", delegate { OpenGitHubRun(repo, run); }); };
             panel.View.GitHubRepoSaved += delegate(string repo) { Guard("GitHub settings", delegate { SaveGitHubRepo(repo); }); };
+            panel.View.ShelfTile.Bind(shelf);
+            notch.FileDragOver += delegate
+            {
+                if (!captureHidden && panel.BeginFileDragAtNotch()) Guard("shelf", delegate { OpenPanel(false, true); });
+            };
+            notch.FileDragLeft += panel.FileDragLeft;
             panel.View.Music.Commanded += OnMusicCommand;
             panel.View.Music.SourceSelected += delegate(string key) { music.Select(key); };
             panel.View.RefreshAllClicked += delegate { Guard("refresh", RefreshAll); };
@@ -253,6 +260,7 @@ namespace Capsule
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
+            capture.KeepOnShelf = shelf.Keep;
             if (!capture.RegisterShortcut(config.CaptureHotkey))
             {
                 Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
@@ -866,15 +874,16 @@ namespace Capsule
         }
 
         // Beside the capsule, wherever it is (even hidden under a fullscreen app, for the shortcut).
-        void OpenPanel(bool byShortcut)
+        void OpenPanel(bool byShortcut, bool forFileDrag = false)
         {
             if (captureHidden) return;
             HideCard();
             panel.View.ClearReviewResult();
             RECT capsule;
             Native.GetWindowRect(notch.Handle, out capsule);
-            panel.Open(PanelNow(), capsule, notch.LeftEdge, notch.Monitor, byShortcut);
+            panel.Open(PanelNow(), capsule, notch.LeftEdge, notch.Monitor, byShortcut, forFileDrag);
             NotchOnTop();
+            if (forFileDrag) return;
             ideas.PanelOpened();
             calendar.PanelOpened(Clock.NowMs());
         }
@@ -1719,7 +1728,8 @@ namespace Capsule
             disposed = true;
             if (github != null) github.SetRepo("");
             foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd }) if (timer != null) timer.Stop();
-            if (capture != null) capture.Dispose();
+            try { if (capture != null) capture.Dispose(); }
+            finally { shelf.Dispose(); }
             if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening

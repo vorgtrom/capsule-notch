@@ -51,6 +51,7 @@ namespace Capsule
         readonly StackPanel ideasContent = new StackPanel();
         readonly Border musicTile = new Border();
         readonly Border focusTile = new Border(), clipTile = new Border();
+        readonly ShelfView shelfTile = new ShelfView();
         ClipboardTile clipModel;
         ClipKind? clipFilter;   // null: every kind
         bool clipExpanded;      // every copy, not just the first ClipRows
@@ -135,7 +136,7 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 15; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 17; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
             Place(sessionsTile, 2, 0, 3);
@@ -143,9 +144,11 @@ namespace Capsule
             Place(musicTile, 6, 0, 3);
             Place(focusTile, 8, 0, 3);
             Place(clipTile, 10, 0, 3);
+            Place(shelfTile, 12, 0, 3);
+            shelfTile.Resized += delegate { FixGaps(); RaiseResized(); };
             musicTile.Child = music;
-            Place(ideasTile, 12, 0, 3);
-            Place(needsYouTile, 14, 0, 3);
+            Place(ideasTile, 14, 0, 3);
+            Place(needsYouTile, 16, 0, 3);
             needsYouTile.Child = needsYou;
             needsYouTile.Visibility = Visibility.Collapsed;
             foreach (Border tile in new[] { calendarTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
@@ -212,6 +215,7 @@ namespace Capsule
         }
 
         public TextBox IdeaBox { get { return ideaBox; } }
+        internal ShelfView ShelfTile { get { return shelfTile; } }
         public MusicView Music { get { return music; } }
         public bool ShowingSettings { get { return settings.Visibility == Visibility.Visible; } }
         public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
@@ -260,7 +264,7 @@ namespace Capsule
             month.Restyle();
             usage.Restyle();
             music.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, ideasTile, needsYouTile })
+            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -284,6 +288,7 @@ namespace Capsule
             reviewRows.Children.Clear();
             shownGitHub = null;
             githubRows.Children.Clear();
+            shelfTile.Refresh();
             calendarLinkBox.CaretBrush = NotchView.Brush(Palette.Text);
             ideaBox.CaretBrush = NotchView.Brush(Palette.Text);
             linkBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -481,6 +486,12 @@ namespace Capsule
             Keyboard.Focus(ideaBox);
             ideaBox.CaretIndex = ideaBox.Text.Length;
             ideaBox.BringIntoView();
+        }
+
+        internal void RevealShelf()
+        {
+            UpdateLayout();
+            shelfTile.BringIntoView(new Rect(0, 0, shelfTile.ActualWidth, Math.Min(64, shelfTile.ActualHeight)));
         }
 
         public void ClearIdea() { ideaBox.Clear(); }

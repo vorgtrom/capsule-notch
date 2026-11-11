@@ -57,6 +57,7 @@ namespace Capsule
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
         [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
@@ -73,6 +74,7 @@ namespace Capsule
 
         // The window that has the keyboard now (zero when none).
         public static IntPtr Foreground() { return GetForegroundWindow(); }
+        internal static bool KeyPressed(int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; }
 
         // Gives the keyboard back to a window that had it; false when that window is gone or Windows refused.
         public static bool GiveForegroundTo(IntPtr window) { return window != IntPtr.Zero && IsWindow(window) && SetForegroundWindow(window); }
