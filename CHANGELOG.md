@@ -5,6 +5,11 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Choose what opens first.** In Settings, put Calendar or Clipboard at the top of the panel.
+- **Needs you.** The panel lists pending Claude and Codex requests and opens the existing review card. The tile moves
+  to the top while a request is pending. In Settings, you can monitor one public GitHub repository for failing
+  pull request workflows.
+
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
@@ -17,6 +22,9 @@ download for each one. A release takes its notes from its section here.
 - **Longer page captures.** After two consistent wheel samples, scrolling capture can move about 40% of the
   selection between screenshots. It uses single notches if the measured scroll distance per notch changes.
   It also goes back to the top in bigger steps.
+- **File shelf.** Drag files over the capsule to open the Shelf tile. Drop files there, then drag one or all of
+  them into another app as copies. Use **Keep on shelf** in Capture Preview to add the current PNG, including
+  any crop. The shelf clears on exit.
 
 ## v1.8.0
 

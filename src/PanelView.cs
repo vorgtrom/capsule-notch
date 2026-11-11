@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -30,10 +33,25 @@ namespace Capsule
         readonly ScrollViewer boardScroll = BodyScroll();
         readonly DockPanel header = new DockPanel { LastChildFill = false };
         readonly Grid tiles = new Grid();
+        readonly Dictionary<Border, int> tileRows = new Dictionary<Border, int>();
+        string panelHome = "default";
+        Border promotedTile;
+        int promotedIndex;
+        readonly ComboBox panelHomeChoice = new ComboBox();
+        readonly TextBlock panelHomeResult = new TextBlock();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
+        readonly Border needsYouTile = new Border();
+        readonly StackPanel needsYou = new StackPanel(), reviewRows = new StackPanel(), githubRows = new StackPanel();
+        readonly TextBlock reviewResult = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        readonly List<PendingReview> shownReviews = new List<PendingReview>();
+        readonly List<TextBlock> reviewTimes = new List<TextBlock>();
+        GitHubChecks shownGitHub;
+        bool needsYouHasSources;
+
         readonly StackPanel ideasContent = new StackPanel();
         readonly Border musicTile = new Border();
         readonly Border focusTile = new Border(), clipTile = new Border();
+        readonly ShelfView shelfTile = new ShelfView();
         ClipboardTile clipModel;
         ClipKind? clipFilter;   // null: every kind
         bool clipExpanded;      // every copy, not just the first ClipRows
@@ -66,7 +84,15 @@ namespace Capsule
         string captureShortcut = "Ctrl+Alt+S";
         bool captureShortcutRecording;
         bool capturing;
+        readonly TextBox githubRepoBox = new TextBox();
+        readonly TextBlock githubSettingsResult = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        readonly Button githubOff = new Button();
+        readonly Button githubSave = new Button();
 
+        public event Action<string> PanelHomeChanged;
+        internal event Action<PendingReview> ReviewRequested;
+        internal event Action<string, long> GitHubRunOpened;
+        internal event Action<string> GitHubRepoSaved;
         public event Action CaptureClicked;
         public event Action<string> CaptureShortcutChosen;
         public event Action RefreshAllClicked;
@@ -110,7 +136,7 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 13; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 17; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
             Place(sessionsTile, 2, 0, 3);
@@ -118,8 +144,13 @@ namespace Capsule
             Place(musicTile, 6, 0, 3);
             Place(focusTile, 8, 0, 3);
             Place(clipTile, 10, 0, 3);
+            Place(shelfTile, 12, 0, 3);
+            shelfTile.Resized += delegate { FixGaps(); RaiseResized(); };
             musicTile.Child = music;
-            Place(ideasTile, 12, 0, 3);
+            Place(ideasTile, 14, 0, 3);
+            Place(needsYouTile, 16, 0, 3);
+            needsYouTile.Child = needsYou;
+            needsYouTile.Visibility = Visibility.Collapsed;
             foreach (Border tile in new[] { calendarTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
             FixGaps();
             boardScroll.Content = tiles;
@@ -179,10 +210,12 @@ namespace Capsule
             Grid.SetRow(tile, row);
             Grid.SetColumn(tile, column);
             Grid.SetColumnSpan(tile, span);
+            tileRows.Add(tile, row);
             tiles.Children.Add(tile);
         }
 
         public TextBox IdeaBox { get { return ideaBox; } }
+        internal ShelfView ShelfTile { get { return shelfTile; } }
         public MusicView Music { get { return music; } }
         public bool ShowingSettings { get { return settings.Visibility == Visibility.Visible; } }
         public bool ShowingMonth { get { return month.Visibility == Visibility.Visible; } }
@@ -231,7 +264,7 @@ namespace Capsule
             month.Restyle();
             usage.Restyle();
             music.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, ideasTile })
+            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -239,8 +272,23 @@ namespace Capsule
                 tile.Background = theme.Brush(theme.Tile);
                 tile.BorderBrush = theme.Brush(theme.TileRim);
             }
-            foreach (Border box in new[] { ideaField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
-            foreach (Control box in new Control[] { ideaBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox }) box.Foreground = NotchView.Brush(Palette.Text);
+            foreach (Border box in new[] { ideaField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent, (Border)githubRepoBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
+            foreach (Control box in new Control[] { ideaBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox, githubRepoBox }) box.Foreground = NotchView.Brush(Palette.Text);
+            githubRepoBox.CaretBrush = NotchView.Brush(Palette.Text);
+            StyleAction(githubSave);
+            StyleAction(githubOff);
+            reviewResult.Foreground = NotchView.Brush(Palette.Amber);
+            githubSettingsResult.Foreground = NotchView.Brush(Palette.Secondary);
+            needsYou.Children.Clear();
+            needsYou.Children.Add(TileHeader("Needs you"));
+            needsYou.Children.Add(reviewRows);
+            needsYou.Children.Add(reviewResult);
+            needsYou.Children.Add(githubRows);
+            shownReviews.Clear();
+            reviewRows.Children.Clear();
+            shownGitHub = null;
+            githubRows.Children.Clear();
+            shelfTile.Refresh();
             calendarLinkBox.CaretBrush = NotchView.Brush(Palette.Text);
             ideaBox.CaretBrush = NotchView.Brush(Palette.Text);
             linkBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -290,6 +338,7 @@ namespace Capsule
 
         public void Update(PanelModel m)
         {
+            SetPanelHome(m.PanelHome);
             // Claude and Codex share a row; either one alone takes all of it.
             bool claude = m.Claude != null, codex = m.Codex != null;
             Show(claudeTile, claude);
@@ -304,6 +353,7 @@ namespace Capsule
             Show(calendarTile, m.Calendar != null);
             calendarTile.Child = m.Calendar != null ? CalendarContent(m.Calendar) : null;
             BuildIdeas(m.Ideas);
+            UpdateNeedsYou(m.NeedsYou);
             UpdateFocus(m.Focus);
             UpdateClipboard(m.Clipboard);
             UpdateMusic(m.Music);
@@ -332,9 +382,60 @@ namespace Capsule
             clipModel = t;
             Show(clipTile, t != null);
             clipTile.Child = t != null ? ClipboardContent(t) : null;
-            FixGaps();
+            ReorderTiles();
             Relayout();
         }
+
+        public void SetPanelHome(string value)
+        {
+            panelHome = Config.NormalizePanelHome(value);
+            foreach (ComboBoxItem choice in panelHomeChoice.Items)
+                if ((string)choice.Tag == panelHome) { panelHomeChoice.SelectedItem = choice; break; }
+            ReorderTiles();
+        }
+
+        public void ShowPanelHomeResult(bool saved)
+        {
+            panelHomeResult.Text = saved ? "" : "Couldn't save which section opens first.";
+            RaiseResized();
+        }
+
+        void ReorderTiles()
+        {
+            Show(needsYouTile, needsYouHasSources || panelHome == "needs_you");
+            Border first = null;
+            if (shownReviews.Count > 0 || panelHome == "needs_you") first = needsYouTile;
+            else if (panelHome == "calendar") first = calendarTile;
+            else if (panelHome == "clipboard") first = clipTile;
+            if (first != null && first.Visibility != Visibility.Visible) first = null;
+            if (first != promotedTile)
+            {
+                // UI Automation follows the child order. Move only the promoted tile to keep Ideas in place.
+                if (promotedTile != null)
+                {
+                    tiles.Children.Remove(promotedTile);
+                    tiles.Children.Insert(promotedIndex, promotedTile);
+                }
+                promotedTile = first;
+                if (first != null)
+                {
+                    promotedIndex = tiles.Children.IndexOf(first);
+                    tiles.Children.Remove(first);
+                    tiles.Children.Insert(0, first);
+                }
+            }
+            int firstRow = first != null ? tileRows[first] : 0;
+            foreach (var tile in tileRows)
+            {
+                int row = tile.Value;
+                if (row == firstRow && firstRow > 0) row = 0;
+                else if (row < firstRow) row += 2;
+                Grid.SetRow(tile.Key, row);
+            }
+            FixGaps();
+        }
+
+        public void ScrollBoardToTop() { boardScroll.ScrollToTop(); }
 
         static void Show(UIElement tile, bool shown) { tile.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; }
 
@@ -384,6 +485,13 @@ namespace Capsule
             ideaBox.Focus();
             Keyboard.Focus(ideaBox);
             ideaBox.CaretIndex = ideaBox.Text.Length;
+            ideaBox.BringIntoView();
+        }
+
+        internal void RevealShelf()
+        {
+            UpdateLayout();
+            shelfTile.BringIntoView(new Rect(0, 0, shelfTile.ActualWidth, Math.Min(64, shelfTile.ActualHeight)));
         }
 
         public void ClearIdea() { ideaBox.Clear(); }
@@ -417,6 +525,27 @@ namespace Capsule
 
             ringsBox.Margin = new Thickness(Pad + 4, 0, Pad + 4, 8);
             settingsBody.Children.Add(ringsBox);   // first: what the capsule shows
+
+            var opening = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
+            opening.Children.Add(SettingsHeading("Open panel with"));
+            System.Windows.Automation.AutomationProperties.SetName(panelHomeChoice, "Open panel with");
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Default order", Tag = "default" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Calendar", Tag = "calendar" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Clipboard", Tag = "clipboard" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Needs you", Tag = "needs_you" });
+            panelHomeChoice.SelectedIndex = 0;
+            panelHomeChoice.SelectionChanged += delegate
+            {
+                var choice = panelHomeChoice.SelectedItem as ComboBoxItem;
+                if (choice != null && (string)choice.Tag != panelHome && PanelHomeChanged != null)
+                    PanelHomeChanged((string)choice.Tag);
+            };
+            opening.Children.Add(panelHomeChoice);
+            panelHomeResult.Foreground = NotchView.Brush(Palette.Amber);
+            panelHomeResult.TextWrapping = TextWrapping.Wrap;
+            opening.Children.Add(panelHomeResult);
+            settingsBody.Children.Add(opening);
+            settingsBody.Children.Add(BuildGitHubSettings());
             settingsBody.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
@@ -524,6 +653,45 @@ namespace Capsule
             settingsBody.Children.Add(captureSettings);
         }
 
+        UIElement BuildGitHubSettings()
+        {
+            var section = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
+            section.Children.Add(Section("GitHub checks"));
+            section.Children.Add(Label("Public repository (owner/repo)"));
+            Plain(githubRepoBox);
+            githubRepoBox.MaxLength = 160;
+            AutomationProperties.SetName(githubRepoBox, "Public GitHub repository (owner/repo)");
+            var field = new Border();
+            Field(field, githubRepoBox);
+            section.Children.Add(field);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            githubSave.Content = "Save repository";
+            githubSave.Click += delegate { if (GitHubRepoSaved != null) GitHubRepoSaved(githubRepoBox.Text); };
+            githubOff.Content = "Turn off";
+            githubOff.Click += delegate { if (GitHubRepoSaved != null) GitHubRepoSaved(null); };
+            buttons.Children.Add(githubSave);
+            buttons.Children.Add(githubOff);
+            section.Children.Add(buttons);
+            githubSettingsResult.FontSize = 11;
+            section.Children.Add(githubSettingsResult);
+            ShowGitHubSettings("");
+            return section;
+        }
+
+        internal void ShowGitHubSettings(string repo)
+        {
+            githubRepoBox.Text = repo;
+            githubOff.IsEnabled = repo != "";
+            ShowGitHubSettingsResult(repo == "" ? "Off. Capsule checks only public repositories." : "Saved. Capsule checks this repository without signing in.", true);
+        }
+
+        internal void ShowGitHubSettingsResult(string text, bool ok)
+        {
+            githubSettingsResult.Text = text;
+            githubSettingsResult.Foreground = NotchView.Brush(ok ? Palette.Secondary : Palette.Amber);
+            RaiseResized();
+        }
+
         void OnShortcutKey(object sender, KeyEventArgs e)
         {
             if (!capturing || e.Key == Key.Escape) return;   // Esc still closes the panel
@@ -561,6 +729,7 @@ namespace Capsule
                 : "Your connection's secret, from app.notion.com/developers (Configuration tab).";
             linkBox.Text = databaseId != "" ? "https://app.notion.com/p/" + databaseId : "";
             notionResult.Text = "";
+            panelHomeResult.Text = "";
             shortcut = currentShortcut;
             shortcutText.Text = currentShortcut;
             shortcutResult.Text = "Click, then press a new shortcut.";
@@ -939,6 +1108,121 @@ namespace Capsule
         }
 
         // ---- Tiles ----
+
+        void UpdateNeedsYou(NeedsYouTile model)
+        {
+            needsYouHasSources = model != null && (model.HasEnabledAgent || model.Requests.Count > 0 || model.GitHub != null);
+            if (model == null)
+            {
+                shownReviews.Clear();
+                reviewRows.Children.Clear();
+                reviewTimes.Clear();
+                shownGitHub = null;
+                githubRows.Children.Clear();
+                return;
+            }
+
+            bool sameRows = shownReviews.Count == model.Requests.Count &&
+                shownReviews.Zip(model.Requests, (a, b) => a.Provider == b.Provider && a.Id == b.Id && a.Queued == b.Queued).All(same => same);
+            if (!sameRows || reviewRows.Children.Count == 0)
+            {
+                reviewRows.Children.Clear();
+                reviewTimes.Clear();
+                shownReviews.Clear();
+                shownReviews.AddRange(model.Requests);
+                if (shownReviews.Count == 0) reviewRows.Children.Add(NeedsText("No pending requests"));
+                foreach (PendingReview row in shownReviews)
+                {
+                    var content = new StackPanel();
+                    content.Children.Add(CardView.Wrap(CardView.MakeText(row.ProviderName + " · " + row.Project, 12.5, Palette.Text, FontWeights.SemiBold)));
+                    TextBlock time = NeedsText("");
+                    content.Children.Add(time);
+                    reviewTimes.Add(time);
+                    Button button = NeedsAction("Review", "Review " + row.ProviderName + " request for " + row.Project,
+                        delegate { if (ReviewRequested != null) ReviewRequested(row); });
+                    reviewRows.Children.Add(NeedsRow(content, button));
+                }
+            }
+            for (int i = 0; i < shownReviews.Count; i++)
+            {
+                PendingReview row = shownReviews[i];
+                reviewTimes[i].Text = row.Type + " · " + row.Wait(model.Now) + (row.Queued > 0 ? " · " + row.Queued + " queued" : "");
+            }
+            if (shownGitHub == model.GitHub) return;
+            shownGitHub = model.GitHub;
+            githubRows.Children.Clear();
+            if (shownGitHub == null) return;
+            TextBlock title = TileHeader("GitHub checks");
+            title.Margin = new Thickness(0, 8, 0, 3);
+            githubRows.Children.Add(title);
+            githubRows.Children.Add(NeedsText(shownGitHub.Repo));
+            if (shownGitHub.Status != null) githubRows.Children.Add(NeedsText(shownGitHub.Status));
+            else if (shownGitHub.Failures.Count == 0 && shownGitHub.Uncertain.Count == 0 && !shownGitHub.MorePulls)
+                githubRows.Children.Add(NeedsText("No failing runs found."));
+            foreach (GitHubFailure failure in shownGitHub.Failures)
+            {
+                string pull = "PR #" + failure.Pull;
+                string workflow = PromptCardModel.Shorten(PromptCardModel.Safe(failure.Workflow), 80);
+                string label = workflow == "" ? pull : pull + " · " + workflow;
+                string conclusion = failure.Conclusion == "timed_out" ? "Timed out" : failure.Conclusion == "startup_failure" ? "Failed to start" : "Failed";
+                string repo = shownGitHub.Repo;
+                long run = failure.Run;
+                Button button = NeedsAction("Open run", "Open " + label + " on GitHub",
+                    delegate { if (GitHubRunOpened != null) GitHubRunOpened(repo, run); });
+                githubRows.Children.Add(NeedsRow(NeedsText(label + " · " + conclusion), button));
+            }
+            foreach (long pull in shownGitHub.Uncertain)
+                githubRows.Children.Add(NeedsText("PR #" + pull + " · Couldn't see the latest run."));
+            if (shownGitHub.MorePulls) githubRows.Children.Add(NeedsText("Capsule checked only the 30 newest open PRs."));
+            if (shownGitHub.LastChecked > 0)
+                githubRows.Children.Add(NeedsText("Last checked " + Clock.FromMs(shownGitHub.LastChecked).ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));
+        }
+
+        internal void ShowReviewExpired()
+        {
+            reviewResult.Text = "This request is no longer pending.";
+            reviewResult.Visibility = Visibility.Visible;
+            RaiseResized();
+        }
+
+        internal void ClearReviewResult()
+        {
+            reviewResult.Visibility = Visibility.Collapsed;
+        }
+
+        static TextBlock NeedsText(string text)
+        {
+            return CardView.Wrap(CardView.MakeText(text, 11.5, Palette.Secondary, FontWeights.Normal));
+        }
+
+        static DockPanel NeedsRow(UIElement content, Button button)
+        {
+            var line = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
+            DockPanel.SetDock(button, Dock.Right);
+            line.Children.Add(button);
+            line.Children.Add(content);
+            return line;
+        }
+
+        static Button NeedsAction(string label, string name, Action action)
+        {
+            var button = new Button { Content = label };
+            AutomationProperties.SetName(button, name);
+            StyleAction(button);
+            button.Click += delegate { action(); };
+            return button;
+        }
+
+        static void StyleAction(Button button)
+        {
+            button.Background = NotchView.Brush(Palette.Track);
+            button.Foreground = NotchView.Brush(Palette.Text);
+            button.BorderBrush = NotchView.Brush(Palette.Secondary);
+            button.Padding = new Thickness(8, 3, 8, 3);
+            button.Margin = new Thickness(5, 4, 0, 4);
+            button.VerticalAlignment = VerticalAlignment.Center;
+            button.FontSize = 12;
+        }
 
         UIElement UsageContent(UsageTile t)
         {

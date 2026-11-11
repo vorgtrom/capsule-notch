@@ -35,6 +35,62 @@ namespace Capsule
             DiskNoteIsAmberEvenBeforeSetup();
             PagesScrollInsideTheWorkArea();
             SettingsAndFormsKeepThePanelOpen();
+            PanelOpeningPreference();
+        }
+
+        static void PanelOpeningPreference()
+        {
+            string file = System.IO.Path.Combine(TestRunner.NewTempDir(), "config.json");
+            System.IO.File.WriteAllText(file, "{}");
+            TestRunner.Eq("default", Config.Load(file).PanelHome, "an older config keeps the default panel order");
+            var config = new Config { PanelHome = "calendar" };
+            TestRunner.Check(config.Save(file), "save the panel opening preference");
+            TestRunner.Eq("calendar", Config.Load(file).PanelHome, "the panel preference survives restart");
+            System.IO.File.WriteAllText(file, "{\"panel_home\":\"unknown\"}");
+            TestRunner.Eq("default", Config.Load(file).PanelHome, "an unknown panel section uses default order");
+
+            var view = new PanelView();
+            var model = Sample(5);
+            model.PanelHome = "calendar";
+            model.Calendar = new CalendarTile();
+            model.Clipboard = new ClipboardTile();
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Claude").Y, "Calendar opens first when available");
+            var boardTiles = (Grid)ScrollOf(view).Content;
+            TestRunner.Check(HasText(boardTiles.Children[0], "Calendar"), "Calendar also comes first in the accessibility order");
+            TestRunner.Near(Position(view, "Claude").Y, Position(view, "Codex").Y, "the usage tiles stay paired");
+            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y, "the other tiles keep their order");
+            model.Calendar = null;
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Clipboard").Y, "a hidden preferred section falls back to default order");
+            TestRunner.Check(HasText(boardTiles.Children[0], "Claude"), "falling back restores the accessibility order");
+            model.PanelHome = "clipboard";
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(Position(view, "Clipboard").Y < Position(view, "Claude").Y, "Clipboard can open first");
+            view.UpdateClipboard(null);
+            Lay(view);
+            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y, "hiding Clipboard restores the default order immediately");
+
+            view.ConstrainHeight(190);
+            Lay(view);
+            ScrollViewer scroll = ScrollOf(view);
+            scroll.ScrollToBottom();
+            view.UpdateLayout();
+            TestRunner.Check(scroll.VerticalOffset > 0, "the board was scrolled");
+            view.ScrollBoardToTop();
+            view.UpdateLayout();
+            TestRunner.Near(0, scroll.VerticalOffset, "an ordinary open returns to the top");
+            view.FocusIdeas();
+            view.UpdateLayout();
+            TestRunner.Check(scroll.VerticalOffset > 0, "the Ideas shortcut scrolls to its field");
+        }
+
+        static Point Position(PanelView view, string text)
+        {
+            return FindText(view, text).TranslatePoint(new Point(), view);
         }
 
         static ScrollViewer ScrollOf(DependencyObject root)

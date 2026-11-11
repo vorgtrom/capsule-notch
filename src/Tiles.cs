@@ -4,9 +4,10 @@ using System.Globalization;
 namespace Capsule
 {
     // Everything the panel shows, tile by tile, in a fixed order: Claude, Codex, Sessions, Calendar, Music, Focus,
-    // Clipboard, Ideas. A tile whose ring is switched off (or that has nothing to show) is null, and isn't shown.
+    // Clipboard, Ideas and Needs you. A tile whose ring is switched off (or that has nothing to show) is null, and isn't shown.
     public sealed class PanelModel
     {
+        public string PanelHome = "default";
         public UsageTile Claude;
         public UsageTile Codex;
         public SessionsTile Sessions;   // null while Claude is off
@@ -15,6 +16,7 @@ namespace Capsule
         public FocusTile Focus;
         public ClipboardTile Clipboard;
         public IdeasTile Ideas;
+        internal NeedsYouTile NeedsYou;
     }
 
     // The Clipboard tile: the copies kept, newest first.

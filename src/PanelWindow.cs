@@ -18,12 +18,14 @@ namespace Capsule
         readonly PanelView view = new PanelView();
         readonly TranslateTransform slide = new TranslateTransform();
         readonly DispatcherTimer hideLater;
+        readonly DispatcherTimer fileDragLeave;
         GlassLayer glass;   // the live blur below the panel; null when the theme is solid
         IntPtr hwnd;
-        RECT capsule;
+        RECT capsule, body;
         bool leftEdge;
         MonitorInfo monitor;
         bool closing;
+        bool fileDragIn, openedForFileDrag;
 
         public PanelWindow()
         {
@@ -43,6 +45,19 @@ namespace Capsule
                 Place();
             };
             Content = view;
+            AllowDrop = true;
+            PreviewDragEnter += OnFileDragOver;
+            PreviewDragOver += OnFileDragOver;
+            PreviewDragLeave += delegate { FileDragLeft(); };
+            PreviewDrop += OnFileDrop;
+            fileDragLeave = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(MotionMs) };
+            fileDragLeave.Tick += delegate
+            {
+                POINT cursor;
+                if (Native.GetCursorPos(out cursor) && InFileDragGap(cursor, capsule, body, leftEdge) &&
+                    (Native.KeyPressed(0x01) || Native.KeyPressed(0x02)) && !Native.KeyPressed(0x1B)) return;
+                FinishFileDrag(false);
+            };
             SourceInitialized += delegate
             {
                 hwnd = new WindowInteropHelper(this).Handle;
@@ -50,6 +65,7 @@ namespace Capsule
             };
             PreviewKeyDown += delegate(object sender, KeyEventArgs e)
             {
+                if (fileDragIn || view.ShelfTile.Dragging) return;
                 // The month page's keys first: Esc there cancels its form before it closes the panel.
                 if (view.ShowingMonth && view.Month.HandleKey(e.Key, Keyboard.FocusedElement as DependencyObject))
                 {
@@ -61,13 +77,21 @@ namespace Capsule
                 if (view.ShowingUsage) view.ShowBoard();   // Esc on the Usage page goes back to the tiles
                 else Dismiss();
             };
-            Deactivated += delegate { if (!view.KeepOpenOnDeactivate) Dismiss(); };
+            Deactivated += delegate
+            {
+                if (!fileDragIn && !view.ShelfTile.Dragging && !view.KeepOpenOnDeactivate) Dismiss();
+            };
+            view.ShelfTile.DragCompleted += delegate
+            {
+                if (!IsActive && !view.KeepOpenOnDeactivate) Dismiss();
+            };
             // Alt+F4, or any other close request, only dismisses: a WPF window that has been closed can never be shown again.
             // WPF ignores Cancel when Windows is shutting down or the session is ending, so the app still exits then; but a
             // panel.Close() of our own on the way out would be cancelled here without a word.
             Closing += delegate(object sender, System.ComponentModel.CancelEventArgs e) { e.Cancel = true; Dismiss(); };
             IsVisibleChanged += delegate
             {
+                if (!IsVisible) FinishFileDrag(false);
                 if (glass == null) return;
                 if (!IsVisible)
                 {
@@ -124,7 +148,7 @@ namespace Capsule
         }
 
         // Opens beside the capsule (its window rect in physical pixels), or brings an open panel to the front.
-        public void Open(PanelModel model, RECT capsuleRect, bool left, MonitorInfo on, bool byShortcut)
+        public void Open(PanelModel model, RECT capsuleRect, bool left, MonitorInfo on, bool byShortcut, bool forFileDrag = false)
         {
             if (on == null) return;
             bool wasClosing = closing;
@@ -141,17 +165,79 @@ namespace Capsule
             new WindowInteropHelper(this).EnsureHandle();
             if (appearing || wasClosing || byShortcut) view.ShowBoard();   // it always opens on the tiles: also when turned round mid-close, and by the shortcut with the settings showing
             view.Update(model);
+            view.ShelfTile.Refresh();
+            if (!byShortcut && !forFileDrag) view.ScrollBoardToTop();
             Place();
             if (appearing)
             {
                 Rest();   // faded out and slid toward the capsule: where the fade-in starts
-                Show();
+                ShowActivated = !forFileDrag;
+                try { Show(); }
+                finally { ShowActivated = true; }
                 Place();   // as with the card: showing on a monitor with other scaling can resize the window
                 Animate(true);
             }
             else if (wasClosing) Animate(true);   // opened again during the close: turn round from wherever it has got to
-            Activate();
+            if (forFileDrag) view.RevealShelf();
+            else Activate();
             if (byShortcut) view.FocusIdeas();
+        }
+
+        internal bool BeginFileDragAtNotch()
+        {
+            if (view.ShelfTile.Dragging) return false;
+            fileDragLeave.Stop();
+            if (fileDragIn) return false;
+            fileDragIn = true;
+            openedForFileDrag = !IsOpen;
+            return openedForFileDrag;
+        }
+
+        internal void FileDragLeft()
+        {
+            if (fileDragIn) fileDragLeave.Start();
+        }
+
+        // Explorer crosses an actual gap between the two windows.
+        internal static bool InFileDragGap(POINT cursor, RECT capsule, RECT panel, bool left)
+        {
+            int near = left ? capsule.Right : panel.Right, far = left ? panel.Left : capsule.Left;
+            return cursor.X >= near && cursor.X < far &&
+                cursor.Y >= Math.Max(capsule.Top, panel.Top) && cursor.Y < Math.Min(capsule.Bottom, panel.Bottom);
+        }
+
+        void OnFileDragOver(object sender, DragEventArgs e)
+        {
+            if (!ShelfView.HasFiles(e.Data)) return;
+            e.Handled = true;
+            e.Effects = DragDropEffects.None;
+            if (view.ShelfTile.Dragging || (e.AllowedEffects & DragDropEffects.Copy) == 0) return;
+            fileDragIn = true;
+            fileDragLeave.Stop();
+            if (view.ShelfTile.IsTarget(e.OriginalSource as DependencyObject)) e.Effects = DragDropEffects.Copy;
+        }
+
+        void OnFileDrop(object sender, DragEventArgs e)
+        {
+            if (!ShelfView.HasFiles(e.Data)) return;
+            e.Handled = true;
+            e.Effects = DragDropEffects.None;
+            if (view.ShelfTile.Dragging) return;
+            bool onShelf = (e.AllowedEffects & DragDropEffects.Copy) != 0 &&
+                view.ShelfTile.IsTarget(e.OriginalSource as DependencyObject);
+            if (onShelf && view.ShelfTile.Receive(e.Data)) e.Effects = DragDropEffects.Copy;
+            FinishFileDrag(onShelf);
+        }
+
+        void FinishFileDrag(bool droppedOnShelf)
+        {
+            fileDragLeave.Stop();
+            if (!fileDragIn) return;
+            bool autoOpened = openedForFileDrag;
+            fileDragIn = openedForFileDrag = false;
+            if (autoOpened && !droppedOnShelf) Dismiss();
+            if (autoOpened && droppedOnShelf)
+                Dispatcher.BeginInvoke(new Action(delegate { if (IsOpen && !fileDragIn && !view.ShelfTile.Dragging) Activate(); }));
         }
 
         // New content while open: the panel resizes to fit.
@@ -193,7 +279,7 @@ namespace Capsule
             view.Relayout();
             int width = (int)Math.Ceiling((view.DesiredSize.Width - 2 * PanelView.ShadowMargin) * scale);
             int height = (int)Math.Ceiling((view.DesiredSize.Height - 2 * PanelView.ShadowMargin) * scale);
-            RECT body = Layout.PanelRect(capsule, leftEdge, monitor.Work, width, height, (int)Math.Round(8 * scale));
+            body = Layout.PanelRect(capsule, leftEdge, monitor.Work, width, height, (int)Math.Round(8 * scale));
             RECT r = Layout.Inflate(body, (int)Math.Round(PanelView.ShadowMargin * scale));
             Native.MovePair(hwnd, GlassHandle, r.Left, r.Top, r.Width, r.Height);
             if (glass != null)

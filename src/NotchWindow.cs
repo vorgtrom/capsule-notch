@@ -27,6 +27,7 @@ namespace Capsule
         public event Action Clicked;                         // a click, not a drag, anywhere on the notch
         public event Action<int> HoverChanged;               // a cell index, or -1 when the mouse leaves the cells
         public event Action RightClicked;
+        internal event Action FileDragOver, FileDragLeft;
         public event Action<string, string, double> Moved;   // edge, monitor device name, position along the edge
 
         public NotchWindow()
@@ -42,6 +43,11 @@ namespace Capsule
             view.HorizontalAlignment = HorizontalAlignment.Left;
             view.VerticalAlignment = VerticalAlignment.Top;
             Content = view;
+            AllowDrop = true;
+            PreviewDragEnter += OnFileDragOver;
+            PreviewDragOver += OnFileDragOver;
+            PreviewDragLeave += OnFileDragLeft;
+            PreviewDrop += OnFileDragLeft;
             SourceInitialized += delegate
             {
                 hwnd = new WindowInteropHelper(this).Handle;
@@ -75,6 +81,21 @@ namespace Capsule
         public MonitorInfo Monitor { get { return monitor; } }
         public bool LeftEdge { get { return edge == "left"; } }
         IntPtr GlassHandle { get { return glass != null ? glass.Handle : IntPtr.Zero; } }
+
+        void OnFileDragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            if ((e.AllowedEffects & DragDropEffects.Copy) != 0 && ShelfView.HasFiles(e.Data) && FileDragOver != null)
+                FileDragOver();
+        }
+
+        void OnFileDragLeft(object sender, DragEventArgs e)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            if (FileDragLeft != null) FileDragLeft();
+        }
 
         // Live blur below the notch on or off. False when it was asked for but couldn't be made.
         public bool SetGlass(bool on)

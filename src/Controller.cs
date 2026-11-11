@@ -27,6 +27,7 @@ namespace Capsule
         IdeasModule ideas;
         CalendarModule calendar;
         MusicModule music;
+        GitHubMonitor github;
         UpdateCheck updates;   // a release build's once-a-day look for a newer release
         CodexActivity codexActivity;
         UsageHistory history;        // token use per day and model, from the Claude Code and Codex logs
@@ -49,6 +50,7 @@ namespace Capsule
         bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
+        readonly Shelf shelf = new Shelf();
         ClipboardWatcher clipWatcher;
         long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
         int clipRetries;        // reads tried again while another app held the clipboard
@@ -171,6 +173,27 @@ namespace Capsule
             notch.RightClicked += ShowMenu;
             notch.Moved += OnMoved;
             panel = new PanelWindow();
+            panel.View.PanelHomeChanged += value => Guard("panel opening", delegate
+            {
+                string previous = config.PanelHome;
+                config.PanelHome = Config.NormalizePanelHome(value);
+                bool saved = config.Save(Paths.ConfigFile);
+                if (!saved) config.PanelHome = previous;
+                panel.View.SetPanelHome(config.PanelHome);
+                panel.View.ShowPanelHomeResult(saved);
+            });
+            github = new GitHubMonitor(TaskScheduler.FromCurrentSynchronizationContext());
+            github.SetRepo(config.GitHubRepo);
+            github.Changed += delegate { if (!disposed && panel.IsOpen) panel.Refresh(PanelNow()); };
+            panel.View.ReviewRequested += delegate(PendingReview row) { Guard("review", delegate { ReviewPending(row); }); };
+            panel.View.GitHubRunOpened += delegate(string repo, long run) { Guard("GitHub run", delegate { OpenGitHubRun(repo, run); }); };
+            panel.View.GitHubRepoSaved += delegate(string repo) { Guard("GitHub settings", delegate { SaveGitHubRepo(repo); }); };
+            panel.View.ShelfTile.Bind(shelf);
+            notch.FileDragOver += delegate
+            {
+                if (!captureHidden && panel.BeginFileDragAtNotch()) Guard("shelf", delegate { OpenPanel(false, true); });
+            };
+            notch.FileDragLeft += panel.FileDragLeft;
             panel.View.Music.Commanded += OnMusicCommand;
             panel.View.Music.SourceSelected += delegate(string key) { music.Select(key); };
             panel.View.RefreshAllClicked += delegate { Guard("refresh", RefreshAll); };
@@ -196,6 +219,7 @@ namespace Capsule
                 panel.View.ShowRings(config);
                 panel.View.ShowSettings(SecretStore.Exists(Paths.NotionSecretFile), config.NotionDatabase, config.Hotkey, config.CaptureHotkey, capture.ShortcutRegistered);
                 panel.View.ShowGoogle(calendar.Settings());
+                panel.View.ShowGitHubSettings(config.GitHubRepo);
             };
             panel.View.NotionSaved += OnNotionSaved;
             panel.View.ShortcutChosen += OnShortcutChosen;
@@ -236,6 +260,7 @@ namespace Capsule
             shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
+            capture.KeepOnShelf = shelf.Keep;
             if (!capture.RegisterShortcut(config.CaptureHotkey))
             {
                 Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
@@ -405,6 +430,7 @@ namespace Capsule
             long now = Clock.NowMs();
             foreach (IModule m in modules) if (ModuleOn(m)) m.Tick(now);
             Guard("updates", delegate { updates.Tick(now); });
+            Guard("GitHub checks", delegate { github.Tick(now); });
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
             PlayCue(cues.Next(ClaudeSessionsForCues()));
@@ -608,6 +634,7 @@ namespace Capsule
             long now = Clock.NowMs();
             return new PanelModel
             {
+                PanelHome = config.PanelHome,
                 Claude = config.RingOn("claude") ? claude.Tile(now, CultureInfo.CurrentCulture) : null,
                 Codex = config.RingOn("codex") ? codex.Tile(now, CultureInfo.CurrentCulture) : null,
                 Sessions = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null,
@@ -616,6 +643,7 @@ namespace Capsule
                 Focus = config.RingOn("focus") ? FocusTile.From(focus, now, CultureInfo.CurrentCulture) : null,
                 Clipboard = ClipTile(),
                 Ideas = ideas.Tile(),
+                NeedsYou = NeedsYouTile.From(config.RingOn("claude") ? prompts : null, config.RingOn("codex") ? codexPrompts : null, github.Current, now),
             };
         }
 
@@ -846,16 +874,67 @@ namespace Capsule
         }
 
         // Beside the capsule, wherever it is (even hidden under a fullscreen app, for the shortcut).
-        void OpenPanel(bool byShortcut)
+        void OpenPanel(bool byShortcut, bool forFileDrag = false)
         {
             if (captureHidden) return;
             HideCard();
+            panel.View.ClearReviewResult();
             RECT capsule;
             Native.GetWindowRect(notch.Handle, out capsule);
-            panel.Open(PanelNow(), capsule, notch.LeftEdge, notch.Monitor, byShortcut);
+            panel.Open(PanelNow(), capsule, notch.LeftEdge, notch.Monitor, byShortcut, forFileDrag);
             NotchOnTop();
+            if (forFileDrag) return;
             ideas.PanelOpened();
             calendar.PanelOpened(Clock.NowMs());
+        }
+
+        void ReviewPending(PendingReview row)
+        {
+            if (!panel.IsOpen || panel.View.ShowingSettings) return;
+            long now = Clock.NowMs();
+            HeldPrompt held = NeedsYouTile.Review(row, prompts, codexPrompts, now);
+            int cell = shown.IndexOf(row.Provider == "codex" ? codex : claude);
+            if (held == null || !config.RingOn(row.Provider) || cell < 0)
+            {
+                panel.Refresh(PanelNow());
+                panel.View.ShowReviewExpired();
+                return;
+            }
+            panel.View.ClearReviewResult();
+            panel.Dismiss();
+            openCard.Stop();
+            closeCard.Stop();
+            cardCell = cell;
+            ShowPromptCard(held, row.Provider == "codex" ? codexPrompts : prompts, now, cell);
+            NotchOnTop();
+        }
+
+        void SaveGitHubRepo(string text)
+        {
+            string repo = GitHubMonitor.NormalizeRepo(text);
+            if (text != null && repo == "")
+            {
+                panel.View.ShowGitHubSettingsResult("Enter a public repository as owner/repo.", false);
+                return;
+            }
+            string old = config.GitHubRepo;
+            config.GitHubRepo = repo;
+            if (!config.Save(Paths.ConfigFile))
+            {
+                config.GitHubRepo = old;
+                panel.View.ShowGitHubSettingsResult("Couldn't save GitHub settings.", false);
+                return;
+            }
+            github.SetRepo(repo);
+            github.Tick(Clock.NowMs());
+            panel.View.ShowGitHubSettings(repo);
+        }
+
+        void OpenGitHubRun(string repo, long run)
+        {
+            if (!string.Equals(repo, config.GitHubRepo, StringComparison.OrdinalIgnoreCase)) return;
+            string url = GitHubMonitor.RunUrl(repo, run);
+            if (url != null) System.Diagnostics.Process.Start(url);
         }
 
         void RefreshAll()
@@ -1304,7 +1383,7 @@ namespace Capsule
             cardCell = cell;
             PromptBroker broker = shown[cell] == codex ? codexPrompts : prompts;
             if (broker.Current != null)
-                card.ShowPromptBeside(PromptCardModel.From(broker.Current, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+                ShowPromptCard(broker.Current, broker, now, cell);
             else
             {
                 CardModel model = shown[cell].Card(sessions, now, CultureInfo.CurrentCulture, w => PaceFor(shown[cell].Current, w), tally.For);
@@ -1317,6 +1396,11 @@ namespace Capsule
                 card.ShowBeside(model, notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
             }
             NotchOnTop();
+        }
+
+        void ShowPromptCard(HeldPrompt held, PromptBroker broker, long now, int cell)
+        {
+            card.ShowPromptBeside(PromptCardModel.From(held, broker.Count, broker.MsLeft(now)), notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
         }
 
         void OnMusicCommand(string key, MusicCommand command)
@@ -1642,8 +1726,10 @@ namespace Capsule
         {
             if (disposed) return;
             disposed = true;
+            if (github != null) github.SetRepo("");
             foreach (DispatcherTimer timer in new[] { tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd }) if (timer != null) timer.Stop();
-            if (capture != null) capture.Dispose();
+            try { if (capture != null) capture.Dispose(); }
+            finally { shelf.Dispose(); }
             if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening
