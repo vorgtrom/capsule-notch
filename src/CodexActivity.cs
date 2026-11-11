@@ -120,8 +120,8 @@ namespace Capsule
             CodexChat chat = null;
             foreach (Seen s in files.Values)
             {
-                if (s.Window <= 0 || (chat != null && Clock.ToMs(s.WrittenUtc) <= chat.AtMs)) continue;
                 long at = Clock.ToMs(s.WrittenUtc);
+                if (chat != null && at <= chat.AtMs) continue;
                 chat = new CodexChat { Model = s.Model, Context = s.Context, Window = s.Window, AtMs = at, Working = s.Started && now - at <= SilentMs };
             }
             Latest = chat;
