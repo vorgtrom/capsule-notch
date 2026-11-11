@@ -5,17 +5,19 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
-- **Clipboard categories.** Filter copies with **All**, **Links**, **Images**, **Code**, or **Text**. Code has a
-  monospace preview, and colours keep their swatches under **Text** and **All**.
-
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
-- **Windows output volume.** Set or mute the default playback device's volume from the Music tile in the panel.
-  The control follows changes made in Windows.
 
-- **Weather in the panel.** Choose a place in Settings to see current conditions and hourly and daily forecasts.
-  You can choose Celsius or Fahrenheit and put Weather first with **Open panel with**.
+## v1.10.0
+
+- **Weather in the panel.** Pick a place in Settings to see the weather now, the next 6 hours and the next 4 days.
+  Choose °C or °F, and put Weather first with **Open panel with**. It's off until you pick a place, and Capsule
+  never asks Windows for your location.
+- **Volume next to the music.** The Music tile has a mute button and a volume slider for your speakers or
+  headphones. It follows changes you make elsewhere in Windows.
+- **Clipboard categories.** Filter copies with **All**, **Links**, **Images**, **Code** or **Text**. Code shows in a
+  monospace font, and colours keep their swatches under **Text**.
 
 ## v1.9.0
 

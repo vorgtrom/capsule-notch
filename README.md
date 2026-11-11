@@ -16,8 +16,9 @@ permission, asks you a question, wants to **edit a file** or has a **plan** read
 right on the capsule**, with the change shown line by line, without switching to the Claude app. Each session shows
 your last prompt and what Claude did last, and a short **sound** tells you when one needs you or finishes. You can
 also connect Codex and local ChatGPT Work for command approvals and answers. And it shows what's playing in
-**Spotify** or **YouTube Music**, with pause, skip and a player switch, runs a **focus timer**, and keeps a short
-**clipboard history**. It takes **screenshots** of an area or a whole scrolling webpage, keeps files on a
+**Spotify** or **YouTube Music**, with pause, skip, a player switch and a **volume** slider, runs a **focus timer**,
+shows the **weather** for a place you pick, and keeps a short **clipboard history** sorted into links, images, code
+and text. It takes **screenshots** of an area or a whole scrolling webpage, keeps files on a
 **shelf** to drag into other apps, and gathers everything that **needs you** in one tile: Claude and Codex requests,
 and failing checks on a GitHub repository. Each ring can be switched off in Settings.
 
@@ -57,8 +58,8 @@ Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding t
   - Hover it for the rest of today and tomorrow's first three events, and, signed in, the Google Tasks due on those
     days that aren't done.
   - All-day events, cancelled ones and ones you declined don't count for the cell.
-- **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, your
-  clipboard, the [shelf](#shelf), your ideas, and [what needs you](#needs-you).
+- **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, the
+  [weather](#weather), your music, your clipboard, the [shelf](#shelf), your ideas, and [what needs you](#needs-you).
   Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
   after a failed check dim once they are over ten minutes old.
   Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
