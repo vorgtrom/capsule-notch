@@ -81,6 +81,10 @@ namespace Capsule
             {
                 if (!fileDragIn && !view.ShelfTile.Dragging && !view.KeepOpenOnDeactivate) Dismiss();
             };
+            view.ShelfTile.DragCompleted += delegate
+            {
+                if (!IsActive && !view.KeepOpenOnDeactivate) Dismiss();
+            };
             // Alt+F4, or any other close request, only dismisses: a WPF window that has been closed can never be shown again.
             // WPF ignores Cancel when Windows is shutting down or the session is ending, so the app still exits then; but a
             // panel.Close() of our own on the way out would be cancelled here without a word.
@@ -159,7 +163,7 @@ namespace Capsule
             OpenedByShortcut = byShortcut;
             bool appearing = !IsVisible;
             new WindowInteropHelper(this).EnsureHandle();
-            if (appearing || wasClosing || byShortcut || forFileDrag) view.ShowBoard();   // it always opens on the tiles: also when turned round mid-close, and by the shortcut with the settings showing
+            if (appearing || wasClosing || byShortcut) view.ShowBoard();   // it always opens on the tiles: also when turned round mid-close, and by the shortcut with the settings showing
             view.Update(model);
             view.ShelfTile.Refresh();
             if (!byShortcut && !forFileDrag) view.ScrollBoardToTop();
@@ -186,7 +190,7 @@ namespace Capsule
             if (fileDragIn) return false;
             fileDragIn = true;
             openedForFileDrag = !IsOpen;
-            return true;
+            return openedForFileDrag;
         }
 
         internal void FileDragLeft()

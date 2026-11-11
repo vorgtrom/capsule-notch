@@ -18,6 +18,7 @@ namespace Capsule
         string status = "";
         internal bool Dragging { get; private set; }
         internal event Action Resized;
+        internal event Action DragCompleted;
 
         internal ShelfView()
         {
@@ -152,7 +153,11 @@ namespace Capsule
                 copied = (drag ?? DragDrop.DoDragDrop)(source, data, DragDropEffects.Copy) == DragDropEffects.Copy;
             }
             catch (ExternalException e) { Log.Error("shelf drag", e); }
-            finally { Dragging = false; }
+            finally
+            {
+                Dragging = false;
+                if (DragCompleted != null) DragCompleted();
+            }
             string missing = files.Length < requested.Length ? "Some files are no longer available. " : "";
             SetStatus(missing + (copied ? "" : DropFailed));
         }

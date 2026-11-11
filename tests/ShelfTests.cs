@@ -15,6 +15,9 @@ namespace Capsule
             CroppedCaptureAndBudget();
             CleanupWithLockedFile();
             DragGap();
+            OutboundDragRechecksWindowActivation();
+            IncomingDragKeepsTheCurrentPage();
+            FolderDropExplainsTheRestriction();
         }
 
         static void References()
@@ -33,7 +36,7 @@ namespace Capsule
                 string alias = Path.Combine(dir, ".", "FILE-0.TXT");
                 TestRunner.Eq(0, shelf.AddFiles(new[] { alias }, out status), "aliases and Windows casing do not duplicate a shelf row");
                 TestRunner.Check(status.Contains("already"), "Shelf explains an all-duplicate drop");
-                TestRunner.Eq(0, shelf.AddFiles(new[] { dir, Path.Combine(dir, "absent.txt"), "relative.txt" }, out status), "Shelf accepts existing absolute file paths only");
+                TestRunner.Eq(0, shelf.AddFiles(new[] { Path.Combine(dir, "absent.txt"), "relative.txt" }, out status), "Shelf accepts existing absolute file paths only");
                 TestRunner.Check(status.Contains("unavailable"), "Shelf explains unavailable paths in an inbound drop");
                 TestRunner.Eq(10, shelf.AddFiles(paths, out status), "a partial drop fills the remaining slots");
                 TestRunner.Eq(Shelf.MaxItems, shelf.Items.Count, "Shelf holds at most 12 rows");
@@ -71,6 +74,87 @@ namespace Capsule
                 File.Delete(path);
             }
             Directory.Delete(dir);
+        }
+
+        static void OutboundDragRechecksWindowActivation()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "drag.txt");
+            File.WriteAllText(path, "synthetic drag");
+            using (var shelf = new Shelf())
+            {
+                WithInactivePanel(panel =>
+                {
+                    panel.View.ShelfTile.Bind(shelf);
+                    panel.View.ShelfTile.DragFiles(panel.View.ShelfTile, new[] { path }, (source, data, effects) =>
+                    {
+                        TestRunner.Check(panel.IsOpen && panel.View.ShelfTile.Dragging, "the inactive board stays open during the drag");
+                        return DragDropEffects.Copy;
+                    });
+                    TestRunner.Check(!panel.IsOpen, "the board dismisses when the drag ends without activation");
+                });
+
+                WithInactivePanel(panel =>
+                {
+                    panel.View.ShelfTile.Bind(shelf);
+                    panel.View.ShowSettings(false, "", "Ctrl+Alt+N");
+                    panel.View.ShelfTile.DragFiles(panel.View.ShelfTile, new[] { path }, (source, data, effects) => DragDropEffects.None);
+                    TestRunner.Check(panel.IsOpen && panel.View.ShowingSettings, "Settings can stay open when an outbound drag ends");
+                });
+            }
+        }
+
+        static void IncomingDragKeepsTheCurrentPage()
+        {
+            WithInactivePanel(panel =>
+            {
+                panel.View.ShowSettings(false, "", "Ctrl+Alt+N");
+                panel.View.ClientSecretBox.Password = "unfinished-test-value";
+                TestRunner.Check(!panel.BeginFileDragAtNotch(), "a drag over the notch does not reopen an open Settings page");
+                TestRunner.Eq("unfinished-test-value", panel.View.ClientSecretBox.Password, "the drag preserves an unsaved settings value");
+            });
+            WithInactivePanel(panel =>
+            {
+                panel.View.ShowMonth(new MonthModel());
+                TestRunner.Check(!panel.BeginFileDragAtNotch(), "a drag over the notch does not reopen an open month page");
+                TestRunner.Check(panel.View.ShowingMonth, "the month page stays visible");
+            });
+
+            var closed = new PanelWindow();
+            TestRunner.Check(closed.BeginFileDragAtNotch(), "a drag over the notch still opens a closed panel");
+        }
+
+        static void WithInactivePanel(Action<PanelWindow> check)
+        {
+            var panel = new PanelWindow { ShowActivated = false, Left = -10000, Top = -10000, Width = 1, Height = 1 };
+            try
+            {
+                panel.Show();
+                TestRunner.Check(panel.IsOpen && !panel.IsActive, "test panel is open without taking focus");
+                check(panel);
+            }
+            finally { panel.Hide(); }
+        }
+
+        static void FolderDropExplainsTheRestriction()
+        {
+            string folder = TestRunner.NewTempDir();
+            string missing = Path.Combine(folder, "missing.txt");
+            string file = Path.Combine(folder, "available.txt");
+            File.WriteAllText(file, "sample");
+            using (var shelf = new Shelf())
+            {
+                var tile = new ShelfView();
+                tile.Bind(shelf);
+                TestRunner.Check(!tile.Receive(new DataObject(DataFormats.FileDrop, new[] { folder })), "the Shelf rejects a folder drop");
+                var content = (StackPanel)tile.Child;
+                TestRunner.Eq("Folders can't go on the shelf.", content.Children.OfType<TextBlock>().Last().Text, "the tile explains why a folder cannot be dropped");
+                TestRunner.Check(!tile.Receive(new DataObject(DataFormats.FileDrop, new[] { missing })), "the Shelf rejects a missing file");
+                TestRunner.Eq("Some dropped files are unavailable.", content.Children.OfType<TextBlock>().Last().Text, "the missing-file message still applies");
+                TestRunner.Check(tile.Receive(new DataObject(DataFormats.FileDrop, new[] { folder, file, missing })), "a mixed drop keeps the available file");
+                string status = content.Children.OfType<TextBlock>().Last().Text;
+                TestRunner.Check(status.Contains("Folders can't go on the shelf.") && status.Contains("Some dropped files are unavailable."),
+                    "a mixed drop explains both kinds of rejected items");
+            }
         }
 
         static void CroppedCaptureAndBudget()

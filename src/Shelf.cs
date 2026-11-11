@@ -25,37 +25,43 @@ namespace Capsule
         internal int AddFiles(string[] files, out string status)
         {
             int added = 0;
-            bool unavailable = false, full = false;
+            bool folders = false, unavailable = false, full = false;
             if (!disposed && files != null)
             {
                 var known = new HashSet<string>(items, StringComparer.OrdinalIgnoreCase);
                 foreach (string path in files)
                 {
-                    string file = FullFilePath(path);
-                    if (file == null) { unavailable = true; continue; }
+                    string file = FullPath(path);
+                    if (!File.Exists(file))
+                    {
+                        if (Directory.Exists(file)) folders = true;
+                        else unavailable = true;
+                        continue;
+                    }
                     if (known.Contains(file)) continue;
-                    if (items.Count == MaxItems) { full = true; break; }
+                    if (items.Count == MaxItems) { full = true; continue; }
                     known.Add(file);
                     items.Add(file);
                     added++;
                 }
             }
-            status = full ? Full : unavailable ? "Some dropped files are unavailable." : added == 0 ? "These files are already on the shelf." : "";
+            var messages = new List<string>();
+            if (folders) messages.Add("Folders can't go on the shelf.");
+            if (unavailable) messages.Add("Some dropped files are unavailable.");
+            if (full) messages.Add(Full);
+            if (messages.Count == 0 && added == 0) messages.Add("These files are already on the shelf.");
+            status = string.Join(" ", messages);
             if (added != 0 && Changed != null) Changed();
             return added;
         }
 
-        static string FullFilePath(string path)
+        static string FullPath(string path)
         {
             if (String.IsNullOrEmpty(path) || path.Length < 3) return null;
             bool network = path.StartsWith(@"\\", StringComparison.Ordinal);
             bool drive = path[1] == ':' && (path[2] == '\\' || path[2] == '/');
             if (!network && !drive) return null;
-            try
-            {
-                string full = Path.GetFullPath(path);
-                return File.Exists(full) ? full : null;
-            }
+            try { return Path.GetFullPath(path); }
             catch (ArgumentException) { return null; }
             catch (NotSupportedException) { return null; }
             catch (PathTooLongException) { return null; }
