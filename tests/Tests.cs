@@ -64,6 +64,8 @@ namespace Capsule
             Run("Notion", NotionTests.Run);
             Run("Ideas", IdeasTests.Run);
             Run("PanelView", PanelViewTests.Run);
+            Run("NeedsYou", NeedsYouTests.Run);
+            Run("GitHubMonitor", GitHubMonitorTests.Run);
             Run("Hotkey", HotkeyTests.Run);
             Run("CardMotion", CardMotionTests.Run);
             Run("PromptPipe", PromptPipeTests.Run);

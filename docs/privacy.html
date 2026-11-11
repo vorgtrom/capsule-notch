@@ -42,6 +42,13 @@ service.</p>
 <p>A downloaded Capsule asks GitHub once a day for the newest release's version number, so it can tell you when an
 update is out. That request carries no sign-in and nothing about you, and you can turn it off in Capsule's menu.</p>
 
+<h2>Needs you and GitHub checks</h2>
+<p>The Needs you tile reads pending request status from Capsule's local request queue. It stores no prompt text
+or approval history.</p>
+<p>GitHub checks start off. If you save a public repository, Capsule requests public pull request and Actions metadata
+from <code>api.github.com</code> without signing in. Capsule saves the repository name in its local settings. It keeps
+responses and cache validators in memory. Turn off GitHub checks in Settings to stop these requests and clear the cache.</p>
+
 <h2>Screenshots, scrolling capture, and clipboard images</h2>
 <p>Capture reads the screen rectangle you select on one physical monitor. Scrolling capture visibly scrolls the
 selected page in Edge or Chrome. Capsule keeps capture pixels and crop images in memory while the preview is open.

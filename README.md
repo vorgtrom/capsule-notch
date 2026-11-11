@@ -399,8 +399,9 @@ asks whether to start with Windows. **No** is the default. You can change the ch
 - **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
   so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
 - The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
-- In Settings, **Open panel with** puts Calendar or Clipboard first. If that section is hidden, Capsule uses the
-  default order. The Ideas shortcut still goes straight to the Ideas box.
+- In Settings, **Open panel with** puts Calendar, Clipboard, or Needs you first. A pending agent request puts
+  Needs you first with any opening preference. If the selected section is hidden, Capsule uses the default order.
+  The Ideas shortcut still goes straight to the Ideas box.
 - **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
 - **Right-click** the capsule or the tray icon for the menu.
 - **Left-click** the tray icon to hide or show the capsule.
@@ -551,6 +552,21 @@ Click the calendar button at the top right of the panel's Calendar tile.
   API** under **APIs & Services → Library** (step 2 of [your own client](#google-calendar)). Tasks show up at the next
   read.
 
+### Needs you
+
+The **Needs you** tile lists the oldest request from each enabled agent, with the project, request type and wait time.
+It also shows how many other requests each agent has queued. With monitoring off, the tile shows only agent status.
+With GitHub checks enabled and no pending agent requests, it shows **No pending requests** above the GitHub section.
+Click **Review** to open the existing request card. If the request has expired or moved on, the tile updates.
+
+In Settings, enter one public GitHub repository as `owner/repo` and click **Save repository**. GitHub checks start off.
+Capsule checks GitHub without signing in, so private repositories aren't supported.
+Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs at most once every three minutes.
+It shows failures for the current PR head, including timeouts and runs that failed to start. Cancelled runs
+and runs with the `action_required` conclusion are not shown as failures. The tile explains incomplete results
+and shows when the last check succeeded.
+Click **Open run** to view a failure on GitHub. Choose **Turn off** in Settings to stop the checks.
+
 ### Ideas → Notion
 
 Ideas go into a Notion database of your choice, one page per idea, with the idea as the page's title.
@@ -588,6 +604,7 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
+| GitHub checks | public PR and Actions metadata, with no sign-in | `api.github.com`, when you save a repository |
 | Music | local Windows media sessions from Spotify, YouTube Music desktop apps, and supported browsers: track metadata, artwork, playback state, available controls and timeline | no internet connection; playback commands go only to the selected local Windows media session |
 | Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |

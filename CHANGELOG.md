@@ -6,6 +6,9 @@ download for each one. A release takes its notes from its section here.
 ## Unreleased
 
 - **Choose what opens first.** In Settings, put Calendar or Clipboard at the top of the panel.
+- **Needs you.** The panel lists pending Claude and Codex requests and opens the existing review card. The tile moves
+  to the top while a request is pending. In Settings, you can monitor one public GitHub repository for failing
+  pull request workflows.
 
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
