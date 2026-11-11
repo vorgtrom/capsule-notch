@@ -9,6 +9,9 @@ download for each one. A release takes its notes from its section here.
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
 
+- **Weather in the panel.** Choose a place in Settings to see current conditions and hourly and daily forecasts.
+  You can choose Celsius or Fahrenheit and put Weather first with **Open panel with**.
+
 ## v1.9.0
 
 - **Needs you.** A panel tile lists the Claude and Codex requests waiting on you, with **Review** to answer each one.

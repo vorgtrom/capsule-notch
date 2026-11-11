@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -36,6 +37,41 @@ namespace Capsule
             PagesScrollInsideTheWorkArea();
             SettingsAndFormsKeepThePanelOpen();
             PanelOpeningPreference();
+            WeatherTileFollowsSettings();
+        }
+
+        static void WeatherTileFollowsSettings()
+        {
+            var view = new PanelView();
+            var model = Sample(5);
+            model.Calendar = new CalendarTile();
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(!HasText(view, "Weather"), "the weather tile is hidden without a saved place");
+
+            WeatherForecast forecast = WeatherApi.Forecast(TestRunner.Fixture("weather-forecast.json"), "celsius");
+            model.Weather = new WeatherTile { Place = "Zürich", Forecast = forecast, UpdatedAt = Now };
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Weather").Y, "Weather follows Calendar in default order");
+            TestRunner.Check(HasText(view, "Zürich") && HasText(view, "4°C"), "Weather displays the selected place and temperature");
+            TestRunner.Check(!HasText(view, "19%") && HasText(view, "20%"), "Weather shows rain chance only from twenty percent");
+            var tile = (StackPanel)((DockPanel)FindText(view, "Weather").Parent).Parent;
+            var attribution = (TextBlock)tile.Children[tile.Children.Count - 1];
+            var link = attribution.Inlines.LastInline as Hyperlink;
+            var credit = link != null ? link.Inlines.FirstInline as Run : null;
+            TestRunner.Check(credit != null && credit.Text == "Weather data by Open-Meteo.com" &&
+                link.NavigateUri.AbsoluteUri == "https://open-meteo.com/", "Weather credits and links to its provider");
+
+            model.PanelHome = "weather";
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(Position(view, "Weather").Y < Position(view, "Claude").Y, "Weather can open first");
+            model.Weather = null;
+            view.Update(model);
+            Lay(view);
+            TestRunner.Check(!HasText(view, "Weather") && Position(view, "Claude").Y < Position(view, "Calendar").Y,
+                "turning Weather off hides the tile and restores default order");
         }
 
         static void PanelOpeningPreference()

@@ -16,7 +16,7 @@ namespace Capsule
     // and Ideas wide), or the settings sheet in its place, laid out in DIPs with room around it for its shadow.
     // PanelWindow shows it; Preview renders it. Update rebuilds the tiles' contents but keeps the Ideas box, so
     // typing is never interrupted.
-    public sealed class PanelView : Grid
+    public sealed partial class PanelView : Grid
     {
         public const double PanelWidth = 360, Pad = 12, Gap = 8, Radius = 22, TileRadius = 16, TilePad = 12;
         public const double ShadowMargin = 20;
@@ -136,22 +136,23 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 17; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 19; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
             Place(sessionsTile, 2, 0, 3);
-            Place(calendarTile, 4, 0, 3);   // below Sessions, above Ideas (calendar spec §2); only while there is a model for it
-            Place(musicTile, 6, 0, 3);
-            Place(focusTile, 8, 0, 3);
-            Place(clipTile, 10, 0, 3);
-            Place(shelfTile, 12, 0, 3);
+            Place(calendarTile, 4, 0, 3);
+            Place(weatherTile, 6, 0, 3);
+            Place(musicTile, 8, 0, 3);
+            Place(focusTile, 10, 0, 3);
+            Place(clipTile, 12, 0, 3);
+            Place(shelfTile, 14, 0, 3);
             shelfTile.Resized += delegate { FixGaps(); RaiseResized(); };
             musicTile.Child = music;
-            Place(ideasTile, 14, 0, 3);
-            Place(needsYouTile, 16, 0, 3);
+            Place(ideasTile, 16, 0, 3);
+            Place(needsYouTile, 18, 0, 3);
             needsYouTile.Child = needsYou;
             needsYouTile.Visibility = Visibility.Collapsed;
-            foreach (Border tile in new[] { calendarTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
+            foreach (Border tile in new[] { calendarTile, weatherTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
             FixGaps();
             boardScroll.Content = tiles;
             board.Children.Add(boardScroll);
@@ -264,7 +265,7 @@ namespace Capsule
             month.Restyle();
             usage.Restyle();
             music.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
+            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, weatherTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -277,6 +278,7 @@ namespace Capsule
             githubRepoBox.CaretBrush = NotchView.Brush(Palette.Text);
             StyleAction(githubSave);
             StyleAction(githubOff);
+            RestyleWeather();
             reviewResult.Foreground = NotchView.Brush(Palette.Amber);
             githubSettingsResult.Foreground = NotchView.Brush(Palette.Secondary);
             needsYou.Children.Clear();
@@ -352,6 +354,7 @@ namespace Capsule
             sessionsTile.Child = m.Sessions != null ? SessionsContent(m.Sessions) : null;
             Show(calendarTile, m.Calendar != null);
             calendarTile.Child = m.Calendar != null ? CalendarContent(m.Calendar) : null;
+            UpdateWeather(m.Weather);
             BuildIdeas(m.Ideas);
             UpdateNeedsYou(m.NeedsYou);
             UpdateFocus(m.Focus);
@@ -406,6 +409,7 @@ namespace Capsule
             Border first = null;
             if (shownReviews.Count > 0 || panelHome == "needs_you") first = needsYouTile;
             else if (panelHome == "calendar") first = calendarTile;
+            else if (panelHome == "weather") first = weatherTile;
             else if (panelHome == "clipboard") first = clipTile;
             if (first != null && first.Visibility != Visibility.Visible) first = null;
             if (first != promotedTile)
@@ -531,6 +535,7 @@ namespace Capsule
             System.Windows.Automation.AutomationProperties.SetName(panelHomeChoice, "Open panel with");
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Default order", Tag = "default" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Calendar", Tag = "calendar" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Weather", Tag = "weather" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Clipboard", Tag = "clipboard" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Needs you", Tag = "needs_you" });
             panelHomeChoice.SelectedIndex = 0;
@@ -546,7 +551,8 @@ namespace Capsule
             opening.Children.Add(panelHomeResult);
             settingsBody.Children.Add(opening);
             settingsBody.Children.Add(BuildGitHubSettings());
-            settingsBody.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
+            settingsBody.Children.Add(BuildGoogle());
+            settingsBody.Children.Add(BuildWeatherSettings());
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
             notion.Children.Add(Section("Ideas → Notion"));
@@ -780,6 +786,7 @@ namespace Capsule
                 return;
             }
             if (!ShowingSettings) return;
+            ClearWeatherSearch();
             settings.Visibility = Visibility.Collapsed;
             board.Visibility = Visibility.Visible;
             RaiseResized();

@@ -16,6 +16,8 @@ namespace Capsule
         public string Hotkey = HotkeyText.Default;   // the global shortcut that opens the panel on the Ideas box
         public string CaptureHotkey = "Ctrl+Alt+S";
         public string PanelHome = "default";
+        public WeatherPlace WeatherPlace;
+        public string WeatherUnits = "automatic";
         public string GitHubRepo = "";   // one public owner/repo; "" means off
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
@@ -63,6 +65,8 @@ namespace Capsule
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "hotkey")), out modifiers, out key)) c.Hotkey = HotkeyText.Format(modifiers, key);
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "capture_hotkey")), out modifiers, out key)) c.CaptureHotkey = HotkeyText.Format(modifiers, key);
             c.PanelHome = NormalizePanelHome(Json.Str(Json.Get(o, "panel_home")));
+            c.WeatherPlace = WeatherPlace.From(Json.Str(Json.Get(o, "weather_place")), Json.Get(o, "weather_lat"), Json.Get(o, "weather_lon"));
+            c.WeatherUnits = WeatherApi.NormalizeUnits(Json.Str(Json.Get(o, "weather_units")));
             c.GitHubRepo = GitHubMonitor.NormalizeRepo(Json.Str(Json.Get(o, "github_repo")));
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
@@ -98,6 +102,13 @@ namespace Capsule
             d["hotkey"] = Hotkey;
             d["capture_hotkey"] = CaptureHotkey;
             d["panel_home"] = NormalizePanelHome(PanelHome);
+            if (WeatherPlace != null)
+            {
+                d["weather_place"] = WeatherPlace.Label;
+                d["weather_lat"] = WeatherPlace.Latitude;
+                d["weather_lon"] = WeatherPlace.Longitude;
+            }
+            d["weather_units"] = WeatherUnits;
             d["github_repo"] = GitHubMonitor.NormalizeRepo(GitHubRepo);
             d["check_updates"] = CheckUpdates;
             d["limit_alerts"] = LimitAlerts;
@@ -119,7 +130,7 @@ namespace Capsule
 
         internal static string NormalizePanelHome(string value)
         {
-            return value == "calendar" || value == "clipboard" || value == "needs_you" ? value : "default";
+            return value == "calendar" || value == "weather" || value == "clipboard" || value == "needs_you" ? value : "default";
         }
 
         // A whole number of minutes from 1 to max, or the default.
