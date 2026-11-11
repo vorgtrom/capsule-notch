@@ -12,6 +12,8 @@ namespace Capsule
             ShowsOnlyTheCurrentRequestForEachProvider();
             ReviewUsesExactIdWithoutExtending();
             PanelShowsEitherSection();
+            PanelReplacesRequestFromAnotherProvider();
+            PanelHidesNeedsYouWithoutSources();
         }
 
         static void ShowsOnlyTheCurrentRequestForEachProvider()
@@ -102,7 +104,7 @@ namespace Capsule
             view.SetPanelHome("needs_you");
             TestRunner.Eq(0, Grid.GetRow(needsTile), "the Needs you preference promotes the tile without a request");
 
-            model.NeedsYou = NeedsYouTile.From(null, null, null, 6000);
+            model.NeedsYou = NeedsYouTile.From(new PromptBroker(() => false), null, null, 6000);
             view.Update(model);
             TestRunner.Check(Find<TextBlock>(view, t => t.Text == "No pending requests") != null &&
                 Find<TextBlock>(view, t => t.Text == "GitHub checks") == null, "empty tile shows only the agent status with monitoring off");
@@ -110,6 +112,49 @@ namespace Capsule
             view.Update(model);
             TestRunner.Check(Find<TextBlock>(view, t => t.Text == "Waiting to check GitHub.") != null &&
                 Find<Button>(view, b => Equals(b.Content, "Review")) != null, "agent pending and GitHub status appear together");
+        }
+
+        static void PanelReplacesRequestFromAnotherProvider()
+        {
+            var claude = new PromptBroker(() => false);
+            var codex = new PromptBroker(() => false);
+            HeldPrompt first = Hold(claude, "claude", "First", 1000);
+            HeldPrompt next = Hold(codex, "codex", "Second", 2000);
+            first.Id = next.Id;   // Exercise the tile's identity check independently of the broker's ID allocator.
+
+            var view = new PanelView();
+            var model = new PanelModel { Ideas = new IdeasTile(), NeedsYou = NeedsYouTile.From(claude, null, null, 3000) };
+            view.Update(model);
+            model.NeedsYou = NeedsYouTile.From(null, codex, null, 3000);
+            view.Update(model);
+            TestRunner.Check(Find<TextBlock>(view, t => t.Text == "Codex / Work · Second") != null &&
+                Find<TextBlock>(view, t => t.Text == "Claude · First") == null, "same-ID replacement updates the provider and project");
+
+            PendingReview clicked = null;
+            view.ReviewRequested += row => clicked = row;
+            Button review = Find<Button>(view, b => Equals(b.Content, "Review"));
+            if (review != null) review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            TestRunner.Eq(next, clicked == null ? null : NeedsYouTile.Review(clicked, null, codex, 3000),
+                "Review opens the replacement provider's held request");
+        }
+
+        static void PanelHidesNeedsYouWithoutSources()
+        {
+            var view = new PanelView();
+            var model = new PanelModel { Ideas = new IdeasTile(), NeedsYou = NeedsYouTile.From(null, null, null, 3000) };
+            view.Update(model);
+            TestRunner.Check(Find<TextBlock>(view, t => t.Text == "Needs you") == null,
+                "Needs you is hidden when both rings and GitHub are off");
+            view.SetPanelHome("needs_you");
+            TestRunner.Check(Find<TextBlock>(view, t => t.Text == "No pending requests") != null,
+                "selecting Needs you reveals the empty tile immediately");
+            view.SetPanelHome("default");
+            TestRunner.Check(Find<TextBlock>(view, t => t.Text == "Needs you") == null,
+                "changing the opening preference hides the empty tile again");
+            model.PanelHome = "needs_you";
+            view.Update(model);
+            TestRunner.Check(Find<TextBlock>(view, t => t.Text == "No pending requests") != null,
+                "a saved Needs you preference keeps the empty tile on reopen");
         }
 
         static T Find<T>(DependencyObject root, Func<T, bool> match) where T : UIElement

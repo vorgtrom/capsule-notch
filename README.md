@@ -556,12 +556,15 @@ Click the calendar button at the top right of the panel's Calendar tile.
 
 The **Needs you** tile lists the oldest request from each enabled agent, with the project, request type and wait time.
 It also shows how many other requests each agent has queued. With monitoring off, the tile shows only agent status.
+Capsule hides the empty tile when both agent rings and GitHub checks are off, unless Needs you is your opening section.
 With GitHub checks enabled and no pending agent requests, it shows **No pending requests** above the GitHub section.
 Click **Review** to open the existing request card. If the request has expired or moved on, the tile updates.
 
 In Settings, enter one public GitHub repository as `owner/repo` and click **Save repository**. GitHub checks start off.
 Capsule checks GitHub without signing in, so private repositories aren't supported.
-Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs at most once every three minutes.
+Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs per scan. Scans are at least
+three minutes apart for the same repository. Changing repositories starts a new scan as soon as any active scan and
+server-requested wait finish.
 It shows failures for the current PR head, including timeouts and runs that failed to start. Cancelled runs
 and runs with the `action_required` conclusion are not shown as failures. The tile explains incomplete results
 and shows when the last check succeeded.
