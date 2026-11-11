@@ -293,6 +293,8 @@ namespace Capsule
             {
                 new[] { "git commit -m \"fix\"", "Code" },
                 new[] { "Get-ChildItem -Recurse", "Code" },
+                new[] { "sort-object -Descending", "Code" },
+                new[] { "Where-Object -Property Name", "Code" },
                 new[] { "const x = () => 1;", "Code" },
                 new[] { "int Value() {\nreturn 1; }", "Code" },
                 new[] { "def greet():\r\n  print('hello')", "Code" },
