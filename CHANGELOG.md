@@ -5,14 +5,20 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
-- **Choose what opens first.** In Settings, put Calendar or Clipboard at the top of the panel.
-- **Needs you.** The panel lists pending Claude and Codex requests and opens the existing review card. The tile moves
-  to the top while a request is pending. In Settings, you can monitor one public GitHub repository for failing
-  pull request workflows.
-
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
+
+## v1.9.0
+
+- **Needs you.** A panel tile lists the Claude and Codex requests waiting on you, with **Review** to answer each one.
+  It moves to the top while a request is waiting. In Settings, you can also have it watch one public GitHub
+  repository and list pull requests whose checks failed, with **Open run**.
+- **File shelf.** Drag files over the capsule to open the panel, and drop them on the **Shelf** tile. Then drag one or
+  all of them into another app as copies. **Keep on shelf** in the capture preview adds the image, including any
+  crop. The shelf clears when Capsule exits.
+- **Choose what opens first.** In Settings, **Open panel with** puts Calendar, Clipboard or Needs you at the top of
+  the panel.
 - **Heads-ups from your sessions.** A notification when a Claude Code session's context passes 90%, before Claude
   compacts it, and when a session waiting on your answer has 5 minutes left on its prompt cache, so you can answer
   before it has to re-read everything. Both follow the **Limit alerts** switch. At the break, Capsule shows only
@@ -22,9 +28,6 @@ download for each one. A release takes its notes from its section here.
 - **Longer page captures.** After two consistent wheel samples, scrolling capture can move about 40% of the
   selection between screenshots. It uses single notches if the measured scroll distance per notch changes.
   It also goes back to the top in bigger steps.
-- **File shelf.** Drag files over the capsule to open the Shelf tile. Drop files there, then drag one or all of
-  them into another app as copies. Use **Keep on shelf** in Capture Preview to add the current PNG, including
-  any crop. The shelf clears on exit.
 
 ## v1.8.0
 
