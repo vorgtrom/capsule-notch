@@ -55,7 +55,7 @@ namespace Capsule
         SessionTally tally;     // each session's model and tokens, from its transcript
         readonly SessionAlerts sessionAlerts = new SessionAlerts();   // context nearly full, a waiting session's cache nearly cold
         int heldNeeds, heldDone;                              // sounds held while you focus
-        readonly List<string> heldAlerts = new List<string>();   // limit alerts held while you focus
+        readonly List<string> heldAlerts = new List<string>();   // provider usage alerts held while you focus
         bool tallyBusy;
         List<UsageModule> shown = new List<UsageModule>();
         List<CellModel> notchCells;
@@ -345,17 +345,18 @@ namespace Capsule
         bool Quiet { get { return config.FocusQuiet && config.RingOn("focus") && focus.Running && focus.Phase == FocusPhase.Focus; } }
 
         // What waited while you focused, in one line, or null; the count starts again.
-        string HeldSummary()
+        string HeldSummary(long now)
         {
             var parts = new List<string>();
             if (heldNeeds > 0) parts.Add(heldNeeds == 1 ? "1 request needed you" : heldNeeds + " requests needed you");
             if (heldDone > 0) parts.Add(heldDone == 1 ? "1 session finished" : heldDone + " sessions finished");
             string text = parts.Count > 0 ? "While you focused: " + string.Join(", ", parts) + "." : null;
-            if (heldAlerts.Count > 0) text = (text == null ? "" : text + "\n") + string.Join("\n", heldAlerts);
+            string alerts = string.Join("\n", heldAlerts.Concat(SessionAlertTexts(now)));
+            if (alerts.Length > 0) text = (text == null ? "" : text + "\n") + alerts;
             Cue cue = heldNeeds > 0 ? Capsule.Cue.Attention : heldDone > 0 ? Capsule.Cue.Done : Capsule.Cue.None;
             heldNeeds = heldDone = 0;
             heldAlerts.Clear();
-            if (text != null && cue != Capsule.Cue.None && config.Sounds) Sounds.Play(cue, Clock.NowMs());
+            if (text != null && cue != Capsule.Cue.None && config.Sounds) Sounds.Play(cue, now);
             return text;
         }
 
@@ -363,7 +364,7 @@ namespace Capsule
         void ReleaseHeld()
         {
             if (Quiet) return;
-            string text = HeldSummary();
+            string text = HeldSummary(Clock.NowMs());
             if (text != null) tray.Balloon("Capsule", text);
         }
 
@@ -735,7 +736,7 @@ namespace Capsule
             if (ended.HasValue)
             {
                 // The end of focus also tells what waited meanwhile; its chime is the one sound for both.
-                string held = ended.Value == FocusPhase.Focus ? HeldSummary() : null;
+                string held = ended.Value == FocusPhase.Focus ? HeldSummary(now) : null;
                 if (held == null) PlayCue(Capsule.Cue.Done);
                 tray.Balloon("Capsule", focus.EndedText(ended.Value) + (held != null ? "\n" + held : ""));
                 SaveFocus();
@@ -1013,21 +1014,19 @@ namespace Capsule
             ShowUsageIfOpen();
         }
 
-        // A session's context nearly full, or a waiting session's cache nearly cold: a balloon, under the Limit alerts
-        // switch, held for the break while you focus. Nothing about the session but its project's name is shown or logged.
+        // Recheck session warnings at the break so the balloon describes the current context and cache.
+        IEnumerable<string> SessionAlertTexts(long now)
+        {
+            if (!config.RingOn("claude") || !sessions.HooksConnected) return Enumerable.Empty<string>();
+            bool enabled = config.LimitAlerts;
+            var texts = sessionAlerts.Check(sessions.All, tally.For, now, defer: enabled && Quiet);
+            return enabled ? texts : Enumerable.Empty<string>();
+        }
+
         void CheckSessionAlerts(long now)
         {
-            if (!config.RingOn("claude") || !sessions.HooksConnected) return;
-            List<string> texts = sessionAlerts.Check(sessions.All, tally.For, now);
-            if (!config.LimitAlerts) return;   // still checked, so turning alerts on doesn't replay old ones
-            foreach (string text in texts)
+            foreach (string text in SessionAlertTexts(now))
             {
-                if (Quiet)
-                {
-                    Log.Info("sessions: alert held for the break");
-                    heldAlerts.Add(text);
-                    continue;
-                }
                 Log.Info("sessions: alert shown");
                 tray.Balloon("Capsule", text);
             }

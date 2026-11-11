@@ -32,6 +32,7 @@ namespace Capsule
             ACutInsideAMultiByteCharacterIsHarmless();
             TheFullScanStopsAtNinetyDays();
             LatestChatsContext();
+            LatestChatBeforeItsFirstCount();
         }
 
         static string TurnContext(string model)
@@ -66,6 +67,22 @@ namespace Capsule
             SessionRow row = SessionRow.ForCodex(chat, Now);
             TestRunner.Check(row.Usage == "GPT-5 Codex" && row.Context == "ctx 90%" && row.ContextHigh && row.Status == "working", "the card's line: model, context in amber, working");
             TestRunner.Check(new CodexActivity(TestRunner.NewTempDir()).Latest == null, "no logs: no latest chat");
+        }
+
+        static void LatestChatBeforeItsFirstCount()
+        {
+            string home = TestRunner.NewTempDir();
+            Log(home, Noon, "old", 20, Meta(), TurnContext("gpt-5"), TokenCount(245000, 0, 272000), Event("task_complete"));
+            Log(home, Noon, "new", 2, Meta(), TurnContext("gpt-5-codex"), Event("task_started"));
+            var reader = new CodexActivity(home);
+            TestRunner.Check(reader.Check(Now), "the newer chat is working before it reports a count");
+            CodexChat chat = reader.Latest;
+            TestRunner.Check(chat != null && chat.Model == "gpt-5-codex" && chat.Working, "latest chat does not fall back to an older counted chat");
+            TestRunner.Check(chat != null && SessionRow.ForCodex(chat, Now).Context == "", "latest chat has no context label before its first count");
+
+            Log(home, Noon, "new", 1, Meta(), TurnContext("gpt-5-codex"), Event("task_started"), TokenCount(68000, 0, 272000));
+            reader.Check(Now);
+            TestRunner.Eq(25, reader.Latest == null ? -1 : reader.Latest.Percent, "the latest chat shows context once it has its own count");
         }
 
         // The scan of every day folder only looks back 90 days (by the folder's date), so its cost stops growing with the

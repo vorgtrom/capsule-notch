@@ -15,8 +15,9 @@ namespace Capsule
         readonly HashSet<string> contextWarned = new HashSet<string>();
         readonly Dictionary<string, long> cacheWarned = new Dictionary<string, long>();   // session -> the reply it was warned for
 
-        public List<string> Check(IEnumerable<SessionStatus> sessions, Func<string, SessionUse> use, long now)
+        public List<string> Check(IEnumerable<SessionStatus> sessions, Func<string, SessionUse> use, long now, bool defer = false)
         {
+            // During Focus, track which warnings can fire again without marking new ones as delivered.
             var texts = new List<string>();
             var live = new HashSet<string>();
             foreach (SessionStatus s in sessions)
@@ -28,13 +29,13 @@ namespace Capsule
                 string name = s.Project != "" ? s.Project : "A Claude session";
 
                 int percent = u.ContextPercent;
-                if (percent >= AlertPercent && contextWarned.Add(s.SessionId))
+                if (!defer && percent >= AlertPercent && contextWarned.Add(s.SessionId))
                     texts.Add(name + " is at " + percent + "% of its context. Claude Code will compact it soon.");
                 else if (percent >= 0 && percent < RearmPercent) contextWarned.Remove(s.SessionId);
 
                 long left = u.LastReplyMs + u.CacheTtlUsedMs - now;
                 long warnedFor;
-                if (s.State == States.Waiting && u.LastReplyMs > 0 && u.CacheTtlUsedMs >= SessionContext.HourMs && left > 0 && left <= CacheWarnMs
+                if (!defer && s.State == States.Waiting && u.LastReplyMs > 0 && u.CacheTtlUsedMs >= SessionContext.HourMs && left > 0 && left <= CacheWarnMs
                     && !(cacheWarned.TryGetValue(s.SessionId, out warnedFor) && warnedFor == u.LastReplyMs))
                 {
                     cacheWarned[s.SessionId] = u.LastReplyMs;

@@ -13,6 +13,7 @@ namespace Capsule
             KnownOffsets();
             NoMovementAndFailures();
             BiggerSteps();
+            VariableStepsKeepTheirOverlap();
             Stability();
             Cancellation();
             PauseAndModifiers();
@@ -156,7 +157,29 @@ namespace Capsule
             }
             int widest = 0;
             for (int i = 1; i < offsets.Count; i++) widest = Math.Max(widest, offsets[i] - offsets[i - 1]);
-            TestRunner.Eq(40, widest, "after the first step, two 20 px notches a step (40% of 120 rows is 48)");
+            TestRunner.Check(offsets.Count >= 3 && offsets[1] == 20 && offsets[2] == 40, "calibration takes two single-notch samples");
+            TestRunner.Eq(40, widest, "steady 20 px notches can be batched after calibration");
+            Released(desktop);
+        }
+
+        static void VariableStepsKeepTheirOverlap()
+        {
+            var desktop = new Desktop { Step = 80, Bottom = 1800 };
+            var offsets = new List<int>();
+            desktop.OnScroll = d => { if (d.Down == 1) d.Step = 200; };
+            desktop.OnRead = d => { if (offsets.Count == 0 || offsets[offsets.Count - 1] != d.Offset) offsets.Add(d.Offset); };
+            CaptureResult result = Run(desktop, Request(CaptureMode.Scrolling, height: 800));
+            using (result.Image)
+            using (CaptureFrame expected = Page(3, 0, 2600))
+            {
+                TestRunner.Eq(2600, result.Image.Height, "a faster second notch still captures the whole page");
+                bool same = result.Image.Pixels.Length == expected.Pixels.Length;
+                for (int i = 0; same && i < expected.Pixels.Length; i++) same = result.Image.Pixels[i] == expected.Pixels[i];
+                TestRunner.Check(same, "variable wheel steps preserve every row");
+            }
+            int widest = 0;
+            for (int i = 1; i < offsets.Count; i++) widest = Math.Max(widest, offsets[i] - offsets[i - 1]);
+            TestRunner.Eq(200, widest, "a change in wheel speed keeps the remaining steps to one notch");
             Released(desktop);
         }
 
@@ -330,7 +353,7 @@ namespace Capsule
             }
             var frames = new Desktop { Step = 20, Bottom = 1000000 };
             result = Run(frames);
-            TestRunner.Eq(4860, result.Image.Height, "120 accepted frames: 120 rows, one 20-row notch, then 118 steps of two notches (40 rows), not 120 + 119 * 20");
+            TestRunner.Eq(4840, result.Image.Height, "120 accepted frames: 120 rows, two 20-row calibration steps, then 117 steps of 40 rows");
             TestRunner.Check(result.Partial && result.Notice.Contains("frame limit"), "accepted frame count is bounded at 120");
             result.Image.Dispose();
             Released(frames);
