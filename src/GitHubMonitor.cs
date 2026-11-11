@@ -63,6 +63,21 @@ namespace Capsule
         public GitHubChecks Current { get; private set; }
         public event Action Changed;
 
+        // What the user typed or pasted: owner/repo, or the repository's GitHub link (any page in it, with or without
+        // https:// or .git). "" when it names no repository.
+        public static string RepoFromInput(string text)
+        {
+            string value = (text ?? "").Trim();
+            Match link = Regex.Match(value, @"\A(?:https?://)?(?:www\.)?github\.com/([^/?#\s]+)/([^/?#\s]+)", RegexOptions.IgnoreCase);
+            if (link.Success)
+            {
+                string name = link.Groups[2].Value;
+                if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - 4);
+                value = link.Groups[1].Value + "/" + name;
+            }
+            return NormalizeRepo(value);
+        }
+
         public static string NormalizeRepo(string text)
         {
             string value = (text ?? "").Trim();

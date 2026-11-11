@@ -666,7 +666,7 @@ namespace Capsule
         {
             var section = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
             section.Children.Add(Section("GitHub checks"));
-            section.Children.Add(Label("Public repository (owner/repo)"));
+            section.Children.Add(Label("Public repository (owner/repo, or its GitHub link)"));
             Plain(githubRepoBox);
             githubRepoBox.MaxLength = 160;
             AutomationProperties.SetName(githubRepoBox, "Public GitHub repository (owner/repo)");
@@ -690,7 +690,7 @@ namespace Capsule
         internal void ShowGitHubSettings(string repo)
         {
             githubRepoBox.Text = repo;
-            githubOff.IsEnabled = repo != "";
+            githubOff.Visibility = repo != "" ? Visibility.Visible : Visibility.Collapsed;   // a disabled button draws white
             ShowGitHubSettingsResult(repo == "" ? "Off. Capsule checks only public repositories." : "Saved. Capsule checks this repository without signing in.", true);
         }
 

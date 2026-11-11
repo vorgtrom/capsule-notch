@@ -36,6 +36,13 @@ namespace Capsule
             TestRunner.Eq("", Config.Load(path).GitHubRepo, "invalid config leaves monitoring off");
             foreach (string input in new[] { "https://github.com/owner/capsule", "owner/..", "owner/.", "owner/a?x=y", "owner/a/b", "owner/a#b", "owner/a%2f", "owner/a\\b" })
                 TestRunner.Eq("", GitHubMonitor.NormalizeRepo(input), "repo path rejects " + input);
+            foreach (string input in new[] { "owner/capsule", "https://github.com/owner/capsule", "http://github.com/owner/capsule/",
+                "github.com/owner/capsule", "https://www.github.com/owner/capsule.git", "https://github.com/owner/capsule/pulls?q=is%3Aopen",
+                "https://github.com/owner/capsule/actions/runs/1", "  https://GitHub.com/owner/capsule#readme  " })
+                TestRunner.Eq(Repo, GitHubMonitor.RepoFromInput(input), "repo input accepts " + input.Trim());
+            foreach (string input in new[] { "https://github.com/owner", "https://gitlab.com/owner/capsule", "https://github.com.evil.example/owner/capsule",
+                "https://github.com/owner/..", "owner/capsule/extra", "" })
+                TestRunner.Eq("", GitHubMonitor.RepoFromInput(input), "repo input rejects " + input);
             TestRunner.Eq("https://github.com/owner/capsule/actions/runs/42969367564", GitHubMonitor.RunUrl(Repo, 42969367564), "builds link from repo and large numeric run ID");
             TestRunner.Eq(null, GitHubMonitor.RunUrl(Repo, 0), "a run link needs a positive ID");
         }
