@@ -39,13 +39,14 @@ namespace Capsule
         static readonly Regex Rgb = new Regex(@"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(,\s*[\d.]+%?\s*)?\)$", RegexOptions.IgnoreCase);
         static readonly Regex Spaces = new Regex(@"\s+");
         static readonly string[] LineBreaks = { "\r\n", "\n", "\r" };
-        const RegexOptions CodeOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
         static readonly Regex CodeLineStart = new Regex(
-            @"^(?:(?:def|class|function|const|let|var|import|from|export|return|if|for|while|public|private|using|namespace|package|fn|#include|select|insert|update|delete[ \t]+from)\b|<(?:\?|[a-z]))", CodeOptions);
+            @"^(?:(?:def|class|function|const|let|var|import|from|export|return|if|for|while|public|private|using|namespace|package|fn|#include|" +
+            @"select|insert|update|delete[ \t]+from|SELECT|INSERT|UPDATE|DELETE[ \t]+FROM)\b|<(?:\?|[A-Za-z]))");
         static readonly Regex ShellCommand = new Regex(
             @"^(?:git|npm|npx|pnpm|yarn|dotnet|cargo|docker|kubectl|curl|winget|scoop|gh)\b");
+        // A trailing period counts only as a standalone path argument.
         static readonly Regex ShellCommandWithArgument = new Regex(
-            @"^(?:go|cat|echo|cd|ls|python|node|pip)[ \t].*[-/\\.='""]");
+            @"^(?:go|cat|echo|cd|ls|python|node|pip)[ \t].*(?:[-/\\='""]|\.(?!$)|(?<=[ \t])\.$)");
         static readonly Regex PowerShellCommand = new Regex(
             @"^(?:Add|Approve|Assert|Backup|Block|Build|Checkpoint|Clear|Close|Compare|Complete|Compress|Confirm|Connect|Convert|" +
             @"ConvertFrom|ConvertTo|Copy|Debug|Deny|Deploy|Disable|Disconnect|Dismount|Edit|Enable|Enter|Exit|Expand|Export|Find|" +
@@ -53,7 +54,8 @@ namespace Capsule
             @"Out|Ping|Pop|Protect|Publish|Push|Read|Receive|Redo|Register|Remove|Rename|Repair|Request|Reset|Resize|Resolve|Restart|" +
             @"Restore|Resume|Revoke|Save|Search|Select|Send|Set|Show|Skip|Sort|Split|Start|Step|Stop|Submit|Suspend|Switch|Sync|Tee|Test|Trace|" +
             @"Unblock|Undo|Uninstall|Unlock|Unprotect|Unpublish|Unregister|Update|Use|Wait|Watch|Where|Write)-[A-Z][A-Za-z0-9]*\b");
-        static readonly Regex SqlSelect = new Regex(@"^(select)[ \t]+\S.*?[ \t](from)\b", CodeOptions);
+        static readonly Regex SqlSelect = new Regex(@"^(select)[ \t]+\S.*?[ \t](from)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         static readonly string[] CodeOperators = { "=>", "();", "::", "!=", "===" };
 
         readonly List<ClipItem> items = new List<ClipItem>();
