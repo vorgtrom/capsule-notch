@@ -30,6 +30,10 @@ namespace Capsule
         readonly ScrollViewer boardScroll = BodyScroll();
         readonly DockPanel header = new DockPanel { LastChildFill = false };
         readonly Grid tiles = new Grid();
+        readonly Dictionary<Border, int> tileRows = new Dictionary<Border, int>();
+        string panelHome = "default";
+        readonly ComboBox panelHomeChoice = new ComboBox();
+        readonly TextBlock panelHomeResult = new TextBlock();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
         readonly StackPanel ideasContent = new StackPanel();
         readonly Border musicTile = new Border();
@@ -67,6 +71,7 @@ namespace Capsule
         bool captureShortcutRecording;
         bool capturing;
 
+        public event Action<string> PanelHomeChanged;
         public event Action CaptureClicked;
         public event Action<string> CaptureShortcutChosen;
         public event Action RefreshAllClicked;
@@ -179,6 +184,7 @@ namespace Capsule
             Grid.SetRow(tile, row);
             Grid.SetColumn(tile, column);
             Grid.SetColumnSpan(tile, span);
+            tileRows.Add(tile, row);
             tiles.Children.Add(tile);
         }
 
@@ -290,6 +296,7 @@ namespace Capsule
 
         public void Update(PanelModel m)
         {
+            SetPanelHome(m.PanelHome);
             // Claude and Codex share a row; either one alone takes all of it.
             bool claude = m.Claude != null, codex = m.Codex != null;
             Show(claudeTile, claude);
@@ -332,9 +339,39 @@ namespace Capsule
             clipModel = t;
             Show(clipTile, t != null);
             clipTile.Child = t != null ? ClipboardContent(t) : null;
-            FixGaps();
+            ReorderTiles();
             Relayout();
         }
+
+        public void SetPanelHome(string value)
+        {
+            panelHome = Config.NormalizePanelHome(value);
+            foreach (ComboBoxItem choice in panelHomeChoice.Items)
+                if ((string)choice.Tag == panelHome) { panelHomeChoice.SelectedItem = choice; break; }
+            ReorderTiles();
+        }
+
+        public void ShowPanelHomeResult(bool saved)
+        {
+            panelHomeResult.Text = saved ? "" : "Couldn't save which section opens first.";
+            RaiseResized();
+        }
+
+        void ReorderTiles()
+        {
+            Border first = panelHome == "calendar" ? calendarTile : panelHome == "clipboard" ? clipTile : null;
+            int firstRow = first != null && first.Visibility == Visibility.Visible ? tileRows[first] : 0;
+            foreach (var tile in tileRows)
+            {
+                int row = tile.Value;
+                if (row == firstRow && firstRow > 0) row = 0;
+                else if (row < firstRow) row += 2;
+                Grid.SetRow(tile.Key, row);
+            }
+            FixGaps();
+        }
+
+        public void ScrollBoardToTop() { boardScroll.ScrollToTop(); }
 
         static void Show(UIElement tile, bool shown) { tile.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; }
 
@@ -384,6 +421,7 @@ namespace Capsule
             ideaBox.Focus();
             Keyboard.Focus(ideaBox);
             ideaBox.CaretIndex = ideaBox.Text.Length;
+            ideaBox.BringIntoView();
         }
 
         public void ClearIdea() { ideaBox.Clear(); }
@@ -417,6 +455,25 @@ namespace Capsule
 
             ringsBox.Margin = new Thickness(Pad + 4, 0, Pad + 4, 8);
             settingsBody.Children.Add(ringsBox);   // first: what the capsule shows
+
+            var opening = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
+            opening.Children.Add(SettingsHeading("Open panel with"));
+            System.Windows.Automation.AutomationProperties.SetName(panelHomeChoice, "Open panel with");
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Default order", Tag = "default" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Calendar", Tag = "calendar" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Clipboard", Tag = "clipboard" });
+            panelHomeChoice.SelectedIndex = 0;
+            panelHomeChoice.SelectionChanged += delegate
+            {
+                var choice = panelHomeChoice.SelectedItem as ComboBoxItem;
+                if (choice != null && (string)choice.Tag != panelHome && PanelHomeChanged != null)
+                    PanelHomeChanged((string)choice.Tag);
+            };
+            opening.Children.Add(panelHomeChoice);
+            panelHomeResult.Foreground = NotchView.Brush(Palette.Amber);
+            panelHomeResult.TextWrapping = TextWrapping.Wrap;
+            opening.Children.Add(panelHomeResult);
+            settingsBody.Children.Add(opening);
             settingsBody.Children.Add(BuildGoogle());   // above Ideas → Notion, as the Calendar tile is above Ideas
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
@@ -561,6 +618,7 @@ namespace Capsule
                 : "Your connection's secret, from app.notion.com/developers (Configuration tab).";
             linkBox.Text = databaseId != "" ? "https://app.notion.com/p/" + databaseId : "";
             notionResult.Text = "";
+            panelHomeResult.Text = "";
             shortcut = currentShortcut;
             shortcutText.Text = currentShortcut;
             shortcutResult.Text = "Click, then press a new shortcut.";

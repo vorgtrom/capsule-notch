@@ -399,6 +399,8 @@ asks whether to start with Windows. **No** is the default. You can change the ch
 - **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
   so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
 - The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
+- In Settings, **Open panel with** puts Calendar or Clipboard first. If that section is hidden, Capsule uses the
+  default order. The Ideas shortcut still goes straight to the Ideas box.
 - **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
 - **Right-click** the capsule or the tray icon for the menu.
 - **Left-click** the tray icon to hide or show the capsule.

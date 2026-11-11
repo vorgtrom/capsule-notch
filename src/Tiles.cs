@@ -7,6 +7,7 @@ namespace Capsule
     // Clipboard, Ideas. A tile whose ring is switched off (or that has nothing to show) is null, and isn't shown.
     public sealed class PanelModel
     {
+        public string PanelHome = "default";
         public UsageTile Claude;
         public UsageTile Codex;
         public SessionsTile Sessions;   // null while Claude is off

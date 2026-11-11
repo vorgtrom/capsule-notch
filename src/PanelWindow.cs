@@ -141,6 +141,7 @@ namespace Capsule
             new WindowInteropHelper(this).EnsureHandle();
             if (appearing || wasClosing || byShortcut) view.ShowBoard();   // it always opens on the tiles: also when turned round mid-close, and by the shortcut with the settings showing
             view.Update(model);
+            if (!byShortcut) view.ScrollBoardToTop();
             Place();
             if (appearing)
             {

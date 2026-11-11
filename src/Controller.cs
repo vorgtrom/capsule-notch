@@ -171,6 +171,15 @@ namespace Capsule
             notch.RightClicked += ShowMenu;
             notch.Moved += OnMoved;
             panel = new PanelWindow();
+            panel.View.PanelHomeChanged += value => Guard("panel opening", delegate
+            {
+                string previous = config.PanelHome;
+                config.PanelHome = Config.NormalizePanelHome(value);
+                bool saved = config.Save(Paths.ConfigFile);
+                if (!saved) config.PanelHome = previous;
+                panel.View.SetPanelHome(config.PanelHome);
+                panel.View.ShowPanelHomeResult(saved);
+            });
             panel.View.Music.Commanded += OnMusicCommand;
             panel.View.Music.SourceSelected += delegate(string key) { music.Select(key); };
             panel.View.RefreshAllClicked += delegate { Guard("refresh", RefreshAll); };
@@ -608,6 +617,7 @@ namespace Capsule
             long now = Clock.NowMs();
             return new PanelModel
             {
+                PanelHome = config.PanelHome,
                 Claude = config.RingOn("claude") ? claude.Tile(now, CultureInfo.CurrentCulture) : null,
                 Codex = config.RingOn("codex") ? codex.Tile(now, CultureInfo.CurrentCulture) : null,
                 Sessions = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null,
