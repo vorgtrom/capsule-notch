@@ -88,6 +88,7 @@ namespace Capsule
             Run("Ics", IcsTests.Run);
             Run("CalendarModule", CalendarModuleTests.Run);
             Run("CalendarView", CalendarViewTests.Run);
+            Run("Weather", WeatherTests.Run);
             Run("Updates", UpdatesTests.Run);
             Run("Log", LogTests.Run);
             Run("UsageLogs", UsageLogsTests.Run);

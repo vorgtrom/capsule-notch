@@ -11,6 +11,9 @@ download for each one. A release takes its notes from its section here.
 - **Windows output volume.** Set or mute the default playback device's volume from the Music tile in the panel.
   The control follows changes made in Windows.
 
+- **Weather in the panel.** Choose a place in Settings to see current conditions and hourly and daily forecasts.
+  You can choose Celsius or Fahrenheit and put Weather first with **Open panel with**.
+
 ## v1.9.0
 
 - **Needs you.** A panel tile lists the Claude and Codex requests waiting on you, with **Review** to answer each one.

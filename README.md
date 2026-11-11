@@ -418,7 +418,7 @@ asks whether to start with Windows. **No** is the default. You can change the ch
 - **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
   so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
 - The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
-- In Settings, **Open panel with** puts Calendar, Clipboard, or Needs you first. A pending agent request puts
+- In Settings, **Open panel with** puts Calendar, Weather, Clipboard, or Needs you first. A pending agent request puts
   Needs you first with any opening preference. If the selected section is hidden, Capsule uses the default order.
   The Ideas shortcut still goes straight to the Ideas box.
 - **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
@@ -571,6 +571,18 @@ Click the calendar button at the top right of the panel's Calendar tile.
   API** under **APIs & Services → Library** (step 2 of [your own client](#google-calendar)). Tasks show up at the next
   read.
 
+### Weather
+
+Weather starts off. Open Settings, enter a place under **Weather**, then click **Find** and select a match.
+The tile shows current conditions, the next six hours, and the next four days. Choose **Automatic**, **°C**, or **°F**.
+Automatic uses your Windows region. Forecast times use the selected place's time zone and your Windows clock format.
+
+Capsule refreshes every 30 minutes. It also refreshes after the PC wakes or reconnects, and when you open the panel
+with a forecast older than 15 minutes. If an update fails, Capsule keeps the last forecast and shows when it last
+updated. Data older than 90 minutes appears dimmed. Choose **Turn off** to clear the saved place and stop requests.
+
+[Weather data by Open-Meteo.com](https://open-meteo.com/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
 ### Needs you
 
 The **Needs you** tile lists the oldest request from each enabled agent, with the project, request type and wait time.
@@ -631,8 +643,9 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Output volume | volume and mute state of the default Windows playback device while the Music tile is visible | no internet connection; the slider and speaker button change the device's volume or mute state locally |
 | Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
+| Weather | the place name you search for and the saved place label, coordinates rounded to two decimals, and units | `geocoding-api.open-meteo.com` (your query and UI language when you click Find), `api.open-meteo.com` (rounded latitude and longitude and temperature unit, only once you select a place) |
 
-Those are the only eight places it connects to. Your browser handles Google's sign-in page,
+Your browser handles Google's sign-in page,
 `accounts.google.com`: Capsule only opens it there. Capsule doesn't follow redirects, so a request can't end up
 anywhere else.
 - Sign-in tokens stay in memory. They are never logged, shown or saved.

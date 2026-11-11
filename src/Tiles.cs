@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace Capsule
 {
-    // Everything the panel shows, tile by tile, in a fixed order: Claude, Codex, Sessions, Calendar, Music, Focus,
+    // Everything the panel shows, tile by tile, in a fixed order: Claude, Codex, Sessions, Calendar, Weather, Music, Focus,
     // Clipboard, Ideas and Needs you. A tile whose ring is switched off (or that has nothing to show) is null, and isn't shown.
     public sealed class PanelModel
     {
@@ -12,6 +12,7 @@ namespace Capsule
         public UsageTile Codex;
         public SessionsTile Sessions;   // null while Claude is off
         public CalendarTile Calendar;
+        public WeatherTile Weather;
         public MusicSnapshot Music;
         public FocusTile Focus;
         public ClipboardTile Clipboard;

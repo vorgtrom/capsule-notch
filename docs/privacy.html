@@ -9,10 +9,10 @@
 <body>
 <main>
 <h1>Privacy policy</h1>
-<p class="muted">Effective 24 October 2026.</p>
+<p class="muted">Effective 12 November 2026.</p>
 
-<p>Capsule is a Windows app that runs only on your own PC. It has no server: nothing it reads is sent to its developer
-or to anyone else.</p>
+<p>Capsule is a Windows app that runs on your own PC. Capsule has no server and sends no data to its developer.
+The sections below describe when Capsule connects to other services.</p>
 
 <h2>Google Calendar and Google Tasks</h2>
 <p>When you connect Google Calendar, Capsule asks Google for access to your events, read-only access to your list of
@@ -44,6 +44,14 @@ own Notion database, each with your own sign-in for that service. That data, too
 service.</p>
 <p>A downloaded Capsule asks GitHub once a day for the newest release's version number, so it can tell you when an
 update is out. That request carries no sign-in and nothing about you, and you can turn it off in Capsule's menu.</p>
+
+<h2>Weather</h2>
+<p>Weather is off by default. When you click <strong>Find</strong> in Weather settings, Capsule sends your place query
+and UI language to <code>geocoding-api.open-meteo.com</code>. If you choose a match, Capsule saves the place label,
+latitude and longitude rounded to two decimals, and your temperature unit preference in its local settings.</p>
+<p>Capsule sends the rounded latitude and longitude and selected temperature unit to <code>api.open-meteo.com</code>
+for forecasts only after you choose a place. It keeps forecasts in memory. Weather needs no sign-in or API key.
+Capsule never requests your device location. Choose <strong>Turn off</strong> to clear the saved place and stop forecast requests.</p>
 
 <h2>Needs you and GitHub checks</h2>
 <p>The Needs you tile reads pending request status from Capsule's local request queue. It stores no prompt text

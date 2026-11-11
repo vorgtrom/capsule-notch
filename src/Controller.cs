@@ -26,6 +26,7 @@ namespace Capsule
         SessionsModule sessions;
         IdeasModule ideas;
         CalendarModule calendar;
+        WeatherModule weather;
         MusicModule music;
         GitHubMonitor github;
         UpdateCheck updates;   // a release build's once-a-day look for a newer release
@@ -115,12 +116,14 @@ namespace Capsule
             calendar.SignedOutByGoogle += delegate { tray.Balloon("Capsule", "Google ended Capsule's access to your calendar. Sign in again in Capsule's settings (⚙ in the panel)."); };
             calendar.SignedInWith += OnGoogleSignedIn;
             calendar.ClientIdChosen += OnGoogleClientIdChosen;
+            weather = new WeatherModule(config.WeatherPlace, config.WeatherUnits, TaskScheduler.FromCurrentSynchronizationContext());
+            weather.Changed += delegate { if (!disposed && panel.IsOpen) panel.Refresh(PanelNow()); };
             history = new UsageHistory(Paths.UsageHistoryFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
             history.Changed += delegate { Guard("usage", ShowUsageIfOpen); };
             samples = SampleStore.Load(Paths.UsageSamplesFile);
             music = new MusicModule(new WindowsMusicSource(), TaskScheduler.FromCurrentSynchronizationContext());
             music.Changed += delegate { Guard("music render", RenderMusic); };
-            modules = new List<IModule> { sessions, claude, codex, calendar, ideas, history, music };
+            modules = new List<IModule> { sessions, claude, codex, calendar, weather, ideas, history, music };
             updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
             updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
             codexActivity = new CodexActivity(Paths.CodexHome);
@@ -219,6 +222,7 @@ namespace Capsule
                 panel.View.ShowRings(config);
                 panel.View.ShowSettings(SecretStore.Exists(Paths.NotionSecretFile), config.NotionDatabase, config.Hotkey, config.CaptureHotkey, capture.ShortcutRegistered);
                 panel.View.ShowGoogle(calendar.Settings());
+                panel.View.ShowWeatherSettings(config.WeatherPlace, config.WeatherUnits, true);
                 panel.View.ShowGitHubSettings(config.GitHubRepo);
             };
             panel.View.NotionSaved += OnNotionSaved;
@@ -233,6 +237,23 @@ namespace Capsule
             };
             panel.View.GoogleSignOutClicked += delegate { Guard("calendar sign-out", calendar.SignOut); };
             panel.View.CalendarToggled += OnCalendarToggled;
+            panel.View.WeatherSearch += delegate(string text)
+            {
+                Guard("weather search", delegate
+                {
+                    weather.Search(text, CultureInfo.CurrentUICulture, delegate(List<WeatherPlace> places, string note)
+                    {
+                        if (panel.IsOpen && panel.View.ShowingSettings) panel.View.ShowWeatherPlaces(places, note);
+                    });
+                });
+            };
+            panel.View.WeatherSearchCancelled += weather.CancelSearch;
+            panel.View.WeatherPlaceChosen += delegate(WeatherPlace place) { SaveWeather(place, config.WeatherUnits); };
+            panel.View.WeatherUnitsChosen += delegate(string units) { SaveWeather(config.WeatherPlace, units); };
+            panel.View.WeatherAttributionClicked += delegate
+            {
+                Guard("weather attribution", delegate { System.Diagnostics.Process.Start(WeatherApi.AttributionUrl); });
+            };
             panel.View.MonthClicked += delegate { Guard("month", OpenMonth); };
             panel.View.UsageClicked += delegate { Guard("usage", OpenUsage); };
             panel.View.Usage.PeriodChosen += delegate(UsagePeriod p) { Guard("usage", delegate { usagePeriod = p; usageOffset = 0; ShowUsage(); }); };
@@ -639,6 +660,7 @@ namespace Capsule
                 Codex = config.RingOn("codex") ? codex.Tile(now, CultureInfo.CurrentCulture) : null,
                 Sessions = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null,
                 Calendar = config.RingOn("calendar") ? calendar.Tile(now, CultureInfo.CurrentCulture) : null,
+                Weather = weather.Tile(now),
                 Music = config.RingOn("music") ? music.Current : null,
                 Focus = config.RingOn("focus") ? FocusTile.From(focus, now, CultureInfo.CurrentCulture) : null,
                 Clipboard = ClipTile(),
@@ -883,6 +905,7 @@ namespace Capsule
             Native.GetWindowRect(notch.Handle, out capsule);
             panel.Open(PanelNow(), capsule, notch.LeftEdge, notch.Monitor, byShortcut, forFileDrag);
             NotchOnTop();
+            weather.PanelOpened(Clock.NowMs());
             if (forFileDrag) return;
             ideas.PanelOpened();
             calendar.PanelOpened(Clock.NowMs());
@@ -1238,6 +1261,23 @@ namespace Capsule
         {
             config.GoogleClientId = clientId;
             if (!config.Save(Paths.ConfigFile)) Log.Info("calendar: couldn't write config.json; the client ID is kept only until Capsule restarts");
+        }
+
+        void SaveWeather(WeatherPlace place, string units)
+        {
+            WeatherPlace oldPlace = config.WeatherPlace;
+            string oldUnits = config.WeatherUnits;
+            config.WeatherPlace = place;
+            config.WeatherUnits = units;
+            if (!config.Save(Paths.ConfigFile))
+            {
+                config.WeatherPlace = oldPlace;
+                config.WeatherUnits = oldUnits;
+                panel.View.ShowWeatherSettings(oldPlace, oldUnits, false);
+                return;
+            }
+            weather.Configure(place, units);
+            panel.View.ShowWeatherSettings(place, units, true);
         }
 
         // A calendar's box in the settings: kept in config.json (its id only), and the calendars read again.
@@ -1732,6 +1772,7 @@ namespace Capsule
             finally { shelf.Dispose(); }
             if (clipWatcher != null) clipWatcher.Dispose();
             if (music != null) music.Dispose();
+            if (weather != null) weather.Dispose();
             if (calendar != null) calendar.CancelSignIn();   // a sign-in waiting for the browser stops listening
             // Every request held goes to the app. A reply still being written when the process ends reaches the hook as a
             // closed pipe, which it takes as a pass too.

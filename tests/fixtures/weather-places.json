@@ -1,0 +1,19 @@
+{
+  "results": [
+    {
+      "name": "Zürich",
+      "admin1": "Zurich",
+      "country": "Switzerland",
+      "latitude": 47.36667,
+      "longitude": 8.55,
+      "id": 2657896,
+      "timezone": "Europe/Zurich"
+    },
+    {
+      "name": "Zurich",
+      "country": "United States",
+      "latitude": 39.232,
+      "longitude": -99.434
+    }
+  ]
+}
