@@ -30,13 +30,15 @@ these holds:
    - It starts with a lowercase command: `git`, `npm`, `npx`, `pnpm`, `yarn`, `dotnet`, `cargo`, `docker`, `kubectl`, `curl`,
      `winget`, `scoop`, or `gh`. The lowercase commands `go`, `cat`, `echo`, `cd`, `ls`, `python`, `node`, and `pip`
      also need an argument containing `-`, `/`, `\`, `.`, `=`, or a quote.
+     A final period attached to another character does not count. A standalone `.` argument counts.
    - It starts with a case-sensitive PowerShell `Verb-Noun` cmdlet, using the verb's standard capitalisation and a
      capitalised noun, such as `Get-ChildItem`.
    - It starts with a SQL SELECT and has a FROM clause. Both keywords must be uppercase unless the line contains
      `*` or ends with `;`.
    - It contains `=>`, `();`, `::`, `!=`, `===`, or both `{` and `}`.
 
-Multi-line keyword matches ignore case. Keywords and command names need a word boundary.
+Multi-line code keywords match only in lowercase. The SQL keywords `select`, `insert`, `update`, and `delete from`
+match in all lowercase or all uppercase. Keywords and command names need a word boundary.
 
 Prose isn't code. Tests must cover at least:
 
@@ -48,7 +50,10 @@ Prose isn't code. Tests must cover at least:
 | two-line C# method with braces | Code |
 | Python `def` with an indented body | Code |
 | `SELECT * FROM users WHERE id = 1` | Code |
-| `go build ./...`, `cat file.txt`, `python -m venv .venv` | Code |
+| `go build ./...`, `cat file.txt`, `python -m venv .venv`, `cd .` | Code |
+| `cd to the store.` | Text |
+| A status update with lines starting with `Update:`, `For`, and `If` | Text |
+| `def greet():\n    return 1` and `SELECT id\nFROM users;` | Code |
 | A shopping list, street address, or email with a salutation and sign-off | Text |
 | `Go home now`, `Cat food is out of stock`, `Python is great`, `echo hello` | Text |
 | `NPM install`, `sort-object`, `Set-up the meeting`, `Get-together tonight` | Text |
