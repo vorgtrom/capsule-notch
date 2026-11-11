@@ -121,7 +121,8 @@ namespace Capsule
                     stitcher = new CaptureStitcher(current);
                     CaptureFrame previous = current;
                     current = null;
-                    int notches = 1;
+                    int notches = 1, firstNotchRows = 0;
+                    bool variableScroll = false;
                     while (await ReadyAsync().ConfigureAwait(false))
                     {
                         if (frameCount >= CaptureLimits.MaxFrames) { notice = "The capture reached the frame limit."; break; }
@@ -137,7 +138,14 @@ namespace Capsule
                             if (!added.Matched) { notice = added.Notice; break; }
                             rows += added.AddedRows;
                             frameCount++;
-                            notches = NotchesFor(added.AddedRows, notches, request.Area.Height);
+                            // Take two single-notch samples before batching. Allow one pixel of rounding per notch.
+                            if (firstNotchRows == 0)
+                                firstNotchRows = added.AddedRows;
+                            else
+                            {
+                                if (Math.Abs(added.AddedRows - firstNotchRows * notches) > notches) variableScroll = true;
+                                notches = variableScroll ? 1 : NotchesFor(added.AddedRows, notches, request.Area.Height);
+                            }
                             previous = next;
                             next = null;
                         }
