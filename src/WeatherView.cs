@@ -186,7 +186,7 @@ namespace Capsule
                 foreach (WeatherHour hour in forecast.Hours)
                 {
                     string rain = hour.RainChance >= 20 ? hour.RainChance.ToString(culture) + "%" : "";
-                    hours.Children.Add(WeatherColumn(hour.Time.ToString("t", culture), WeatherCondition.For(hour.Code, true),
+                    hours.Children.Add(WeatherColumn(hour.Time.ToString("t", culture), WeatherCondition.For(hour.Code, hour.Daylight),
                         WeatherTemperature(hour.Temperature, culture), rain));
                 }
                 data.Children.Add(WeatherHeading("Next 6 hours"));

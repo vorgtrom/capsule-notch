@@ -1,13 +1,26 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace Capsule
 {
     static class WeatherTests
     {
+        static void PrivacyPolicyDate()
+        {
+            string policy = File.ReadAllText(Path.Combine(TestRunner.RepoRoot(), "docs", "privacy.html"));
+            Match effective = Regex.Match(policy, @"<p class=""muted"">Effective ([^.]+)\.</p>");
+            DateTime date;
+            TestRunner.Check(DateTime.TryParseExact(effective.Groups[1].Value, "d MMMM yyyy", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out date) && date >= new DateTime(2026, 11, 12),
+                "privacy policy effective date includes the Weather update");
+        }
+
         public static void Run()
         {
+            PrivacyPolicyDate();
+
             string places = TestRunner.Fixture("weather-places.json");
             var results = WeatherApi.Places(places);
             TestRunner.Eq(2, results.Count, "weather keeps both places");
@@ -21,6 +34,7 @@ namespace Capsule
             string url = WeatherApi.ForecastUrl(results[0], "fahrenheit");
             TestRunner.Check(url.StartsWith("https://api.open-meteo.com/v1/forecast?latitude=47.37&longitude=8.55&", StringComparison.Ordinal), "weather sends rounded invariant coordinates");
             TestRunner.Check(url.EndsWith("forecast_days=5&timezone=auto&temperature_unit=fahrenheit", StringComparison.Ordinal), "weather sends requested forecast days and unit");
+            TestRunner.Check(url.Contains("&hourly=temperature_2m,weather_code,precipitation_probability,is_day&"), "weather requests the day flag for every hour");
             TestRunner.Check(!url.Contains("Zurich"), "weather forecast omits the label");
             TestRunner.Eq("fahrenheit", WeatherApi.TemperatureUnit("automatic", new RegionInfo("US")), "weather Automatic in US");
             TestRunner.Eq("celsius", WeatherApi.TemperatureUnit("automatic", new RegionInfo("MY")), "weather Automatic in Malaysia");
@@ -35,6 +49,9 @@ namespace Capsule
             TestRunner.Check(!forecast.Daylight, "weather is day flag");
             TestRunner.Eq(6, forecast.Hours.Count, "weather takes six future hours");
             TestRunner.Eq(new DateTime(2026, 11, 11, 23, 0, 0), forecast.Hours[0].Time, "weather skips hours before current weather");
+            TestRunner.Check(!forecast.Hours[0].Daylight, "weather parses the first clear night hour");
+            var morning = WeatherApi.Forecast(json.Replace("2026-11-11T22:15", "2026-11-11T10:15"), "celsius");
+            TestRunner.Check(morning != null && morning.Hours[0].Daylight, "weather parses a daylight hour independently of the current flag");
             TestRunner.Eq(new DateTime(2026, 11, 12), forecast.Hours[1].Time, "weather uses place-local midnight");
             TestRunner.Eq(19, forecast.Hours[1].RainChance, "weather reads chance below threshold");
             TestRunner.Eq(20, forecast.Hours[2].RainChance, "weather reads chance at threshold");
@@ -45,6 +62,8 @@ namespace Capsule
             TestRunner.Check(WeatherApi.Forecast(json.Replace("\"weather_code\"", "\"unexpected\""), "celsius") == null, "weather rejects missing code array");
             TestRunner.Check(WeatherApi.Forecast(json.Replace("\"2026-11-12T01:00\"", "\"invalid\""), "celsius") == null, "weather rejects invalid forecast times");
             TestRunner.Check(WeatherApi.Forecast(json.Replace("\"2026-11-12T01:00\",", ""), "celsius") == null, "weather rejects arrays with mismatched lengths");
+            TestRunner.Check(WeatherApi.Forecast(json.Replace("\"is_day\":[", "\"unexpected\":["), "celsius") == null, "weather rejects a missing hourly day flag");
+            TestRunner.Check(WeatherApi.Forecast(json.Replace("\"is_day\":[0", "\"is_day\":[2"), "celsius") == null, "weather rejects an invalid hourly day flag");
 
             TestRunner.Eq("Partly cloudy", WeatherCondition.For(2, true).Label, "weather partly cloudy");
             TestRunner.Eq("Thunderstorm", WeatherCondition.For(97, true).Label, "weather heavy thunderstorm");

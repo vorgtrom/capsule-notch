@@ -56,6 +56,12 @@ namespace Capsule
             TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Weather").Y, "Weather follows Calendar in default order");
             TestRunner.Check(HasText(view, "Zürich") && HasText(view, "4°C"), "Weather displays the selected place and temperature");
             TestRunner.Check(!HasText(view, "19%") && HasText(view, "20%"), "Weather shows rain chance only from twenty percent");
+            TextBlock hourHeading = FindText(view, "Next 6 hours");
+            var forecastRows = (StackPanel)hourHeading.Parent;
+            var hours = (System.Windows.Controls.Primitives.UniformGrid)forecastRows.Children[forecastRows.Children.IndexOf(hourHeading) + 1];
+            var nightGlyph = (TextBlock)((StackPanel)hours.Children[0]).Children[1];
+            TestRunner.Eq(WeatherCondition.For(0, false).Glyph, nightGlyph.Text, "the first clear hour shows the moon at night");
+
             var tile = (StackPanel)((DockPanel)FindText(view, "Weather").Parent).Parent;
             var attribution = (TextBlock)tile.Children[tile.Children.Count - 1];
             var link = attribution.Inlines.LastInline as Hyperlink;

@@ -40,6 +40,7 @@ namespace Capsule
         public DateTime Time;
         public double Temperature;
         public int Code, RainChance;
+        public bool Daylight;
     }
 
     public sealed class WeatherDay
@@ -71,7 +72,7 @@ namespace Capsule
             return "https://api.open-meteo.com/v1/forecast?latitude=" + place.Latitude.ToString("0.00", Invariant) +
                 "&longitude=" + place.Longitude.ToString("0.00", Invariant) +
                 "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
-                "&hourly=temperature_2m,weather_code,precipitation_probability" +
+                "&hourly=temperature_2m,weather_code,precipitation_probability,is_day" +
                 "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto&temperature_unit=" + unit;
         }
 
@@ -125,6 +126,7 @@ namespace Capsule
                 object[] hourTemps = Values(hourly, "temperature_2m", hours.Length);
                 object[] hourCodes = Values(hourly, "weather_code", hours.Length);
                 object[] chances = Values(hourly, "precipitation_probability", hours.Length);
+                object[] daylight = Values(hourly, "is_day", hours.Length);
                 DateTime lastHour = DateTime.MinValue;
                 for (int i = 0; i < hours.Length; i++)
                 {
@@ -133,8 +135,9 @@ namespace Capsule
                     lastHour = time;
                     double temp = Number(hourTemps[i]);
                     int code = Integer(hourCodes[i], 0, int.MaxValue), chance = Integer(chances[i], 0, 100);
+                    bool isDay = Integer(daylight[i], 0, 1) == 1;
                     if (time > now && forecast.Hours.Count < 6)
-                        forecast.Hours.Add(new WeatherHour { Time = time, Temperature = temp, Code = code, RainChance = chance });
+                        forecast.Hours.Add(new WeatherHour { Time = time, Temperature = temp, Code = code, RainChance = chance, Daylight = isDay });
                 }
                 if (forecast.Hours.Count != 6 || forecast.Hours[0].Time - now > TimeSpan.FromHours(1)) return null;
 
