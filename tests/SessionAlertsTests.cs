@@ -12,6 +12,7 @@ namespace Capsule
         {
             Context();
             Cache();
+            AfterFocus();
         }
 
         static List<SessionStatus> One(string state) { return new List<SessionStatus> { new SessionStatus { SessionId = "s1", Project = "capsule", State = state } }; }
@@ -35,6 +36,28 @@ namespace Capsule
             TestRunner.Eq(0, alerts.Check(list, id => null, Now).Count, "no transcript read yet: nothing");
             TestRunner.Eq(0, alerts.Check(new List<SessionStatus>(), id => use, Now).Count, "the session ended");
             TestRunner.Eq(1, alerts.Check(list, id => use, Now).Count, "a session seen again starts afresh");
+        }
+
+        static void AfterFocus()
+        {
+            var waiting = One(States.Waiting);
+            var use = new SessionUse { Model = "claude-opus-4-8", Context = 184000, LastReplyMs = Now - 56 * Minute, CacheTtlMs = SessionContext.HourMs };
+            var alerts = new SessionAlerts();
+            TestRunner.Eq(0, alerts.Check(waiting, id => use, Now, defer: true).Count, "Focus suppresses both session alerts");
+            use.Context = 190000;
+            var current = alerts.Check(waiting, id => use, Now + 2 * Minute);
+            TestRunner.Eq(2, current.Count, "both still relevant alerts appear on the break");
+            TestRunner.Check(current.Exists(text => text.Contains("95%")) && current.Exists(text => text.Contains("about 2 min")), "the break uses current context and cache time");
+            TestRunner.Eq(0, alerts.Check(waiting, id => use, Now + 2 * Minute).Count, "released alerts are not repeated");
+
+            alerts = new SessionAlerts();
+            alerts.Check(waiting, id => use, Now, defer: true);
+            use.Context = 40000;
+            TestRunner.Eq(0, alerts.Check(waiting, id => use, Now + 5 * Minute).Count, "compacted context and expired cache produce no break alert");
+
+            alerts = new SessionAlerts();
+            alerts.Check(waiting, id => use, Now, defer: true);
+            TestRunner.Eq(0, alerts.Check(One(States.Working), id => use, Now + Minute).Count, "a session no longer waiting has no cache warning");
         }
 
         static void Cache()
