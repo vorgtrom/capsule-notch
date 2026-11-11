@@ -28,7 +28,6 @@ namespace Capsule
         [StructLayout(LayoutKind.Sequential)]
         struct INPUT { public uint type; public INPUTUNION data; }
 
-        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr window);
         [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
@@ -42,10 +41,8 @@ namespace Capsule
         static extern bool GetUserObjectInformation(IntPtr handle, int index, StringBuilder value, int length, out int needed);
 
         public long NowMs { get { return clock.ElapsedMilliseconds; } }
-        public bool EscapePressed { get { return Pressed(0x1B); } }
-        public bool ModifiersPressed { get { return Pressed(0x10) || Pressed(0x11) || Pressed(0x12) || Pressed(0x5B) || Pressed(0x5C); } }
-
-        static bool Pressed(int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; }
+        public bool EscapePressed { get { return Native.KeyPressed(0x1B); } }
+        public bool ModifiersPressed { get { return Native.KeyPressed(0x10) || Native.KeyPressed(0x11) || Native.KeyPressed(0x12) || Native.KeyPressed(0x5B) || Native.KeyPressed(0x5C); } }
         public Task WaitAsync(int milliseconds, CancellationToken cancel) { return Task.Delay(milliseconds, cancel); }
 
         static bool OrdinaryDesktop()

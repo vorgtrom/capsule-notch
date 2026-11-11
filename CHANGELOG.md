@@ -22,6 +22,9 @@ download for each one. A release takes its notes from its section here.
 - **Longer page captures.** After two consistent wheel samples, scrolling capture can move about 40% of the
   selection between screenshots. It uses single notches if the measured scroll distance per notch changes.
   It also goes back to the top in bigger steps.
+- **File shelf.** Drag files over the capsule to open the Shelf tile. Drop files there, then drag one or all of
+  them into another app as copies. Use **Keep on shelf** in Capture Preview to add the current PNG, including
+  any crop. The shelf clears on exit.
 
 ## v1.8.0
 
