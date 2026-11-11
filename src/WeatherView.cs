@@ -68,7 +68,7 @@ namespace Capsule
         {
             ClearWeatherSearch();
             weatherPlace.Text = place != null ? place.Label : "";
-            weatherOff.IsEnabled = place != null;
+            weatherOff.Visibility = place != null ? Visibility.Visible : Visibility.Collapsed;   // a disabled button draws white
             weatherUnits.SelectionChanged -= OnWeatherUnitsChanged;
             foreach (ComboBoxItem choice in weatherUnits.Items)
                 if ((string)choice.Tag == units) { weatherUnits.SelectedItem = choice; break; }

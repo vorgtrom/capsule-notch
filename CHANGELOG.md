@@ -9,6 +9,13 @@ download for each one. A release takes its notes from its section here.
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
 
+## v1.10.1
+
+- **Weather works.** Finding a place and the forecast both failed with "The weather service sent something
+  Capsule couldn't read": the weather service compresses its replies in a way Capsule couldn't unpack.
+- **Turn off** in the Weather and GitHub settings no longer shows as a blank white button when there's nothing to
+  turn off; it's hidden instead.
+
 ## v1.10.0
 
 - **Weather in the panel.** Pick a place in Settings to see the weather now, the next 6 hours and the next 4 days.

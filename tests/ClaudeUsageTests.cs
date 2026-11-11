@@ -22,6 +22,7 @@ namespace Capsule
             RejectsGarbage();
             ReadsRetryAfter();
             ErrorReplyCutOffStillReturnsStatus();
+            ReadsACompressedReply();
             PostsAUtf8BodyWithoutExpectContinue();
             RenewsOnlyNearExpiry();
             RetryWaitsDoubleToAnHour();
@@ -117,6 +118,79 @@ namespace Capsule
             if (r == null) return;
             TestRunner.Eq(429, r.Status, "status kept when the error body is cut off");
             TestRunner.Eq(30L, r.RetryAfterSeconds, "Retry-After kept");
+        }
+
+        // A server that, like Open-Meteo, answers "deflate" with a zlib-wrapped body and "gzip" with gzip. The reply
+        // must still read as its JSON: Capsule asks for gzip only.
+        static void ReadsACompressedReply()
+        {
+            const string json = "{\"results\":[{\"name\":\"Klang\"}]}";
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            string accepted = null;
+            var server = new Thread(delegate()
+            {
+                try
+                {
+                    using (TcpClient client = listener.AcceptTcpClient())
+                    {
+                        NetworkStream stream = client.GetStream();
+                        var reader = new StreamReader(stream, Encoding.ASCII);
+                        string line;
+                        while (!string.IsNullOrEmpty(line = reader.ReadLine()))
+                            if (line.StartsWith("Accept-Encoding:", StringComparison.OrdinalIgnoreCase)) accepted = line.Substring(16).Trim();
+                        bool deflate = accepted != null && accepted.Contains("deflate");
+                        bool gzip = accepted != null && accepted.Contains("gzip");
+                        byte[] body = deflate ? Zlib(Encoding.UTF8.GetBytes(json)) : gzip ? Gzip(Encoding.UTF8.GetBytes(json)) : Encoding.UTF8.GetBytes(json);
+                        string encoding = deflate ? "Content-Encoding: deflate\r\n" : gzip ? "Content-Encoding: gzip\r\n" : "";
+                        byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" + encoding + "Content-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+                        stream.Write(head, 0, head.Length);
+                        stream.Write(body, 0, body.Length);
+                        stream.Flush();
+                    }
+                }
+                catch (Exception) { }
+            });
+            server.IsBackground = true;
+            server.Start();
+            HttpResult r = null;
+            try { r = Http.Get("http://127.0.0.1:" + port + "/", new Dictionary<string, string>(), 5000); }
+            finally
+            {
+                server.Join(5000);
+                listener.Stop();
+            }
+            TestRunner.Check(accepted != null && accepted.Contains("gzip") && !accepted.Contains("deflate"), "asks for gzip, not deflate");
+            TestRunner.Eq(json, r == null ? null : r.Body, "a compressed reply reads as its JSON");
+        }
+
+        static byte[] Gzip(byte[] data)
+        {
+            using (var output = new MemoryStream())
+            {
+                using (var gzip = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionMode.Compress)) gzip.Write(data, 0, data.Length);
+                return output.ToArray();
+            }
+        }
+
+        // zlib: a 2-byte header, raw deflate, then the Adler-32 of the data, big-endian.
+        static byte[] Zlib(byte[] data)
+        {
+            using (var output = new MemoryStream())
+            {
+                output.WriteByte(0x78);
+                output.WriteByte(0x9C);
+                using (var deflate = new System.IO.Compression.DeflateStream(output, System.IO.Compression.CompressionMode.Compress, true)) deflate.Write(data, 0, data.Length);
+                uint a = 1, b = 0;
+                foreach (byte x in data) { a = (a + x) % 65521; b = (b + a) % 65521; }
+                uint adler = (b << 16) | a;
+                output.WriteByte((byte)(adler >> 24));
+                output.WriteByte((byte)(adler >> 16));
+                output.WriteByte((byte)(adler >> 8));
+                output.WriteByte((byte)adler);
+                return output.ToArray();
+            }
         }
 
         // The head of the request that has been read so far ends in a blank line.

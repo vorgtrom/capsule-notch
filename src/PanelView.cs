@@ -690,7 +690,7 @@ namespace Capsule
         internal void ShowGitHubSettings(string repo)
         {
             githubRepoBox.Text = repo;
-            githubOff.IsEnabled = repo != "";
+            githubOff.Visibility = repo != "" ? Visibility.Visible : Visibility.Collapsed;   // a disabled button draws white
             ShowGitHubSettingsResult(repo == "" ? "Off. Capsule checks only public repositories." : "Saved. Capsule checks this repository without signing in.", true);
         }
 

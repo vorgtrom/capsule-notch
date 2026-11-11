@@ -51,7 +51,9 @@ namespace Capsule
                 request.ReadWriteTimeout = timeoutMs;
                 request.UserAgent = "Capsule/" + AppVersion.Current + " (Windows)";
                 request.Accept = "application/json";
-                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                // gzip only: some servers (Open-Meteo) answer "deflate" with a zlib header, which .NET Framework's
+                // DeflateStream can't read, so the body came back empty.
+                request.AutomaticDecompression = DecompressionMethods.GZip;
                 request.AllowAutoRedirect = false;   // only ever the endpoints Capsule names, never wherever a redirect points
                 foreach (KeyValuePair<string, string> header in headers)
                 {
