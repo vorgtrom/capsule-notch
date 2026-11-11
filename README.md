@@ -91,6 +91,9 @@ the same music controls. No extra sign-in or API key is needed.
 
 - The Music cell appears while something plays and stays for 2 minutes after you pause, so Play is still in
   reach; then the capsule goes back to its other cells. The panel's music tile is always there.
+- The Music tile's speaker button mutes or unmutes the default Windows playback device. Drag the slider to set
+  its volume from 0 to 100%. The mouse wheel and arrow keys change it by 2 points. Page Up and Page Down change
+  it by 10 points. The slider follows changes made in Windows and hides when there is no playback device.
 - Spotify's desktop app and players that expose Windows media controls are detected automatically.
 - YouTube Music in Chrome, Edge, Firefox, and other supported browsers appears under the **browser's name**.
   Windows supplies the player and track metadata, not the tab URL, so other media tabs can appear too.
@@ -625,6 +628,7 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
 | GitHub checks | public PR and Actions metadata, with no sign-in | `api.github.com`, when you save a repository |
 | Music | local Windows media sessions from Spotify, YouTube Music desktop apps, and supported browsers: track metadata, artwork, playback state, available controls and timeline | no internet connection; playback commands go only to the selected local Windows media session |
+| Output volume | volume and mute state of the default Windows playback device while the Music tile is visible | no internet connection; the slider and speaker button change the device's volume or mute state locally |
 | Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
 

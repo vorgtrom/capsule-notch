@@ -8,6 +8,8 @@ download for each one. A release takes its notes from its section here.
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
+- **Windows output volume.** Set or mute the default playback device's volume from the Music tile in the panel.
+  The control follows changes made in Windows.
 
 ## v1.9.0
 

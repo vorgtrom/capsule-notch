@@ -607,7 +607,7 @@ namespace Capsule
             if (disposed || notchCells == null) return;
             // Music started, or stopped long enough ago: the cell comes or goes, and the capsule is laid out again.
             if (MusicShown(Clock.NowMs()) != (musicCell >= 0)) { Render(); return; }
-            if (panel.IsOpen) panel.RefreshMusic(music.Current);
+            if (panel.IsOpen && config.RingOn("music")) panel.RefreshMusic(music.Current);
             if (musicCell < 0 || musicCell >= notchCells.Count) return;
             notchCells[musicCell] = music.Current.Cell();
             notch.SetCells(notchCells);

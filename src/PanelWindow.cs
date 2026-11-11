@@ -15,7 +15,7 @@ namespace Capsule
         public const int MotionMs = 150;
         const double SlideDips = 12;
 
-        readonly PanelView view = new PanelView();
+        readonly PanelView view;
         readonly TranslateTransform slide = new TranslateTransform();
         readonly DispatcherTimer hideLater;
         readonly DispatcherTimer fileDragLeave;
@@ -27,8 +27,11 @@ namespace Capsule
         bool closing;
         bool fileDragIn, openedForFileDrag;
 
-        public PanelWindow()
+        public PanelWindow() : this(new SystemVolume()) { }
+
+        internal PanelWindow(ISystemVolume systemVolume)
         {
+            view = new PanelView(systemVolume);
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
@@ -177,7 +180,15 @@ namespace Capsule
                 Place();   // as with the card: showing on a monitor with other scaling can resize the window
                 Animate(true);
             }
-            else if (wasClosing) Animate(true);   // opened again during the close: turn round from wherever it has got to
+            else if (wasClosing)
+            {
+                if (view.Music.IsVisible)
+                {
+                    view.Music.RefreshVolume();
+                    Place();
+                }
+                Animate(true);   // opened again during the close: turn round from wherever it has got to
+            }
             if (forFileDrag) view.RevealShelf();
             else Activate();
             if (byShortcut) view.FocusIdeas();
@@ -252,6 +263,7 @@ namespace Capsule
         {
             if (!IsOpen) return;
             view.UpdateMusic(model);
+            if (view.Music.IsVisible) view.Music.RefreshVolume();
             Place();
         }
 

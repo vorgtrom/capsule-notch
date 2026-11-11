@@ -20,14 +20,21 @@ namespace Capsule
         readonly Grid details = new Grid();
         readonly ProgressBar progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 3, Margin = new Thickness(0, 10, 0, 5), IsHitTestVisible = false };
         readonly Button source, previous, toggle, next;
-        readonly StackPanel controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) };
+        readonly StackPanel controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        readonly ISystemVolume systemVolume;
+        readonly Button speaker;
+        readonly Slider volume;
+        bool refreshingVolume, muted;
         MusicSnapshot model;
         string shownKey = "";
         public event Action<string, MusicCommand> Commanded;
         public event Action<string> SourceSelected;
 
-        public MusicView()
+        public MusicView() : this(null) { }
+
+        internal MusicView(ISystemVolume systemVolume)
         {
+            this.systemVolume = systemVolume;
             heading.Margin = new Thickness(0, 0, 0, 10);
             Children.Add(heading);
             details.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -62,8 +69,38 @@ namespace Capsule
                 ((TextBlock)button.Content).FontFamily = new FontFamily(PanelView.IconFont);
                 button.Width = 50;
                 button.Height = 36;
-                button.Margin = new Thickness(4, 0, 4, 0);
+                button.Margin = new Thickness(4, 10, 4, 0);
                 controls.Children.Add(button);
+            }
+            if (systemVolume != null)
+            {
+                speaker = MakeButton("", "Mute", ToggleMute);
+                ((TextBlock)speaker.Content).FontFamily = new FontFamily(PanelView.IconFont);
+                speaker.Width = speaker.Height = 36;
+                speaker.Margin = new Thickness(4, 10, 4, 0);
+                volume = new Slider
+                {
+                    Width = 84, Height = 36, VerticalContentAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 10, 0, 0), Minimum = 0, Maximum = 100,
+                    SmallChange = 2, LargeChange = 10, TickFrequency = 1, IsSnapToTickEnabled = true,
+                    IsMoveToPointEnabled = true
+                };
+                AutomationProperties.SetName(volume, "Volume");
+                speaker.Visibility = volume.Visibility = Visibility.Collapsed;
+                volume.ValueChanged += delegate
+                {
+                    if (refreshingVolume || volume.Visibility != Visibility.Visible) return;
+                    if (systemVolume.TrySetLevel(volume.Value)) UpdateVolumeDisplay();
+                    else RefreshVolume();
+                };
+                volume.PreviewMouseWheel += delegate(object sender, MouseWheelEventArgs e)
+                {
+                    volume.Value += Math.Sign(e.Delta) * volume.SmallChange;
+                    e.Handled = true;
+                };
+                IsVisibleChanged += delegate { if (IsVisible) RefreshVolume(); };
+                controls.Children.Add(speaker);
+                controls.Children.Add(volume);
             }
             Children.Add(controls);
             note.TextWrapping = TextWrapping.Wrap;
@@ -77,8 +114,9 @@ namespace Capsule
             foreach (TextBlock text in new[] { heading, title }) text.Foreground = NotchView.Brush(Palette.Text);
             foreach (TextBlock text in new[] { artist, time, note, placeholder }) text.Foreground = NotchView.Brush(Palette.Secondary);
             cover.Background = progress.Background = NotchView.Brush(Palette.Track);
-            foreach (Button button in new[] { source, previous, toggle, next })
+            foreach (Button button in new[] { source, previous, toggle, next, speaker })
             {
+                if (button == null) continue;
                 button.Background = NotchView.Brush(Palette.Track);
                 ((TextBlock)button.Content).Foreground = NotchView.Brush(Palette.Text);
             }
@@ -91,7 +129,8 @@ namespace Capsule
             MusicTrack t = model.Selected;
             shownKey = t == null ? "" : t.Key;
             heading.Text = t == null ? "Music" : t.Source;
-            details.Visibility = controls.Visibility = t == null ? Visibility.Collapsed : Visibility.Visible;
+            details.Visibility = previous.Visibility = toggle.Visibility = next.Visibility =
+                t == null ? Visibility.Collapsed : Visibility.Visible;
             title.Text = t == null ? "" : t.Title;
             artist.Text = t == null ? "" : t.Artist;
             title.ToolTip = title.Text;
@@ -119,6 +158,39 @@ namespace Capsule
             if (note.Text == "" && t != null && t.Source != "Spotify" && t.Source != "YouTube Music")
                 note.Text = "Browser media \u00B7 YouTube Music and other tabs use the browser's name.";
             note.Visibility = note.Text == "" ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        internal void RefreshVolume()
+        {
+            if (systemVolume == null) return;
+            double level;
+            bool available = systemVolume.TryRead(out level, out muted);
+            speaker.Visibility = volume.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+            if (!available) return;
+            if (!volume.IsMouseCaptureWithin)
+            {
+                refreshingVolume = true;
+                volume.Value = Math.Round(level);
+                refreshingVolume = false;
+            }
+            UpdateVolumeDisplay();
+        }
+
+        void ToggleMute()
+        {
+            if (systemVolume.TryToggleMute(out muted)) UpdateVolumeDisplay();
+            else RefreshVolume();
+        }
+
+        void UpdateVolumeDisplay()
+        {
+            double level = volume.Value;
+            string action = muted ? "Unmute" : "Mute";
+            AutomationProperties.SetName(speaker, action);
+            speaker.ToolTip = action;
+            ((TextBlock)speaker.Content).Text = muted ? "\uE74F" :
+                level == 0 ? "\uE992" : level <= 33 ? "\uE993" : level <= 66 ? "\uE994" : "\uE995";
+            volume.ToolTip = level + "%";
         }
 
         void SelectNext()
