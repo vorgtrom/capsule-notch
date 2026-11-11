@@ -666,7 +666,7 @@ namespace Capsule
         {
             var section = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
             section.Children.Add(Section("GitHub checks"));
-            section.Children.Add(Label("Public repository (owner/repo)"));
+            section.Children.Add(Label("Public repository (owner/repo, or its GitHub link)"));
             Plain(githubRepoBox);
             githubRepoBox.MaxLength = 160;
             AutomationProperties.SetName(githubRepoBox, "Public GitHub repository (owner/repo)");

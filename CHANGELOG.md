@@ -13,6 +13,8 @@ download for each one. A release takes its notes from its section here.
 
 - **Weather works.** Finding a place and the forecast both failed with "The weather service sent something
   Capsule couldn't read": the weather service compresses its replies in a way Capsule couldn't unpack.
+- **GitHub checks take a link.** Paste the repository's GitHub link, such as `https://github.com/owner/repo`, as well
+  as `owner/repo`.
 - **Turn off** in the Weather and GitHub settings no longer shows as a blank white button when there's nothing to
   turn off; it's hidden instead.
 

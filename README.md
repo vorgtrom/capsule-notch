@@ -592,7 +592,7 @@ Capsule hides the empty tile when both agent rings and GitHub checks are off, un
 With GitHub checks enabled and no pending agent requests, it shows **No pending requests** above the GitHub section.
 Click **Review** to open the existing request card. If the request has expired or moved on, the tile updates.
 
-In Settings, enter one public GitHub repository as `owner/repo` and click **Save repository**. GitHub checks start off.
+In Settings, enter one public GitHub repository as `owner/repo`, or paste its GitHub link, and click **Save repository**. GitHub checks start off.
 Capsule checks GitHub without signing in, so private repositories aren't supported.
 Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs per scan. Scans are at least
 three minutes apart for the same repository. Changing repositories starts a new scan as soon as any active scan and

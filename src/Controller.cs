@@ -934,10 +934,10 @@ namespace Capsule
 
         void SaveGitHubRepo(string text)
         {
-            string repo = GitHubMonitor.NormalizeRepo(text);
+            string repo = GitHubMonitor.RepoFromInput(text);
             if (text != null && repo == "")
             {
-                panel.View.ShowGitHubSettingsResult("Enter a public repository as owner/repo.", false);
+                panel.View.ShowGitHubSettingsResult("Enter a public repository as owner/repo, or paste its GitHub link.", false);
                 return;
             }
             string old = config.GitHubRepo;
