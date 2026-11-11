@@ -56,7 +56,7 @@ namespace Capsule
         ClipKind? clipFilter;   // null: every kind
         bool clipExpanded;      // every copy, not just the first ClipRows
         const int ClipRows = 5;
-        readonly MusicView music = new MusicView();
+        readonly MusicView music;
         readonly DockPanel ideasHeader = new DockPanel { LastChildFill = false };
         readonly StackPanel ideasRows = new StackPanel();
         readonly StackPanel ideasFooter = new StackPanel();
@@ -122,8 +122,11 @@ namespace Capsule
         public event Action<string, int> FocusLengthChanged;   // "focus", "short" or "long", and its new minutes
         public event Action<bool> FocusQuietToggled;
 
-        public PanelView()
+        public PanelView() : this(null) { }
+
+        internal PanelView(ISystemVolume systemVolume)
         {
+            music = new MusicView(systemVolume);
             UseLayoutRounding = true;
             Margin = new Thickness(ShadowMargin);
             board.Width = PanelWidth;

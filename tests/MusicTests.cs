@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -18,6 +19,8 @@ namespace Capsule
             SelectionAndSources();
             TheCellHidesWhenNothingPlays();
             ModelsAndViews();
+            OutputVolumeControls();
+            VolumeReadsFollowPanelVisibility();
             CommandsStayWithTheirPlayer();
         }
 
@@ -118,6 +121,107 @@ namespace Capsule
             TestRunner.Eq("Music", new MusicSnapshot().Cell().Text, "empty cell invites music playback");
         }
 
+        static void OutputVolumeControls()
+        {
+            var audio = new FakeSystemVolume();
+            var view = new MusicView(audio);
+            view.Update(new MusicSnapshot());
+            view.RefreshVolume();
+            view.Measure(new Size(312, double.PositiveInfinity));
+            view.Arrange(new Rect(0, 0, 312, view.DesiredSize.Height));
+
+            Slider slider = Find<Slider>(view, "Volume");
+            Button speaker = Find(view, "Mute");
+            TestRunner.Eq(Visibility.Visible, slider.Visibility, "volume is available without a media session");
+            TestRunner.Near(36, slider.Value, "opening shows the output level");
+            TestRunner.Near(2, slider.SmallChange, "arrow keys use two points");
+            TestRunner.Near(10, slider.LargeChange, "page keys use ten points");
+
+            slider.Value = 42;
+            TestRunner.Near(42, audio.Level, "moving the slider sets the output level");
+            var wheel = new MouseWheelEventArgs(Mouse.PrimaryDevice, 0, -120) { RoutedEvent = Mouse.PreviewMouseWheelEvent };
+            slider.RaiseEvent(wheel);
+            TestRunner.Near(40, audio.Level, "the wheel changes the output level by two points");
+            TestRunner.Check(wheel.Handled, "the wheel does not scroll the panel over the slider");
+            speaker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            TestRunner.Check(audio.Muted && Find(view, "Unmute") == speaker, "the button mutes and offers Unmute");
+            speaker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            TestRunner.Check(!audio.Muted && Find(view, "Mute") == speaker, "the button unmutes and offers Mute");
+
+            audio.Level = 77;
+            audio.Muted = true;
+            int writes = audio.VolumeWrites;
+            view.RefreshVolume();
+            TestRunner.Near(77, slider.Value, "the next refresh shows an outside volume change");
+            TestRunner.Eq(writes, audio.VolumeWrites, "refreshing the slider does not write volume");
+            TestRunner.Check(Find(view, "Unmute") == speaker, "the next refresh shows an outside mute change");
+
+            audio.Available = false;
+            view.RefreshVolume();
+            TestRunner.Eq(Visibility.Collapsed, slider.Visibility, "no playback device hides the slider");
+            TestRunner.Eq(Visibility.Collapsed, speaker.Visibility, "no playback device hides the speaker button");
+            audio.Available = true;
+            audio.Level = 23;
+            view.RefreshVolume();
+            TestRunner.Eq(Visibility.Visible, slider.Visibility, "a replacement device restores the control");
+            TestRunner.Near(23, slider.Value, "the control shows the replacement device's level");
+        }
+
+        static void VolumeReadsFollowPanelVisibility()
+        {
+            var audio = new FakeSystemVolume();
+            var panel = new PanelWindow(audio) { ShowActivated = false, Left = -10000, Top = -10000, Width = 1, Height = 1 };
+            var snapshot = new MusicSnapshot();
+            panel.View.UpdateMusic(snapshot);
+            panel.RefreshMusic(snapshot);
+            TestRunner.Eq(0, audio.Reads, "the closed panel does not read output volume");
+
+            try
+            {
+                panel.Show();
+                TestRunner.Eq(1, audio.Reads, "showing the music tile reads output volume");
+                panel.RefreshMusic(snapshot);
+                TestRunner.Eq(2, audio.Reads, "the panel's music refresh reads output volume");
+                panel.View.ShowSettings(false, "", HotkeyText.Default);
+                panel.RefreshMusic(snapshot);
+                TestRunner.Eq(2, audio.Reads, "the settings page does not read output volume");
+                panel.View.ShowBoard();
+                TestRunner.Eq(3, audio.Reads, "returning to the music tile reads output volume");
+            }
+            finally { panel.Hide(); }
+
+            panel.RefreshMusic(snapshot);
+            TestRunner.Eq(3, audio.Reads, "closing the panel stops output volume reads");
+        }
+
+        sealed class FakeSystemVolume : ISystemVolume
+        {
+            public double Level = 36;
+            public bool Muted, Available = true;
+            public int VolumeWrites, Reads;
+
+            public bool TryRead(out double level, out bool muted)
+            {
+                Reads++;
+                level = Level;
+                muted = Muted;
+                return Available;
+            }
+
+            public bool TrySetLevel(double level)
+            {
+                VolumeWrites++;
+                Level = level;
+                return Available;
+            }
+
+            public bool TryToggleMute(out bool muted)
+            {
+                muted = Muted = !Muted;
+                return Available;
+            }
+        }
+
         sealed class Source : IMusicSource
         {
             public MusicSnapshot Snapshot = new MusicSnapshot { Tracks = Tracks(), SelectedKey = "spotify" };
@@ -198,13 +302,15 @@ namespace Capsule
             TestRunner.Check(done(), "asynchronous music operation finishes");
         }
 
-        static Button Find(DependencyObject root, string name)
+        static Button Find(DependencyObject root, string name) { return Find<Button>(root, name); }
+
+        static T Find<T>(DependencyObject root, string name) where T : DependencyObject
         {
-            var button = root as Button;
-            if (button != null && AutomationProperties.GetName(button) == name) return button;
+            var control = root as T;
+            if (control != null && AutomationProperties.GetName(control) == name) return control;
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
             {
-                var found = Find(VisualTreeHelper.GetChild(root, i), name);
+                var found = Find<T>(VisualTreeHelper.GetChild(root, i), name);
                 if (found != null) return found;
             }
             return null;
