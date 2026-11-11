@@ -46,6 +46,7 @@ namespace Capsule
         readonly List<PendingReview> shownReviews = new List<PendingReview>();
         readonly List<TextBlock> reviewTimes = new List<TextBlock>();
         GitHubChecks shownGitHub;
+        bool needsYouHasSources;
 
         readonly StackPanel ideasContent = new StackPanel();
         readonly Border musicTile = new Border();
@@ -401,6 +402,7 @@ namespace Capsule
 
         void ReorderTiles()
         {
+            Show(needsYouTile, needsYouHasSources || panelHome == "needs_you");
             Border first = null;
             if (shownReviews.Count > 0 || panelHome == "needs_you") first = needsYouTile;
             else if (panelHome == "calendar") first = calendarTile;
@@ -1109,7 +1111,7 @@ namespace Capsule
 
         void UpdateNeedsYou(NeedsYouTile model)
         {
-            Show(needsYouTile, model != null);
+            needsYouHasSources = model != null && (model.HasEnabledAgent || model.Requests.Count > 0 || model.GitHub != null);
             if (model == null)
             {
                 shownReviews.Clear();
@@ -1121,7 +1123,7 @@ namespace Capsule
             }
 
             bool sameRows = shownReviews.Count == model.Requests.Count &&
-                shownReviews.Zip(model.Requests, (a, b) => a.Id == b.Id && a.Queued == b.Queued).All(same => same);
+                shownReviews.Zip(model.Requests, (a, b) => a.Provider == b.Provider && a.Id == b.Id && a.Queued == b.Queued).All(same => same);
             if (!sameRows || reviewRows.Children.Count == 0)
             {
                 reviewRows.Children.Clear();

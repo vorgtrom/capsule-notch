@@ -21,12 +21,13 @@ namespace Capsule
     internal sealed class NeedsYouTile
     {
         public readonly List<PendingReview> Requests = new List<PendingReview>();
+        public bool HasEnabledAgent;
         public GitHubChecks GitHub;
         public long Now;
 
         public static NeedsYouTile From(PromptBroker claude, PromptBroker codex, GitHubChecks checks, long now)
         {
-            var result = new NeedsYouTile { GitHub = checks, Now = now };
+            var result = new NeedsYouTile { HasEnabledAgent = claude != null || codex != null, GitHub = checks, Now = now };
             Add(result, "claude", claude);
             Add(result, "codex", codex);
             result.Requests.Sort((a, b) => a.Arrived == b.Arrived ? a.Id.CompareTo(b.Id) : a.Arrived.CompareTo(b.Arrived));

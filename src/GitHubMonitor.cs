@@ -46,7 +46,7 @@ namespace Capsule
         readonly Func<long> clock;
         string repo = "";
         int generation;
-        long next;
+        long next, retryAt;
         bool busy;
         Page pulls, runs;
 
@@ -82,6 +82,7 @@ namespace Capsule
             if (Same(name, repo)) return;
             Interlocked.Increment(ref generation);
             repo = name;
+            next = 0;
             pulls = runs = null;
             SetCurrent(name == "" ? null : new GitHubChecks { Repo = name, Status = Waiting });
         }
@@ -94,7 +95,7 @@ namespace Capsule
 
         public Task Tick(long now)
         {
-            if (repo == "" || busy || now < next) return null;
+            if (repo == "" || busy || now < next || now < retryAt) return null;
             busy = true;
             next = now + IntervalMs;
             int started = generation;
@@ -112,8 +113,12 @@ namespace Capsule
                 // A server backoff still applies when another repository is selected.
                 if (t.Status == TaskStatus.RanToCompletion)
                     foreach (Page page in t.Result)
-                        if (page != null) next = Math.Max(next, page.RetryAt);
-                if (started != generation) return;
+                        if (page != null) retryAt = Math.Max(retryAt, page.RetryAt);
+                if (started != generation)
+                {
+                    Tick(clock());
+                    return;
+                }
                 long checkedAt = Current.LastChecked;
                 if (t.Status != TaskStatus.RanToCompletion)
                 {
@@ -156,17 +161,19 @@ namespace Capsule
         Page Unavailable(HttpResult response)
         {
             string message = Text(Json.TryParse(response.Body), "message");
-            if (response.Status == 429 || (response.Status == 403 && (response.RetryAfterSeconds > 0 ||
-                response.RateLimitRemaining == "0" || message.IndexOf("rate limit", StringComparison.OrdinalIgnoreCase) >= 0)))
+            bool limited = response.Status == 429 || (response.Status == 403 && (response.RetryAfterSeconds > 0 ||
+                response.RateLimitRemaining == "0" || message.IndexOf("rate limit", StringComparison.OrdinalIgnoreCase) >= 0));
+            if (limited || response.RetryAfterSeconds > 0)
             {
                 long now = clock();
+                long retryMs = Math.Min(response.RetryAfterSeconds, 365L * 24 * 60 * 60) * 1000;
+                if (!limited) return new Page { Error = "GitHub checks are unavailable. Capsule will retry later.", RetryAt = now + retryMs };
                 long reset;
                 long.TryParse(response.RateLimitReset, NumberStyles.None, CultureInfo.InvariantCulture, out reset);
-                long retry = Math.Min(response.RetryAfterSeconds, 365L * 24 * 60 * 60);
                 return new Page
                 {
                     Error = "GitHub rate limit reached. Capsule will retry later.",
-                    RetryAt = Math.Max(Math.Min(reset, DateTimeOffset.MaxValue.ToUnixTimeSeconds()) * 1000, now + Math.Max(IntervalMs, retry * 1000)),
+                    RetryAt = Math.Max(Math.Min(reset, DateTimeOffset.MaxValue.ToUnixTimeSeconds()) * 1000, now + Math.Max(IntervalMs, retryMs)),
                 };
             }
             if (response.Status == 401 || response.Status == 403 || response.Status == 404 || response.Status == 410 || response.Status == 451)
@@ -220,7 +227,7 @@ namespace Capsule
                 return result;
             }
 
-            // GitHub returns runs newest first. If an open PR predates the page, it may have an omitted workflow.
+            // GitHub returns runs newest first. Workflows for one head are created together, so use the first matched run as the cutoff test.
             long oldest = runs.Count == 0 ? 0 : runs.Min(r => r.Created);
             var matches = open.ToDictionary(p => p.Number, p => new List<Run>());
             var ambiguous = new HashSet<long>();
@@ -246,13 +253,15 @@ namespace Capsule
 
             foreach (Pull pull in open)
             {
+                List<Run> matched = matches[pull.Number];
+                long firstRun = matched.Count == 0 ? pull.Created : matched.Min(r => r.Created);
                 if (pull.Sha == "" || pull.Repo == "" || pull.Branch == "" || pull.Created <= 0 ||
-                    (moreRuns && (oldest == 0 || pull.Created <= oldest)) || ambiguous.Contains(pull.Number))
+                    (moreRuns && (oldest == 0 || firstRun <= oldest)) || ambiguous.Contains(pull.Number))
                 {
                     result.Uncertain.Add(pull.Number);
                     continue;
                 }
-                foreach (var group in matches[pull.Number].GroupBy(r => r.Workflow))
+                foreach (var group in matched.GroupBy(r => r.Workflow))
                 {
                     Run latest = group.OrderByDescending(r => r.Created).ThenByDescending(r => r.Id).ThenByDescending(r => r.Attempt).First();
                     if (latest.Status != "completed" || !IsFailure(latest.Conclusion)) continue;

@@ -21,7 +21,9 @@ namespace Capsule
             ConditionalRequestsAndOutage();
             PayloadBoundsAndCacheSeparation();
             RateLimitsAndUnavailable();
-            DiscardAnInFlightRepository();
+            ChangingRepositoryResetsOnlyThePollingInterval();
+            DiscardAnInFlightRepository(false);
+            DiscardAnInFlightRepository(true);
         }
 
         static void LinksAndConfig()
@@ -85,10 +87,15 @@ namespace Capsule
         static void ReportUncertainCoverage()
         {
             object[] pulls = { Pull(1, date: Old), Pull(2, branch: "new", date: New), Pull(3, branch: "old", date: Old) };
-            object[] runs = { Run(11, 1, date: Recent), Run(12, 1, branch: "new", date: New) };
+            object[] runs = { Run(11, 1, date: New), Run(12, 1, branch: "new", date: New), Run(13, 1, branch: "other", date: Recent) };
             var result = GitHubMonitor.Assess(Repo, pulls, false, runs, true, 10);
-            TestRunner.Eq("2:12", Failures(result), "older PR's visible failure is withheld when the history is incomplete");
-            TestRunner.Eq("1,3", string.Join(",", result.Uncertain), "old PRs with or without a match show uncertain coverage");
+            TestRunner.Eq("1:11,2:12", Failures(result), "older PR shows its current-head failure when its run is newer than the cutoff");
+            TestRunner.Eq("3", string.Join(",", result.Uncertain), "older PR without a current-head match remains uncertain");
+
+            runs[2] = Run(13, 2, date: Recent);
+            result = GitHubMonitor.Assess(Repo, pulls, false, runs, true, 10);
+            TestRunner.Eq("2:12", Failures(result), "a newer run does not establish coverage when another current-head run meets the cutoff");
+            TestRunner.Eq("1,3", string.Join(",", result.Uncertain), "earliest matched run at the cutoff keeps the PR uncertain");
 
             var limited = GitHubMonitor.Assess(Repo, pulls, true, new[] { Run(11, 1), Run(12, 1, association: 2, branch: "new", date: New) }, false, 10);
             TestRunner.Check(limited.MorePulls && limited.Uncertain.Contains(1), "truncated pull list cannot establish uniqueness");
@@ -210,13 +217,37 @@ namespace Capsule
             TestRunner.Check(monitor.Current.Status.Contains("unreadable"), "invalid JSON shows an unreadable status");
         }
 
-        static void DiscardAnInFlightRepository()
+        static void ChangingRepositoryResetsOnlyThePollingInterval()
+        {
+            long now = 1000;
+            HttpResult reply = Pulls("", Pull(1));
+            var monitor = new GitHubMonitor(TaskScheduler.Default, (url, headers) =>
+                IsRuns(url) ? Runs("", Run(71, 1)) : reply, () => now);
+            monitor.SetRepo(Repo);
+            Check(monitor, now);
+            monitor.SetRepo("owner/replacement");
+            Check(monitor, now);
+            TestRunner.Eq("1:71", Failures(monitor.Current), "new repository skips the ordinary polling interval");
+            TestRunner.Eq(null, monitor.Tick(now), "new repository still has its own polling interval");
+
+            now += GitHubMonitor.IntervalMs;
+            reply = new HttpResult { Status = 503, RetryAfterSeconds = 420 };
+            Check(monitor, now);
+            monitor.SetRepo(Repo);
+            TestRunner.Eq(null, monitor.Tick(now + 419000), "Retry-After persists across repository changes");
+            now += 420000;
+            reply = Pulls("", Pull(1));
+            Check(monitor, now);
+        }
+
+        static void DiscardAnInFlightRepository(bool rateLimited)
         {
             long now = 1000;
             bool blocked = false;
             using (var entered = new ManualResetEventSlim())
             using (var resume = new ManualResetEventSlim())
             {
+                var replacement = new TaskCompletionSource<GitHubChecks>();
                 var monitor = new GitHubMonitor(TaskScheduler.Default, (url, headers) =>
                 {
                     bool actions = IsRuns(url);
@@ -225,25 +256,38 @@ namespace Capsule
                     {
                         entered.Set();
                         blocked = resume.Wait(5000);
+                        if (rateLimited) return new HttpResult { Status = 429, RetryAfterSeconds = 420 };
                     }
                     if (!first) TestRunner.Check(!headers.ContainsKey("If-None-Match"), "repo change discards each old validator");
                     if (first && actions) TestRunner.Check(false, "repo change skips an old endpoint that has not started");
                     return actions ? Runs(first ? "old runs" : "new runs", Run(first ? 71 : 72, 1)) :
                         Pulls(first ? "old pulls" : "new pulls", Pull(1));
                 }, () => now);
+                monitor.Changed += delegate
+                {
+                    if (monitor.Current != null && monitor.Current.Repo == "owner/replacement" && monitor.Current.LastChecked > 0)
+                        replacement.TrySetResult(monitor.Current);
+                };
                 monitor.SetRepo(Repo);
                 Task scan = monitor.Tick(now);
                 bool started = entered.Wait(5000);
                 monitor.SetRepo("owner/replacement");
-                TestRunner.Eq(null, monitor.Tick(now + GitHubMonitor.IntervalMs), "repo change does not start an overlapping scan");
+                TestRunner.Eq(null, monitor.Tick(now), "repo change does not start an overlapping scan");
+                TestRunner.Eq("owner/replacement", monitor.Current.Repo, "in-flight repo change keeps the replacement snapshot");
+                TestRunner.Check(monitor.Current.Failures.Count == 0 && monitor.Current.LastChecked == 0, "replacement waits without old results");
                 resume.Set();
                 scan.GetAwaiter().GetResult();
                 TestRunner.Check(started && blocked, "test changed repository before the old response returned");
-                TestRunner.Eq("owner/replacement", monitor.Current.Repo, "in-flight repo change keeps the replacement snapshot");
-                TestRunner.Check(monitor.Current.Failures.Count == 0 && monitor.Current.LastChecked == 0, "in-flight result is discarded");
-                now += GitHubMonitor.IntervalMs;
-                Check(monitor, now);
-                TestRunner.Eq("1:72", Failures(monitor.Current), "replacement uses only its own response");
+                if (rateLimited)
+                {
+                    TestRunner.Check(!replacement.Task.IsCompleted, "old repository's late rate limit blocks automatic replacement scan");
+                    TestRunner.Eq(null, monitor.Tick(now + 419000), "old repository's late backoff applies to its replacement");
+                    now += 420000;
+                    Check(monitor, now);
+                }
+                TestRunner.Check(replacement.Task.Wait(3000), "replacement scans as soon as the old request and any backoff finish");
+                if (replacement.Task.IsCompleted)
+                    TestRunner.Eq("1:72", Failures(replacement.Task.Result), "replacement uses only its own response");
                 monitor.SetRepo("");
                 TestRunner.Eq(null, monitor.Current, "turning monitoring off drops cached rows");
             }
