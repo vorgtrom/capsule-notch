@@ -16,6 +16,7 @@ namespace Capsule
     {
         CaptureFrame original, cropped;
         Func<CaptureFrame, bool> copy, save;
+        Func<CaptureFrame, string> keep;
         readonly Image image = new Image { Stretch = Stretch.Fill };
         readonly Canvas canvas = new Canvas { Background = Brushes.Transparent };
         readonly ScrollViewer scroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -30,6 +31,7 @@ namespace Capsule
         public event Action RetakeRequested;
         public Button CopyButton { get; private set; }
         public Button SaveButton { get; private set; }
+        public Button KeepButton { get; private set; }
         public Button RetakeButton { get; private set; }
         public IEnumerable<Button> ActionButtons { get { return actions; } }
         public CaptureFrame CurrentImage { get { return cropped ?? original; } }
@@ -39,12 +41,13 @@ namespace Capsule
         public bool IsReleased { get; private set; }
 
         // Borrows result.Image. The caller releases it after Closed. Only the crop belongs to this window.
-        public CapturePreviewWindow(CaptureResult result, Func<CaptureFrame, bool> copy = null, Func<CaptureFrame, bool> save = null)
+        public CapturePreviewWindow(CaptureResult result, Func<CaptureFrame, bool> copy = null, Func<CaptureFrame, bool> save = null, Func<CaptureFrame, string> keep = null)
         {
             if (result == null || result.Image == null || result.Image.Pixels == null) throw new ArgumentException("A capture image is required.", "result");
             original = result.Image;
             this.copy = copy ?? CopyDefault;
             this.save = save ?? SaveDefault;
+            this.keep = keep;
             CaptureControls.Window(this, "Capture preview", 960, 720);
             CaptureControls.Forward(this, false);
             MinWidth = 640;
@@ -60,6 +63,10 @@ namespace Capsule
             AddButton(buttons, "_Reset crop", ResetCrop);
             CopyButton = AddButton(buttons, "Cop_y", delegate { Write(true); });
             SaveButton = AddButton(buttons, "_Save PNG", delegate { Write(false); });
+            if (keep != null) KeepButton = AddButton(buttons, "_Keep on shelf", delegate
+            {
+                if (!IsReleased) status.Text = this.keep(CurrentImage);
+            });
             RetakeButton = AddButton(buttons, "_Retake", Retake);
             AddButton(buttons, "C_lose", Close);
             top.Children.Add(buttons);
@@ -307,22 +314,46 @@ namespace Capsule
 
         internal static bool SavePng(CaptureFrame frame, string path, Func<string, Stream> open = null)
         {
+            return ExportPng(frame, path, Int64.MaxValue, true, open) > 0;
+        }
+
+        internal static long ExportPng(CaptureFrame frame, string path, long maxBytes, bool replace, Func<string, Stream> open = null,
+            Action<string> cleanupFailed = null)
+        {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(Bitmap(frame)));
             string staging = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)), ".capsule-" + Guid.NewGuid().ToString("N") + ".tmp");
+            bool ownsStaging = false;
             try
             {
                 using (var data = new MemoryStream())
                 {
                     encoder.Save(data);
-                    using (var file = open == null ? new FileStream(staging, FileMode.CreateNew, FileAccess.Write) : open(staging)) data.WriteTo(file);
+                    if (data.Length > maxBytes) return 0;
+                    using (var file = open == null ? new FileStream(staging, FileMode.CreateNew, FileAccess.Write) : open(staging))
+                    {
+                        ownsStaging = true;
+                        data.WriteTo(file);
+                    }
+                    // Commit only after the PNG and staging stream close successfully.
+                    if (replace && File.Exists(path)) File.Replace(staging, path, null);
+                    else File.Move(staging, path);
+                    ownsStaging = false;
+                    return data.Length;
                 }
-                // Commit only after the PNG and staging stream close successfully.
-                if (File.Exists(path)) File.Replace(staging, path, null);
-                else File.Move(staging, path);
             }
-            finally { if (File.Exists(staging)) File.Delete(staging); }
-            return true;
+            finally
+            {
+                if (ownsStaging)
+                {
+                    try { File.Delete(staging); }
+                    catch
+                    {
+                        if (cleanupFailed != null) cleanupFailed(staging);
+                        throw;
+                    }
+                }
+            }
         }
 
         void Retake()
@@ -343,6 +374,7 @@ namespace Capsule
             original = null;
             copy = null;
             save = null;
+            keep = null;
         }
     }
 }

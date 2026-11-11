@@ -57,6 +57,7 @@ namespace Capsule
             Run("CaptureView", CaptureViewTests.Run);
             Run("CaptureIntegration", CaptureIntegrationTests.Run);
             Run("GlassShape", GlassShapeTests.Run);
+            Run("Shelf", ShelfTests.Run);
             Run("Theme", ThemeTests.Run);
             Run("Tray", TrayTests.Run);
             Run("Modules", ModulesTests.Run);
@@ -64,6 +65,8 @@ namespace Capsule
             Run("Notion", NotionTests.Run);
             Run("Ideas", IdeasTests.Run);
             Run("PanelView", PanelViewTests.Run);
+            Run("NeedsYou", NeedsYouTests.Run);
+            Run("GitHubMonitor", GitHubMonitorTests.Run);
             Run("Hotkey", HotkeyTests.Run);
             Run("CardMotion", CardMotionTests.Run);
             Run("PromptPipe", PromptPipeTests.Run);

@@ -109,8 +109,8 @@ shortcut under **Capture shortcut** in ⚙.
 2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
 3. For a webpage, keep the pointer over the page while it scrolls. Moving it away pauses. **Stop** keeps what's
    captured so far; **Esc** or **Cancel** throws it away.
-4. In the preview, zoom in to check it, crop it if you like (**Crop**, drag, then Enter), and click **Copy** or
-   **Save PNG**. **Retake** starts again.
+4. Check the image in the preview. To crop it, click **Crop**, drag over the area, then press Enter.
+5. Choose **Copy**, **Save PNG** or **Keep on shelf**. **Retake** starts again.
 
 - A scrolling capture goes to the top of the page first, then scrolls down to the end, joining the screenshots where
   they overlap. A fixed header or footer appears once. If the page is too far down to reach the top in time, the
@@ -121,9 +121,22 @@ shortcut under **Capture shortcut** in ⚙.
 - Switching to another window, or moving, resizing or closing the browser, cancels a scrolling capture.
 - Limits: one capture at a time, up to 32,000 rows and 32 million pixels, 120 screenshots and 90 seconds. The area
   stays on one monitor, and the page scrolls at its current width and zoom.
-- Captures stay on your PC, in memory until the preview closes. Capsule only writes a file when you click
-  **Save PNG**, and only changes the clipboard when you click **Copy**. With clipboard history on, a copied capture
-  joins it like any other image, if it's under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
+- Capsule keeps capture pixels in memory until you close the preview. **Save PNG** writes to your chosen location.
+  **Keep on shelf** writes a temporary PNG. **Copy** changes the clipboard. With clipboard history on, a copied
+  capture joins it like any other image if it is under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
+
+## Shelf
+
+1. Drag files from File Explorer over the capsule to open the panel.
+2. Move the pointer to the **Shelf** tile and drop the files there. Capsule keeps references to the original files.
+3. Drag a file row or **Drag all files** to another app. The shelf offers a copy. Windows can block drops into apps
+   running as administrator. A canceled or rejected drop shows this as a possible cause.
+
+The shelf holds up to 12 entries and clears when Capsule exits. **Keep on shelf** in Capture Preview adds a PNG
+of the current image, including any crop. Capsule stages up to 12 captures and 64 MiB of generated PNGs per session.
+**Remove** clears a row. Staged PNGs still count toward those limits and remain available until Capsule exits.
+Capsule deletes the PNGs it staged on normal exit. A crash or a file still open in another app can leave PNGs in
+the Windows temporary folder.
 
 ## Focus timer, clipboard and your rings
 
@@ -399,8 +412,9 @@ asks whether to start with Windows. **No** is the default. You can change the ch
 - **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
   so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
 - The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
-- In Settings, **Open panel with** puts Calendar or Clipboard first. If that section is hidden, Capsule uses the
-  default order. The Ideas shortcut still goes straight to the Ideas box.
+- In Settings, **Open panel with** puts Calendar, Clipboard, or Needs you first. A pending agent request puts
+  Needs you first with any opening preference. If the selected section is hidden, Capsule uses the default order.
+  The Ideas shortcut still goes straight to the Ideas box.
 - **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
 - **Right-click** the capsule or the tray icon for the menu.
 - **Left-click** the tray icon to hide or show the capsule.
@@ -551,6 +565,24 @@ Click the calendar button at the top right of the panel's Calendar tile.
   API** under **APIs & Services → Library** (step 2 of [your own client](#google-calendar)). Tasks show up at the next
   read.
 
+### Needs you
+
+The **Needs you** tile lists the oldest request from each enabled agent, with the project, request type and wait time.
+It also shows how many other requests each agent has queued. With monitoring off, the tile shows only agent status.
+Capsule hides the empty tile when both agent rings and GitHub checks are off, unless Needs you is your opening section.
+With GitHub checks enabled and no pending agent requests, it shows **No pending requests** above the GitHub section.
+Click **Review** to open the existing request card. If the request has expired or moved on, the tile updates.
+
+In Settings, enter one public GitHub repository as `owner/repo` and click **Save repository**. GitHub checks start off.
+Capsule checks GitHub without signing in, so private repositories aren't supported.
+Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs per scan. Scans are at least
+three minutes apart for the same repository. Changing repositories starts a new scan as soon as any active scan and
+server-requested wait finish.
+It shows failures for the current PR head, including timeouts and runs that failed to start. Cancelled runs
+and runs with the `action_required` conclusion are not shown as failures. The tile explains incomplete results
+and shows when the last check succeeded.
+Click **Open run** to view a failure on GitHub. Choose **Turn off** in Settings to stop the checks.
+
 ### Ideas → Notion
 
 Ideas go into a Notion database of your choice, one page per idea, with the idea as the page's title.
@@ -588,6 +620,7 @@ for example when Notion made the page but its reply was lost, or Capsule quit wh
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
 | Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
 | Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
+| GitHub checks | public PR and Actions metadata, with no sign-in | `api.github.com`, when you save a repository |
 | Music | local Windows media sessions from Spotify, YouTube Music desktop apps, and supported browsers: track metadata, artwork, playback state, available controls and timeline | no internet connection; playback commands go only to the selected local Windows media session |
 | Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
 | Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
@@ -632,9 +665,11 @@ anywhere else.
 - **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
   Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
   managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
-- **Capture** reads only the area you select, and keeps it in memory until you close the preview. It saves a file
-  or changes the clipboard only when you click **Save PNG** or **Copy**. Nothing about a capture is logged or sent
-  anywhere.
+- **Capture** reads only the area you select. **Copy** changes the clipboard, **Save PNG** writes to the location
+  you choose, and **Keep on shelf** stages a PNG in the Windows temporary folder. Capsule does not log or upload
+  capture content.
+- **Shelf** keeps file paths in memory. Capsule gives the selected paths to the local app where you drop them.
+  Capsule leaves your original files in place and removes its own staged PNGs on normal exit.
 - It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
   file only when you choose Connect, Reconnect or Disconnect.
 - When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only

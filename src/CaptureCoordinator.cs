@@ -23,6 +23,7 @@ namespace Capsule
         internal Func<CancellationToken, Task<CaptureRequest>> SelectRequest;
         internal Func<CaptureRequest, CancellationToken, Task<CaptureResult>> Capture;
         internal Func<CaptureResult, CapturePreviewWindow> CreatePreview;
+        internal Func<CaptureFrame, string> KeepOnShelf;
         internal Action<Window> ShowWindow;
         internal Action<string> ShowError;
         internal Func<Action, IDisposable> WatchEscape;   // calls its action when Esc is pressed, until disposed
@@ -51,7 +52,7 @@ namespace Capsule
             else { this.register = register; releaseShortcut = release; }
             SelectRequest = SelectAsync;
             Capture = CaptureAsync;
-            CreatePreview = r => new CapturePreviewWindow(r);
+            CreatePreview = r => new CapturePreviewWindow(r, keep: KeepOnShelf);
             ShowWindow = w => w.Show();
             ShowError = text => MessageBox.Show(text, "Capture", MessageBoxButton.OK, MessageBoxImage.Information);
             WatchEscape = pressed =>

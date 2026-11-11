@@ -42,12 +42,20 @@ service.</p>
 <p>A downloaded Capsule asks GitHub once a day for the newest release's version number, so it can tell you when an
 update is out. That request carries no sign-in and nothing about you, and you can turn it off in Capsule's menu.</p>
 
+<h2>Needs you and GitHub checks</h2>
+<p>The Needs you tile reads pending request status from Capsule's local request queue. It stores no prompt text
+or approval history.</p>
+<p>GitHub checks start off. If you save a public repository, Capsule requests public pull request and Actions metadata
+from <code>api.github.com</code> without signing in. Capsule saves the repository name in its local settings. It keeps
+responses and cache validators in memory. Turn off GitHub checks in Settings to stop these requests and clear the cache.</p>
+
 <h2>Screenshots, scrolling capture, and clipboard images</h2>
 <p>Capture reads the screen rectangle you select on one physical monitor. Scrolling capture visibly scrolls the
 selected page in Edge or Chrome. Capsule keeps capture pixels and crop images in memory while the preview is open.
 It does not upload them, log page content or addresses, or add private paths to its settings.</p>
-<p>Capsule changes the clipboard only when you choose <strong>Copy</strong>. It writes a PNG only when you choose
-<strong>Save PNG</strong> and select a destination. Closing the preview releases its capture and crop buffers.
+<p>Capsule changes the clipboard only when you choose <strong>Copy</strong>. <strong>Save PNG</strong> writes
+to your chosen destination. <strong>Keep on shelf</strong> writes the current image to the Windows temporary folder.
+Closing the preview releases its capture and crop buffers.
 Copies and saved files can remain outside Capsule. Windows and other clipboard tools can handle copied images
 according to their own settings.</p>
 <p>Capture does not enable clipboard history. If you already enabled history, its normal clipboard watcher can retain
@@ -55,11 +63,18 @@ an explicit copy in memory. Each retained image is limited to 16 million pixels 
 at most five images and 32 MiB of PNG data across them, removing the oldest images first. Turning history off clears
 the list. Capsule does not save or log this history.</p>
 
+<h2>Shelf</h2>
+<p>The shelf keeps up to 12 file paths in memory for the current session. Capsule leaves the original files in
+place and offers paths to the local app where you drop them. Capsule does not log or upload shelf paths or files.</p>
+<p>Capsule stages up to 12 captures and 64 MiB of generated PNGs in the Windows temporary folder per session.
+Removing a row leaves its PNG available until exit and does not free its capture space. Capsule deletes only its
+staged files on normal exit. A crash or a file still open in another app can leave a PNG in that folder.</p>
+
 <h2>Removing access</h2>
 <p>Choose <strong>Sign out</strong> in Capsule's settings: it deletes the saved sign-in and asks Google to revoke it.
 You can also remove Capsule at any time from your Google Account, under
 <a href="https://myaccount.google.com/connections">Security &rarr; Your connections to third-party apps &amp;
-services</a>. Deleting <code>%USERPROFILE%\.capsule</code> removes everything Capsule keeps on your PC.</p>
+services</a>. Delete <code>%USERPROFILE%\.capsule</code> to remove Capsule's saved settings and logs.</p>
 
 <h2>Contact</h2>
 <p>Questions: <a href="https://github.com/vorgtrom">github.com/vorgtrom</a>.</p>

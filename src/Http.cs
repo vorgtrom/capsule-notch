@@ -13,6 +13,7 @@ namespace Capsule
         public string Body = "";
         public long RetryAfterSeconds;   // from a Retry-After header; 0 if none
         public string Error = "";        // why no response arrived, e.g. "Timeout" or "NameResolutionFailure"
+        public string ETag = "", Link = "", RateLimitRemaining = "", RateLimitReset = "";
         public bool Truncated;           // the body was longer than the caller's limit, and was cut there
     }
 
@@ -71,7 +72,7 @@ namespace Capsule
                 }
                 using (var response = (HttpWebResponse)request.GetResponse())
                 {
-                    result.Status = (int)response.StatusCode;
+                    ReadHeaders(response, result);
                     result.Body = ReadBody(response, maxBodyChars, result);
                 }
             }
@@ -82,8 +83,7 @@ namespace Capsule
                 {
                     using (response)
                     {
-                        result.Status = (int)response.StatusCode;
-                        result.RetryAfterSeconds = ParseRetryAfter(response.Headers["Retry-After"]);
+                        ReadHeaders(response, result);
                         // Defensive: HttpWebRequest already buffers error bodies inside GetResponse, so this read
                         // shouldn't fail today; if it ever does, the status and Retry-After read above must survive.
                         try { result.Body = ReadBody(response, maxBodyChars, result); }
@@ -94,6 +94,16 @@ namespace Capsule
             }
             catch (Exception e) { result.Error = e.GetType().Name; }
             return result;
+        }
+
+        static void ReadHeaders(HttpWebResponse response, HttpResult result)
+        {
+            result.Status = (int)response.StatusCode;
+            result.RetryAfterSeconds = ParseRetryAfter(response.Headers["Retry-After"]);
+            result.ETag = response.Headers["ETag"] ?? "";
+            result.Link = response.Headers["Link"] ?? "";
+            result.RateLimitRemaining = response.Headers["X-RateLimit-Remaining"] ?? "";
+            result.RateLimitReset = response.Headers["X-RateLimit-Reset"] ?? "";
         }
 
         // Retry-After as seconds, whether it is given as a number or an HTTP date. 0 when absent or unreadable.
