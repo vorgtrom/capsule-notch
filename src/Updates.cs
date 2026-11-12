@@ -6,11 +6,30 @@ using System.Threading.Tasks;
 
 namespace Capsule
 {
+    public static class Updates
+    {
+        public static bool InstalledWithScoop(string exeDir)
+        {
+            return InstalledWithScoop(exeDir, Environment.GetEnvironmentVariable("SCOOP"), Environment.GetEnvironmentVariable("SCOOP_GLOBAL"));
+        }
+
+        internal static bool InstalledWithScoop(string exeDir, string scoop, string scoopGlobal)
+        {
+            if (string.IsNullOrWhiteSpace(exeDir)) return false;
+            const string app = @"\apps\capsule\";
+            const StringComparison comparison = StringComparison.OrdinalIgnoreCase;
+            string dir = exeDir.Replace('/', '\\').TrimEnd('\\');
+            if (dir.IndexOf(@"\scoop" + app, comparison) >= 0) return true;
+            foreach (string root in new[] { scoop, scoopGlobal })
+                if (!string.IsNullOrWhiteSpace(root) && dir.StartsWith(root.Replace('/', '\\').TrimEnd('\\') + app, comparison)) return true;
+            return false;
+        }
+    }
+
     // Whether a newer Capsule is out: about a minute after starting, then once a day, one GET of the latest release from
     // GitHub (api.github.com), unauthenticated. Only its tag (v1.2.0) is read; nothing about the user is sent but the
     // request itself. A release build only: one built from source is "dev" and never asks. Found is raised once per
-    // newer version seen; the menu offers its release page, which is built here from the checked tag, never taken from
-    // the reply.
+    // newer version seen. The release page is built here from the checked tag, never taken from the reply.
     public sealed class UpdateCheck
     {
         public const string LatestUrl = "https://api.github.com/repos/vorgtrom/capsule-notch/releases/latest";

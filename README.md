@@ -300,8 +300,9 @@ scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule
 scoop install capsule/capsule
 ```
 
-Then start **Capsule** from the Start menu (Scoop Apps → Capsule). `scoop update capsule` updates it; the bucket picks
-up each new release within a few hours.
+Then start **Capsule** from the Start menu (Scoop Apps → Capsule). When Capsule shows an update in its tray menu,
+select the notice to copy `scoop update capsule`. Run the command in a terminal. The bucket gets each new release
+within a few hours.
 
 **With winget** (once Microsoft has accepted the package):
 
@@ -311,7 +312,7 @@ winget install vorgtrom.Capsule
 
 Then start it with `capsule-notch` in a terminal. `winget upgrade vorgtrom.Capsule` updates it.
 
-Installed either way, ignore Capsule's own "is available" notice and update with the command above instead.
+If you installed with winget, use that command when Capsule shows an update notice.
 
 **Download it (no building):**
 1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
