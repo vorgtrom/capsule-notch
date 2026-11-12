@@ -73,11 +73,11 @@ namespace Capsule
                 view.Arrange(new Rect(view.DesiredSize));
                 List<string> got = ActionsOf(view);
                 fakeNow += window - 1;
-                Click(ButtonFor(view, "Allow"));
+                Click(ButtonFor(view, "Allow once"));
                 Click(ButtonFor(view, "Deny"));
                 TestRunner.Eq(0, got.Count, "a press just inside the window on the new request: nothing fires");
                 fakeNow += 1;
-                Click(ButtonFor(view, "Allow"));
+                Click(ButtonFor(view, "Allow once"));
                 TestRunner.Eq("allow", string.Join(", ", got), "a press once the window has passed fires");
 
                 // A rebuild of the same request (its countdown, a step) doesn't start the window again.
@@ -113,7 +113,7 @@ namespace Capsule
                 view = new CardView();
                 view.ShowPrompt(PromptCardModel.From(Held("Bash", "{\"command\":\"rm c\"}", 5), 1, 60000), true);
                 got = ActionsOf(view);
-                Border allow = ButtonFor(view, "Allow");
+                Border allow = ButtonFor(view, "Allow once");
                 Press(allow);
                 fakeNow += window + 100;
                 Release(allow);
@@ -173,7 +173,7 @@ namespace Capsule
         {
             CardView view = Shown(Approval(false));
             List<string> got = ActionsOf(view);
-            Border allow = ButtonFor(view, "Allow");
+            Border allow = ButtonFor(view, "Allow once");
             Press(allow, 2);
             Release(allow);
             TestRunner.Eq(0, got.Count, "a press with ClickCount 2 does nothing");
@@ -274,7 +274,7 @@ namespace Capsule
         static void ThePillsRowsAndBoxAreNamedForScreenReaders()
         {
             CardView view = Shown(Approval(true));
-            foreach (string b in new[] { "Allow", "Always allow", "Deny", "Answer in Claude" })
+            foreach (string b in new[] { "Allow once", "Always allow", "Deny", "Answer in Claude" })
                 TestRunner.Eq(b, System.Windows.Automation.AutomationProperties.GetName(ButtonFor(view, b)), "the " + b + " button is named");
             HeldPrompt held = Held("AskUserQuestion", Questions);
             held.Flow.Choose(0);
@@ -313,7 +313,7 @@ namespace Capsule
         {
             CardView view = Shown(Approval(false));
             List<string> got = ActionsOf(view);
-            Border allow = ButtonFor(view, "Allow");
+            Border allow = ButtonFor(view, "Allow once");
             Press(allow);
             allow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
             Release(allow);
@@ -328,7 +328,7 @@ namespace Capsule
         {
             CardView view = Shown(PromptCardModel.From(Held("Bash", "{\"command\":\"rm a\"}", 1), 1, 60000));
             List<string> got = ActionsOf(view);
-            Border allow = ButtonFor(view, "Allow");
+            Border allow = ButtonFor(view, "Allow once");
             Press(allow);
             view.ShowPrompt(PromptCardModel.From(Held("Bash", "{\"command\":\"rm b\"}", 2), 1, 60000), true);
             Release(allow);
@@ -438,7 +438,7 @@ namespace Capsule
             List<string> texts = Texts(view);
             foreach (string t in new[] { "Claude wants to run a command", "Bash: npm test", "confetti", "Goes to Claude in 45 s", "1 of 2" })
                 TestRunner.Check(texts.Contains(t), "an approval shows " + t);
-            foreach (string b in new[] { "Allow", "Always allow", "Deny", "Answer in Claude" })
+            foreach (string b in new[] { "Allow once", "Always allow", "Deny", "Answer in Claude" })
                 TestRunner.Check(ButtonFor(view, b) != null, "and has " + b);
             TestRunner.Eq("Don't ask again: Bash(npm test:*)", TipText(ButtonFor(view, "Always allow")), "Always allow names the rule it applies");
             TestRunner.Check(view.ShowingPrompt, "the card shows the request");
@@ -466,6 +466,11 @@ namespace Capsule
             held.Request.Destinations.Add("session");
             view = Shown(PromptCardModel.From(held, 1, 45000));
             pill = ButtonFor(view, "Allow all edits");
+            Border once = ButtonFor(view, "Allow once"), deny = ButtonFor(view, "Deny");
+            TestRunner.Check(once != null && pill != null && deny != null &&
+                once.TranslatePoint(new Point(), view).Y == deny.TranslatePoint(new Point(), view).Y &&
+                deny.TranslatePoint(new Point(deny.ActualWidth, 0), view).X <= view.ActualWidth - CardView.ShadowMargin,
+                "Allow once, Allow all edits and Deny fit on the narrow card");
             TestRunner.Check(pill != null && ButtonFor(view, "Always allow") == null, "accepting edits: the pill is Allow all edits, not Always allow");
             TestRunner.Eq("Applies: Accept all edits, Access to docs (for this session)", pill == null ? null : TipText(pill), "and its tooltip names what it does, and for how long");
             TestRunner.Check(Texts(view).Contains("Also gives access to docs"), "a directory is on the card itself, under the pills");
@@ -479,7 +484,7 @@ namespace Capsule
                 "{\"type\":\"setMode\",\"mode\":\"bypassPermissions\",\"destination\":\"session\"}]}";
             PromptRequest request = PromptRequest.FromHookInput(Json.Obj(Json.Parse(bypass)), 1000);
             view = Shown(PromptCardModel.From(new HeldPrompt { Id = 3, Request = request }, 1, 45000));
-            TestRunner.Check(request != null && ButtonFor(view, "Always allow") == null && ButtonFor(view, "Allow all edits") == null && ButtonFor(view, "Allow") != null, "bypassPermissions in the suggestions: no Always allow pill, just Allow and Deny");
+            TestRunner.Check(request != null && ButtonFor(view, "Always allow") == null && ButtonFor(view, "Allow all edits") == null && ButtonFor(view, "Allow once") != null, "bypassPermissions in the suggestions: no Always allow pill, just Allow and Deny");
         }
 
         // A request that comes in behind the one shown changes only its "1 of N" badge and countdown: the card's elements
@@ -533,7 +538,7 @@ namespace Capsule
             TestRunner.Check(texts.Contains("Claude's plan is ready") && !texts.Any(t => t.Contains("Sample plan")), "a plan says it is ready, and isn't shown");
             foreach (string b in new[] { "Approve plan", "Keep planning", "Answer in Claude" })
                 TestRunner.Check(ButtonFor(view, b) != null, "a plan has " + b);
-            TestRunner.Check(ButtonFor(view, "Allow") == null && ButtonFor(view, "Deny") == null, "and not Allow or Deny");
+            TestRunner.Check(ButtonFor(view, "Allow once") == null && ButtonFor(view, "Deny") == null, "and not Allow or Deny");
         }
 
         static void AQuestionShowsItsOptions()
@@ -573,7 +578,7 @@ namespace Capsule
         {
             CardView view = Shown(PromptCardModel.From(Held("AskUserQuestion", "{\"questions\":\"odd\"}"), 1, 60000));
             TestRunner.Check(Texts(view).Contains("Claude asked you a question") && ButtonFor(view, "Answer in Claude") != null, "a question the card can't show: Answer in Claude");
-            TestRunner.Check(ButtonFor(view, "Send") == null && ButtonFor(view, "Next") == null && ButtonFor(view, "Allow") == null, "and nothing else");
+            TestRunner.Check(ButtonFor(view, "Send") == null && ButtonFor(view, "Next") == null && ButtonFor(view, "Allow once") == null, "and nothing else");
         }
 
         static List<string> ActionsOf(CardView view)
@@ -593,7 +598,7 @@ namespace Capsule
             List<string> got = ActionsOf(view);
             int touches = 0;
             view.Prompt.Acted += delegate(PromptAction a) { if (a.Kind == PromptAction.Touch) touches++; };
-            foreach (string b in new[] { "Allow", "Always allow", "Deny", "Answer in Claude" }) Click(ButtonFor(view, b));
+            foreach (string b in new[] { "Allow once", "Always allow", "Deny", "Answer in Claude" }) Click(ButtonFor(view, b));
             TestRunner.Eq("allow, always, deny, in-claude", string.Join(", ", got), "an approval's buttons");
             TestRunner.Eq(4, touches, "each click also counts as using the card");
             view = Shown(PromptCardModel.From(Held("ExitPlanMode", "{}"), 1, 60000));
@@ -669,7 +674,7 @@ namespace Capsule
             view = Shown(PromptCardModel.From(Held("Bash", "{\"command\":\"npm test\"}", 9), 1, 60000));
             targets.Clear();
             view.Prompt.Acted += delegate(PromptAction a) { targets.Add(a.Target); };
-            Click(ButtonFor(view, "Allow"));
+            Click(ButtonFor(view, "Allow once"));
             TestRunner.Check(targets.Count == 2 && targets.TrueForAll(t => t == 9), "an approval's Allow, and its touch, carry its own");
         }
 
@@ -679,21 +684,21 @@ namespace Capsule
         {
             CardView view = Shown(PromptCardModel.From(Held("Bash", "{\"command\":\"rm a\"}", 1), 2, 60000));
             List<string> got = ActionsOf(view);
-            Press(ButtonFor(view, "Allow"));
+            Press(ButtonFor(view, "Allow once"));
             view.ShowPrompt(PromptCardModel.From(Held("Bash", "{\"command\":\"rm b\"}", 2), 1, 60000), true);
             view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             view.Arrange(new Rect(view.DesiredSize));
-            Release(ButtonFor(view, "Allow"));
+            Release(ButtonFor(view, "Allow once"));
             TestRunner.Eq(0, got.Count, "pressed on one request's Allow, the card moved on, released on the next one's: nothing fires");
-            Release(ButtonFor(view, "Allow"));
+            Release(ButtonFor(view, "Allow once"));
             TestRunner.Eq(0, got.Count, "a release that began elsewhere fires nothing");
-            Press(ButtonFor(view, "Allow"));
+            Press(ButtonFor(view, "Allow once"));
             Release(ButtonFor(view, "Deny"));
             TestRunner.Eq(0, got.Count, "pressed on Allow, released on Deny: nothing fires");
-            Press(ButtonFor(view, "Allow"));
-            Release(ButtonFor(view, "Allow"));
+            Press(ButtonFor(view, "Allow once"));
+            Release(ButtonFor(view, "Allow once"));
             TestRunner.Eq("allow", string.Join(", ", got), "pressed and released on the same button: it fires");
-            Release(ButtonFor(view, "Allow"));
+            Release(ButtonFor(view, "Allow once"));
             TestRunner.Eq("allow", string.Join(", ", got), "once");
 
             // A multi-question card: the step changed between press and release.
@@ -730,7 +735,7 @@ namespace Capsule
             CardView view = Shown(Approval(false));
             var r = new Reading { Provider = "claude", Status = "ok", Plan = "Max" };
             view.Show(CardModel.From(r, new List<SessionStatus>(), true, 1000, System.Globalization.CultureInfo.GetCultureInfo("en-US")), true);
-            TestRunner.Check(!view.ShowingPrompt && !Texts(view).Contains("Allow"), "the usage comes back once nothing is held");
+            TestRunner.Check(!view.ShowingPrompt && !Texts(view).Contains("Allow once"), "the usage comes back once nothing is held");
         }
     }
 }

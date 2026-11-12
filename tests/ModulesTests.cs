@@ -78,7 +78,7 @@ namespace Capsule
             UsageTile t = UsageTile.From(r, Now, En);
             TestRunner.Eq("Claude", t.Title, "title");
             TestRunner.Eq("Max", t.Plan, "plan");
-            TestRunner.Eq("73%", t.Percent, "percent");
+            TestRunner.Eq("73% used", t.Percent, "percent");
             TestRunner.Check(t.ShowBar && t.Used == 73, "a bar at 73%");
             TestRunner.Eq(Palette.Red, t.Color, "red from 70%");
             TestRunner.Eq("Resets in 51 min", t.ResetText, "reset time");

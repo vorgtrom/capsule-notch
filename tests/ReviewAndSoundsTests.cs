@@ -200,7 +200,7 @@ namespace Capsule
             view.Show(PromptCardModel.From(new HeldPrompt { Id = 1, Request = R("Edit", "{\"file_path\":\"a.ts\",\"old_string\":\"old line\",\"new_string\":\"new line\"}") }, 1, 45000));
             Lay(view);
             TestRunner.Check(FindText(view, s => s == "- old line") != null && FindText(view, s => s == "+ new line") != null, "the card draws the change");
-            TestRunner.Check(FindText(view, s => s == "Allow") != null, "with Allow");
+            TestRunner.Check(FindText(view, s => s == "Allow once") != null, "with Allow");
             var plan = new PromptView();
             plan.Show(PromptCardModel.From(new HeldPrompt { Id = 2, Request = R("ExitPlanMode", "{\"plan\":\"# Fix auth\\n- Check the **token**\"}") }, 1, 45000));
             Lay(plan);

@@ -31,6 +31,10 @@ namespace Capsule
             TestRunner.Eq(Palette.Yellow, Palette.ForUsed(69.9), "69.9");
             TestRunner.Eq(Palette.Red, Palette.ForUsed(70), "70");
             TestRunner.Eq(Palette.Red, Palette.ForUsed(100), "100");
+            TestRunner.Eq("", Palette.UsedWarning(49.9), "no usage warning below 50");
+            TestRunner.Eq("high", Palette.UsedWarning(50), "high at 50");
+            TestRunner.Eq("high", Palette.UsedWarning(69.9), "still high below 70");
+            TestRunner.Eq("near limit", Palette.UsedWarning(70), "near limit at 70");
         }
 
         static void PercentRoundsAndHandlesMissing()
@@ -97,7 +101,7 @@ namespace Capsule
             r.Windows[1].Used = 10;
             TestRunner.Eq("seven_day", r.DisplayWindow.Id, "99% weekly usage cannot hide behind a 10% session");
             UsageTile tile = UsageTile.From(r, Now, En);
-            TestRunner.Eq("99%", tile.Percent, "the panel shows the highest usage");
+            TestRunner.Eq("99% used", tile.Percent, "the panel shows the highest usage");
             TestRunner.Eq("Weekly · all models", tile.WindowLabel, "the panel names that window");
             TestRunner.Eq("99%", NotchView.CellFor(r, null, Now).Text, "the ring agrees with the panel");
             r.Windows[0].Used = 10;

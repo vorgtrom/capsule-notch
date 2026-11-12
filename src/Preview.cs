@@ -48,6 +48,7 @@ namespace Capsule
             SaveMusic(dir, "", claude, codex, now, en);
             SaveFocusClipboard(dir, "", claude, codex, now, en);
             SaveCapture(dir, "");
+            SaveQuickWins(dir, "", now, en);
             Theme.Use(Theme.For(true, false));
             SaveNotch(dir, "notch-light.png", Cells(now, States.Waiting, claude, codex), false);
             SaveCard(dir, "card-light.png", CardModel.From(claude, SampleSessions(now), true, now, en), true);
@@ -59,7 +60,45 @@ namespace Capsule
             SaveMusic(dir, "-light", claude, codex, now, en);
             SaveFocusClipboard(dir, "-light", claude, codex, now, en);
             SaveCapture(dir, "-light");
+            SaveQuickWins(dir, "-light", now, en);
             Theme.Use(Theme.For(false, false));
+        }
+
+        static void SaveQuickWins(string dir, string suffix, long now, CultureInfo en)
+        {
+            if (suffix == "")
+            {
+                Reading claude = SampleClaude(now), codex = SampleCodex(now);
+                claude.Windows.RemoveRange(1, claude.Windows.Count - 1);
+                claude.Windows[0].Used = 49;
+                codex.Windows[0].Used = 60;
+                var usage = new PanelModel { Claude = UsageTile.From(claude, now, en), Codex = UsageTile.From(codex, now, en),
+                    Ideas = new IdeasTile() };
+                SavePanel(dir, "quick-wins-usage-below-and-high.png", usage, false);
+
+                claude.Windows[0].Used = 100;
+                codex.Windows.Clear();
+                usage.Claude = UsageTile.From(claude, now, en);
+                usage.Codex = UsageTile.From(codex, now, en);
+                SavePanel(dir, "quick-wins-usage-near-limit.png", usage, false);
+
+                var clips = new ClipboardTile();
+                ClipItem copied = ClipboardHistory.FromText("npm run build", now);
+                clips.Items.Add(copied);
+                var clipboard = new PanelView();
+                clipboard.Update(new PanelModel { Clipboard = clips, Ideas = new IdeasTile() });
+                clipboard.UpdateClipboard(clips, copied);
+                SavePanelView(dir, "quick-wins-copied.png", clipboard);
+            }
+
+            using (var shelf = new Shelf())
+            {
+                var view = new PanelView();
+                view.ShelfTile.Bind(shelf);
+                view.ShelfTile.SetDropTarget(true);
+                view.Update(new PanelModel { Ideas = new IdeasTile() });
+                SavePanelView(dir, "quick-wins-shelf" + suffix + ".png", view);
+            }
         }
 
         static long SampleNow() { return Clock.ToMs(DateTime.Today.AddHours(10).AddMinutes(40).ToUniversalTime()); }   // the previews' clock
@@ -293,6 +332,11 @@ namespace Capsule
                 view.ShowNotionResult(true, "Connected to “Ideas”");
                 view.Relayout();
             }
+            SavePanelView(dir, name, view);
+        }
+
+        static void SavePanelView(string dir, string name, PanelView view)
+        {
             var host = new Grid { Background = NotchView.Brush(Wallpaper) };
             host.Children.Add(view);
             SavePng(host, Path.Combine(dir, name));

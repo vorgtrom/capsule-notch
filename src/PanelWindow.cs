@@ -68,6 +68,12 @@ namespace Capsule
             };
             PreviewKeyDown += delegate(object sender, KeyEventArgs e)
             {
+                if (fileDragIn && e.Key == Key.Escape)
+                {
+                    FinishFileDrag(false);
+                    e.Handled = true;
+                    return;
+                }
                 if (fileDragIn || view.ShelfTile.Dragging) return;
                 // The month page's keys first: Esc there cancels its form before it closes the panel.
                 if (view.ShowingMonth && view.Month.HandleKey(e.Key, Keyboard.FocusedElement as DependencyObject))
@@ -206,6 +212,7 @@ namespace Capsule
 
         internal void FileDragLeft()
         {
+            view.ShelfTile.SetDropTarget(false);
             if (fileDragIn) fileDragLeave.Start();
         }
 
@@ -219,17 +226,21 @@ namespace Capsule
 
         void OnFileDragOver(object sender, DragEventArgs e)
         {
-            if (!ShelfView.HasFiles(e.Data)) return;
+            bool files = ShelfView.HasFiles(e.Data);
+            bool canCopy = files && !view.ShelfTile.Dragging && (e.AllowedEffects & DragDropEffects.Copy) != 0;
+            bool onShelf = canCopy && view.ShelfTile.IsTarget(e.OriginalSource as DependencyObject);
+            view.ShelfTile.SetDropTarget(onShelf);
+            if (!files) return;
             e.Handled = true;
-            e.Effects = DragDropEffects.None;
-            if (view.ShelfTile.Dragging || (e.AllowedEffects & DragDropEffects.Copy) == 0) return;
+            e.Effects = onShelf ? DragDropEffects.Copy : DragDropEffects.None;
+            if (!canCopy) return;
             fileDragIn = true;
             fileDragLeave.Stop();
-            if (view.ShelfTile.IsTarget(e.OriginalSource as DependencyObject)) e.Effects = DragDropEffects.Copy;
         }
 
         void OnFileDrop(object sender, DragEventArgs e)
         {
+            view.ShelfTile.SetDropTarget(false);
             if (!ShelfView.HasFiles(e.Data)) return;
             e.Handled = true;
             e.Effects = DragDropEffects.None;
@@ -242,6 +253,7 @@ namespace Capsule
 
         void FinishFileDrag(bool droppedOnShelf)
         {
+            view.ShelfTile.SetDropTarget(false);
             fileDragLeave.Stop();
             if (!fileDragIn) return;
             bool autoOpened = openedForFileDrag;

@@ -17,6 +17,7 @@ namespace Capsule
             DragGap();
             OutboundDragRechecksWindowActivation();
             IncomingDragKeepsTheCurrentPage();
+            DropHighlightClearsOnLeave();
             FolderDropExplainsTheRestriction();
         }
 
@@ -52,6 +53,8 @@ namespace Capsule
                 tile.DragFiles(tile, shelf.Items.ToArray(), delegate(DependencyObject source, object data, DragDropEffects effects)
                 {
                     TestRunner.Check(tile.Dragging && source == tile, "outbound drag keeps the Shelf in its dragging state");
+                    tile.SetDropTarget(true);
+                    TestRunner.Eq("Shelf", ((TextBlock)((StackPanel)tile.Child).Children[0]).Text, "outbound drag cannot highlight its own Shelf");
                     TestRunner.Eq(DragDropEffects.Copy, effects, "Shelf offers only the copy effect");
                     var fileDrop = (string[])((IDataObject)data).GetData(DataFormats.FileDrop, false);
                     TestRunner.Check(fileDrop.SequenceEqual(shelf.Items.Where(File.Exists)), "Drag all offers only available file paths");
@@ -121,6 +124,27 @@ namespace Capsule
 
             var closed = new PanelWindow();
             TestRunner.Check(closed.BeginFileDragAtNotch(), "a drag over the notch still opens a closed panel");
+        }
+
+        static void DropHighlightClearsOnLeave()
+        {
+            using (var shelf = new Shelf())
+            {
+                WithInactivePanel(panel =>
+                {
+                    ShelfView tile = panel.View.ShelfTile;
+                    tile.Bind(shelf);
+                    var title = (TextBlock)((StackPanel)tile.Child).Children[0];
+                    tile.SetDropTarget(true);
+                    TestRunner.Eq("Shelf · Drop to add", title.Text, "external drop target has a visible instruction");
+                    TestRunner.Eq(Theme.Current.Amber, ((System.Windows.Media.SolidColorBrush)tile.BorderBrush).Color,
+                        "the target uses the current theme's amber");
+                    panel.FileDragLeft();
+                    TestRunner.Eq("Shelf", title.Text, "leaving clears the drop instruction immediately");
+                    TestRunner.Eq(Theme.Current.TileRim, ((System.Windows.Media.SolidColorBrush)tile.BorderBrush).Color,
+                        "leaving restores the tile border");
+                });
+            }
         }
 
         static void WithInactivePanel(Action<PanelWindow> check)

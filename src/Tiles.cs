@@ -62,9 +62,9 @@ namespace Capsule
                 return t;
             }
             LimitWindow headline = r.DisplayWindow;
-            t.Percent = Format.Percent(headline);
             if (headline != null)
             {
+                t.Percent = Format.Percent(headline) + " used";
                 t.ShowBar = true;
                 t.Used = headline.Used;
                 t.Color = Palette.ForUsed(headline.Used);
