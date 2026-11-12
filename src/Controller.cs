@@ -886,7 +886,7 @@ namespace Capsule
                 return;
             }
             clips.Add(item);   // to the top
-            panel.View.UpdateClipboard(ClipTile());
+            panel.View.UpdateClipboard(ClipTile(), item);
         }
 
         void TogglePanel()

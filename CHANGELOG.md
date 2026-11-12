@@ -5,6 +5,9 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Clearer panel feedback.** Usage shows how much you used and flags higher levels in words. Clipboard history confirms
+  when a copy succeeds, Shelf highlights where to drop files, and approval cards say **Allow once**.
+
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.

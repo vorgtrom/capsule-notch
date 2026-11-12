@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,12 +17,27 @@ namespace Capsule
         public static void Run()
         {
             SizesTheCard();
+            WarningsUseWords();
             LongTextStaysInsideTheSessionRow();
             OutlineHoldsTheCardAndItsPointer();
             ShadowIsDrawnOutsideTheCard();
             BarsFollowTheirActualWidth();
             AnOpenCardResizesWhenItsContentChanges();
             AQueueBadgeResizesAnOpenCard();
+        }
+
+        static void WarningsUseWords()
+        {
+            var model = CardModel.From(ClaudeReading(), null, true, Now, En);
+            model.Rows.Add(new CardRow { Label = "Weekly", Used = 50, UsedText = "50% used" });
+            model.Rows.Add(new CardRow { Label = "Daily", Used = 49.9, UsedText = "50% used" });
+            model.SessionRows.Add(new SessionRow { Project = "sample", Usage = "Sonnet", Context = "ctx 85%", ContextHigh = true });
+            var view = new CardView();
+            view.Show(model, true);
+            ArrangeCard(view);
+            TestRunner.Check(FindText(view, "73% used · near limit") != null && FindText(view, "50% used · high") != null &&
+                FindText(view, "50% used") != null, "the usage card shows warning words at the unrounded thresholds");
+            TestRunner.Check(FindText(view, "ctx 85% · high") != null, "high context is described in words");
         }
 
         static void AQueueBadgeResizesAnOpenCard()
@@ -213,7 +229,7 @@ namespace Capsule
         static TextBlock FindText(DependencyObject root, string text)
         {
             var t = root as TextBlock;
-            if (t != null && t.Text == text) return t;
+            if (t != null && (t.Text == text || t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == text))) return t;
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
             {
                 TextBlock found = FindText(VisualTreeHelper.GetChild(root, i), text);

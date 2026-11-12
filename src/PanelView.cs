@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using WEllipse = System.Windows.Shapes.Ellipse;
 using WPath = System.Windows.Shapes.Path;
 
@@ -55,7 +56,9 @@ namespace Capsule
         ClipboardTile clipModel;
         ClipKind? clipFilter;   // null: every kind
         bool clipExpanded;      // every copy, not just the first ClipRows
-        const int ClipRows = 5;
+        const int ClipRows = 5, ClipCopiedMs = 1200;
+        string copiedClipKey;
+        long copiedClipUntil;
         readonly MusicView music;
         readonly DockPanel ideasHeader = new DockPanel { LastChildFill = false };
         readonly StackPanel ideasRows = new StackPanel();
@@ -383,8 +386,14 @@ namespace Capsule
         }
 
         // The Clipboard tile alone, after each copy. null: clipboard history is off.
-        public void UpdateClipboard(ClipboardTile t)
+        public void UpdateClipboard(ClipboardTile t, ClipItem copied = null)
         {
+            if (copied != null)
+            {
+                copiedClipKey = copied.Key;
+                copiedClipUntil = Clock.NowMs() + ClipCopiedMs;
+            }
+            if (t == null || t.Items.Count == 0) copiedClipKey = null;
             clipModel = t;
             Show(clipTile, t != null);
             clipTile.Child = t != null ? ClipboardContent(t) : null;
@@ -1267,10 +1276,17 @@ namespace Capsule
             }
             else
             {
-                TextBlock percent = CardView.MakeText(t.Percent, 26, Palette.Text, FontWeights.SemiBold);
-                percent.Margin = new Thickness(0, 2, 0, 0);
-                if (t.Dimmed) percent.Opacity = 0.45;
-                box.Children.Add(percent);
+                var usageLine = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), Opacity = t.Dimmed ? 0.45 : 1 };
+                usageLine.Children.Add(CardView.MakeText(t.Percent, 22, Palette.Text, FontWeights.SemiBold));
+                string warning = Palette.UsedWarning(t.Used);
+                if (warning != "")
+                {
+                    TextBlock label = CardView.MakeText(warning, 11.5, Palette.Amber, FontWeights.SemiBold);
+                    label.Margin = new Thickness(5, 0, 0, 0);
+                    label.VerticalAlignment = VerticalAlignment.Center;
+                    usageLine.Children.Add(label);
+                }
+                box.Children.Add(usageLine);
                 if (t.WindowLabel != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal)));
                 if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color));
                 if (t.ResetText != "") box.Children.Add(CardView.MakeText(t.ResetText, 11.5, Palette.Secondary, FontWeights.Normal));
@@ -1439,6 +1455,11 @@ namespace Capsule
                 top.Children.Add(clear);
             }
             top.Children.Add(TileHeader("Clipboard"));
+            List<ClipItem> list = t.Items.FindAll(i => ClipboardHistory.Matches(i.Kind, clipFilter));
+            int shown = clipExpanded ? list.Count : Math.Min(ClipRows, list.Count);
+            long hold = copiedClipUntil - Clock.NowMs();
+            bool showCopied = copiedClipKey != null && hold > 0;
+            if (showCopied && !list.Take(shown).Any(i => i.Key == copiedClipKey)) top.Children.Add(ClipboardCopied(hold));
             box.Children.Add(top);
             if (t.Items.Count == 0)
             {
@@ -1452,9 +1473,8 @@ namespace Capsule
             chips.Children.Add(Chip("Code", ClipKind.Code));
             chips.Children.Add(Chip("Text", ClipKind.Text));
             box.Children.Add(chips);
-            List<ClipItem> list = t.Items.FindAll(i => ClipboardHistory.Matches(i.Kind, clipFilter));
             if (list.Count == 0) box.Children.Add(CardView.MakeText("None of this kind yet", 12, Palette.Secondary, FontWeights.Normal));
-            for (int i = 0; i < list.Count && (clipExpanded || i < ClipRows); i++) box.Children.Add(ClipLine(list[i]));
+            for (int i = 0; i < shown; i++) box.Children.Add(ClipLine(list[i], showCopied && list[i].Key == copiedClipKey ? hold : 0));
             if (list.Count > ClipRows)
             {
                 Border more = LinkButton(clipExpanded ? "Show fewer" : "Show all " + list.Count, delegate
@@ -1486,9 +1506,26 @@ namespace Capsule
             return chip;
         }
 
-        UIElement ClipLine(ClipItem item)
+        static TextBlock ClipboardCopied(long hold)
+        {
+            TextBlock label = CardView.MakeText("Copied", 11.5, Palette.Secondary, FontWeights.SemiBold);
+            label.Margin = new Thickness(8, 0, 2, 0);
+            label.VerticalAlignment = VerticalAlignment.Center;
+            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(160)) { BeginTime = TimeSpan.FromMilliseconds(hold) };
+            fade.Completed += delegate { label.Visibility = Visibility.Collapsed; };
+            label.BeginAnimation(OpacityProperty, fade);
+            return label;
+        }
+
+        UIElement ClipLine(ClipItem item, long copiedHold)
         {
             var line = new DockPanel { LastChildFill = true };
+            if (copiedHold > 0)
+            {
+                TextBlock copied = ClipboardCopied(copiedHold);
+                DockPanel.SetDock(copied, Dock.Right);
+                line.Children.Add(copied);
+            }
             FrameworkElement mark;
             if (item.Kind == ClipKind.Image)
                 mark = new Image { Source = item.Thumb, Height = 36, MaxWidth = 96, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };

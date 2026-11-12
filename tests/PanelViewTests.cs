@@ -22,6 +22,8 @@ namespace Capsule
         {
             SizesThePanel();
             TilesShowTheirModels();
+            UsageTextFitsBothTiles();
+            ClipboardCopyFeedback();
             SignInReplacesTheNumbers();
             IdeasBoxSurvivesUpdates();
             PastedParagraphsAreJoined();
@@ -239,7 +241,7 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(view.ShowingSettings && resized == 1, "the settings take the tiles' place, and the window is told to resize");
             TestRunner.Check(HasText(view, "Saved. Paste a new one to replace it."), "a saved secret is mentioned, not shown");
-            TestRunner.Check(!HasText(view, "73%"), "the tiles are hidden");
+            TestRunner.Check(!HasText(view, "73% used"), "the tiles are hidden");
             TestRunner.Check(HasText(view, "Ctrl+Alt+N"), "the shortcut");
             TextBox link = null;
             PasswordBox secret = null;
@@ -253,7 +255,7 @@ namespace Capsule
             TestRunner.Check(HasText(view, "Ctrl+Alt+Space is used by another app. Try another."), "a taken shortcut says so");
             view.ShowBoard();
             Lay(view);
-            TestRunner.Check(!view.ShowingSettings && HasText(view, "73%"), "back to the tiles");
+            TestRunner.Check(!view.ShowingSettings && HasText(view, "73% used"), "back to the tiles");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
             Lay(view);
             TestRunner.Check(HasText(view, "Your connection's secret, from app.notion.com/developers (Configuration tab)."), "no secret yet: where to find one");
@@ -476,13 +478,53 @@ namespace Capsule
             TestRunner.Check(Math.Abs(b.Width - PanelView.PanelWidth) < 0.5 && Math.Abs(b.Height - height) < 0.5, "its glass is the panel's outline: " + b);
         }
 
+        static void UsageTextFitsBothTiles()
+        {
+            var reading = new Reading { Provider = "claude", Status = "ok" };
+            reading.Windows.Add(new LimitWindow { Id = "session", Label = "Current session", Used = 100 });
+            var model = new PanelModel { Claude = UsageTile.From(reading, Now, En),
+                Codex = UsageTile.From(new Reading { Provider = "codex", Status = "ok" }, Now, En), Ideas = new IdeasTile() };
+            var view = new PanelView();
+            view.Update(model);
+            view.ConstrainHeight(145);
+            Lay(view);
+            TestRunner.Check(ScrollOf(view).ScrollableHeight > 0, "the narrow usage check has a scrollbar");
+            foreach (string text in new[] { "100% used", "near limit", "–" })
+            {
+                TextBlock label = FindText(view, text);
+                if (label != null) label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                TestRunner.Check(label != null && label.DesiredSize.Width <= ((WrapPanel)label.Parent).ActualWidth + 0.5,
+                    text + " fits in the two-column layout with the scrollbar");
+            }
+        }
+
+        static void ClipboardCopyFeedback()
+        {
+            var view = new PanelView();
+            var clips = new ClipboardTile();
+            ClipItem item = ClipboardHistory.FromText("git status", Now);
+            clips.Items.Add(item);
+            view.UpdateClipboard(clips);
+            TestRunner.Check(!HasText(view, "Copied"), "refresh alone shows no confirmation");
+            view.UpdateClipboard(clips, item);
+            Lay(view);
+            TextBlock copied = FindText(view, "Copied");
+            TestRunner.Check(copied != null && ((DockPanel)copied.Parent).LastChildFill, "a successful copy confirms on its visible row");
+            Click(Holder(view, "Images"));
+            Lay(view);
+            copied = FindText(view, "Copied");
+            TestRunner.Check(copied != null && !((DockPanel)copied.Parent).LastChildFill, "confirmation moves to the header if its row is hidden");
+            view.UpdateClipboard(new ClipboardTile());
+            TestRunner.Check(!HasText(view, "Copied"), "clearing history also clears the confirmation");
+        }
+
         static void TilesShowTheirModels()
         {
             var view = new PanelView();
             view.Update(Sample(3));
             Lay(view);
             TestRunner.Check(HasText(view, "Capsule"), "the header");
-            TestRunner.Check(HasText(view, "73%") && HasText(view, "Resets in 51 min") && HasText(view, "Max"), "the Claude tile");
+            TestRunner.Check(HasText(view, "73% used") && HasText(view, "Resets in 51 min") && HasText(view, "Max"), "the Claude tile");
             TestRunner.Check(HasText(view, "Codex isn't set up on this PC"), "the Codex tile says why it's empty");
             TestRunner.Check(HasText(view, "confetti") && HasText(view, "waiting · asked you a question") && HasText(view, "working · 2m"), "the Sessions tile");
             TestRunner.Check(HasText(view, "idea 0") && HasText(view, "✓") && HasText(view, "idea 2"), "the Ideas tile's rows");

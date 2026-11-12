@@ -15,12 +15,20 @@ namespace Capsule
         public const string Yellow = "#FFD60A";
         public const string Red = "#FF453A";
 
-        // The colour for a percentage used, judged on the unrounded value.
+        const double HighUsage = 50, NearLimitUsage = 70;
+
+        // The colour and words use the same unrounded thresholds.
         public static string ForUsed(double used)
         {
-            if (used >= 70) return Red;
-            if (used >= 50) return Yellow;
+            if (used >= NearLimitUsage) return Red;
+            if (used >= HighUsage) return Yellow;
             return Green;
+        }
+
+        public static string UsedWarning(double used)
+        {
+            if (used >= NearLimitUsage) return "near limit";
+            return used >= HighUsage ? "high" : "";
         }
     }
 

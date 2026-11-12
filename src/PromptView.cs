@@ -339,7 +339,7 @@ namespace Capsule
             var buttons = new WrapPanel();
             if (m.Kind == PromptCardModel.Approval)
             {
-                buttons.Children.Add(Pill("Allow", PromptAction.Allow));
+                buttons.Children.Add(Pill("Allow once", PromptAction.Allow));
                 if (m.CanAlwaysAllow)
                 {
                     Border always = Pill(m.AlwaysAllowLabel, PromptAction.AlwaysAllow);
@@ -347,6 +347,7 @@ namespace Capsule
                     buttons.Children.Add(always);
                 }
                 buttons.Children.Add(Pill("Deny", PromptAction.Deny));
+                foreach (Border button in buttons.Children) button.Padding = new Thickness(9, 4, 9, 5);
             }
             else if (m.Kind == PromptCardModel.Plan)
             {

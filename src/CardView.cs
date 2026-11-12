@@ -284,7 +284,8 @@ namespace Capsule
             top.Children.Add(MakeText(row.Label, 13, Palette.Text, FontWeights.Normal));
             box.Children.Add(top);
             box.Children.Add(Bar(row.Used, row.Color));
-            box.Children.Add(MakeText(row.UsedText, 12, Palette.Text, FontWeights.Normal));
+            string warning = Palette.UsedWarning(row.Used);
+            box.Children.Add(MakeText(warning == "" ? row.UsedText : row.UsedText + " · " + warning, 12, Palette.Text, FontWeights.Normal));
             if (row.Pace != "") box.Children.Add(MakeText(row.Pace, 11.5, row.PaceWarn ? Palette.Amber : Palette.Secondary, row.PaceWarn ? FontWeights.SemiBold : FontWeights.Normal));
             return box;
         }
@@ -339,7 +340,7 @@ namespace Capsule
                 if (s.Context != "")
                 {
                     usage.Inlines.Add(new System.Windows.Documents.Run(" · "));
-                    var context = new System.Windows.Documents.Run(s.Context);
+                    var context = new System.Windows.Documents.Run(s.ContextHigh ? s.Context + " · high" : s.Context);
                     if (s.ContextHigh) context.Foreground = NotchView.Brush(Palette.Amber);
                     usage.Inlines.Add(context);
                 }

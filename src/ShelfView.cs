@@ -14,6 +14,8 @@ namespace Capsule
     {
         internal const string DropFailed = "The drop was canceled or rejected. Windows can block drops into apps running as administrator.";
         readonly StackPanel content = new StackPanel();
+        readonly TextBlock title = CardView.MakeText("Shelf", 12, Palette.Secondary, FontWeights.SemiBold);
+        bool dropTarget;
         Shelf shelf;
         string status = "";
         internal bool Dragging { get; private set; }
@@ -23,6 +25,7 @@ namespace Capsule
         internal ShelfView()
         {
             Child = content;
+            title.Margin = new Thickness(0, 0, 0, 6);
             Visibility = Visibility.Collapsed;
         }
 
@@ -43,6 +46,21 @@ namespace Capsule
         internal bool IsTarget(DependencyObject source)
         {
             return IsVisible && (source == this || (source is Visual && IsAncestorOf(source)));
+        }
+
+        internal void SetDropTarget(bool active)
+        {
+            active = active && !Dragging;
+            if (dropTarget == active) return;
+            dropTarget = active;
+            RestyleDropTarget();
+        }
+
+        void RestyleDropTarget()
+        {
+            BorderBrush = dropTarget ? NotchView.Brush(Palette.Amber) : Theme.Current.Brush(Theme.Current.TileRim);
+            title.Foreground = NotchView.Brush(dropTarget ? Palette.Amber : Palette.Secondary);
+            title.Text = dropTarget ? "Shelf · Drop to add" : "Shelf";
         }
 
         internal bool Receive(IDataObject data)
@@ -66,8 +84,7 @@ namespace Capsule
         {
             if (shelf == null || Dragging) return;
             content.Children.Clear();
-            var title = CardView.MakeText("Shelf", 12, Palette.Secondary, FontWeights.SemiBold);
-            title.Margin = new Thickness(0, 0, 0, 6);
+            RestyleDropTarget();
             content.Children.Add(title);
             if (shelf.Items.Count == 0) content.Children.Add(Label("Drop files here. The shelf clears when Capsule exits."));
             else
@@ -146,6 +163,7 @@ namespace Capsule
                 return;
             }
             bool copied = false;
+            SetDropTarget(false);
             Dragging = true;
             try
             {
