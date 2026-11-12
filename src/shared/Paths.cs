@@ -60,6 +60,9 @@ namespace Capsule
         }
 
         public static string ExeDir { get { return AppDomain.CurrentDomain.BaseDirectory; } }
+        public static string HookBinDir { get { return Path.Combine(DataDir, "bin"); } }
+        public static string StagedHook { get { return Path.Combine(HookBinDir, "capsule-hook.exe"); } }
+        internal const string HookImageName = "capsule-exe.txt";
         public static string CodexHooks { get { return Path.Combine(CodexHome, "hooks.json"); } }
     }
 

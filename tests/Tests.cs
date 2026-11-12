@@ -43,6 +43,7 @@ namespace Capsule
             Run("Json", JsonTests.Run);
             Run("HookEvents", HookEventsTests.Run);
             Run("HookSetup", HookSetupTests.Run);
+            Run("HookInstall", HookInstallTests.Run);
             Run("Readings", ReadingsTests.Run);
             Run("ClaudeUsage", ClaudeUsageTests.Run);
             Run("CodexUsage", CodexUsageTests.Run);

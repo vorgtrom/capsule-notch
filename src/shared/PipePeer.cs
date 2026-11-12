@@ -9,7 +9,7 @@ namespace Capsule
 {
     // Who is on the other end of the pipe (act-from-notch spec §4). The hook sends a request, with tool inputs in it, only
     // to the real Capsule: the process that made the pipe instance it connected to must belong to the current user, run at
-    // medium integrity or higher, and be Capsule.exe in the hook's own folder. Anything else, and any failure to find
+    // medium integrity or higher, and run the expected Capsule.exe image. Anything else, and any failure to find
     // out, counts as no Capsule. kernel32 and advapi32 through mscorlib only, as the hook may reference nothing else.
     public static class PipePeer
     {
@@ -81,10 +81,33 @@ namespace Capsule
             catch (Exception) { return false; }
         }
 
-        // Capsule.exe next to the hook, or the tests' stand-in.
         static string ExpectedImage()
         {
-            return ExpectedImageForTests ?? Path.Combine(Paths.ExeDir, "Capsule.exe");
+            return ExpectedImageForTests ?? ExpectedImage(Paths.ExeDir, Paths.HookBinDir);
+        }
+
+        internal static string ExpectedImage(string hookDir, string stagedDir)
+        {
+            try
+            {
+                if (!SameFile(Path.Combine(hookDir, "Capsule.exe"), Path.Combine(stagedDir, "Capsule.exe")))
+                    return Path.Combine(hookDir, "Capsule.exe");
+
+                // The marker inherits the private user profile's ACL and medium integrity. A process that can
+                // rewrite it could already rewrite this user's hook settings or staged executable.
+                string image;
+                using (var stream = new FileStream(Path.Combine(stagedDir, Paths.HookImageName), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+                {
+                    if (stream.Length > 32768) return null;
+                    using (var reader = new StreamReader(stream, new UTF8Encoding(false, true), false))
+                        image = reader.ReadToEnd().Trim().TrimStart('\uFEFF').TrimStart();
+                }
+                string root = Path.GetPathRoot(image);
+                if (root == null || root.Length <= 2 || !string.Equals(Path.GetFileName(image), "Capsule.exe", StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return Path.GetFullPath(image);
+            }
+            catch (Exception) { return null; }
         }
 
         static bool SameFile(string a, string b)
