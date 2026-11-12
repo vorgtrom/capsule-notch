@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace Capsule
 {
@@ -11,6 +12,9 @@ namespace Capsule
         internal const long MaxPngBytes = 64L * 1024 * 1024;
         internal const string Full = "Shelf is full. Remove a file to add another.";
         internal const string PngFull = "This capture exceeds the remaining 64 MiB shelf limit for this session.";
+        const string FolderPrefix = "Capsule-Shelf-";
+        static readonly Regex StagedFolderName = new Regex(@"\A" + FolderPrefix + @"[0-9a-fA-F]{32}\z");
+        static readonly Regex StagedFileName = new Regex(@"\ACapture-[0-9]{2}\.png\z");
         readonly List<string> items = new List<string>();
         readonly List<string> staged = new List<string>();
         readonly long maxPngBytes;
@@ -88,7 +92,7 @@ namespace Capsule
                 }
                 if (folder == null)
                 {
-                    string path = Path.Combine(Path.GetTempPath(), "Capsule-Shelf-" + Guid.NewGuid().ToString("N"));
+                    string path = Path.Combine(Path.GetTempPath(), FolderPrefix + Guid.NewGuid().ToString("N"));
                     Directory.CreateDirectory(path);
                     folder = path;
                 }
@@ -108,6 +112,57 @@ namespace Capsule
             }
             if (Changed != null) Changed();
             return "Kept on shelf.";
+        }
+
+        internal static void SweepTempFolders(string tempRoot = null, DateTime? nowUtc = null)
+        {
+            try
+            {
+                var root = new DirectoryInfo(tempRoot ?? Path.GetTempPath());
+                if (!PlainDirectoryPath(root)) return;
+                DateTime cutoff = (nowUtc ?? DateTime.UtcNow).AddHours(-24);
+                foreach (string path in Directory.EnumerateDirectories(root.FullName, FolderPrefix + "*"))
+                {
+                    if (!StagedFolderName.IsMatch(Path.GetFileName(path))) continue;
+                    try { SweepFolder(new DirectoryInfo(path), cutoff); }
+                    catch (Exception e) { Log.Error("shelf temp cleanup", e); }
+                }
+            }
+            catch (Exception e) { Log.Error("shelf temp cleanup", e); }
+        }
+
+        static void SweepFolder(DirectoryInfo folder, DateTime cutoff)
+        {
+            if (!PlainDirectoryPath(folder)) return;
+            DateTime lastWrite = Directory.GetLastWriteTimeUtc(folder.FullName);
+            if (lastWrite >= cutoff) return;
+
+            string[] entries = Directory.GetFileSystemEntries(folder.FullName);
+            foreach (string path in entries)
+                if (!PlainDirectoryPath(folder) || !StagedFile(path)) return;
+
+            // Check for changes during inspection. Keep every deletion nonrecursive.
+            if (!PlainDirectoryPath(folder) || Directory.GetLastWriteTimeUtc(folder.FullName) != lastWrite) return;
+            foreach (string path in entries)
+            {
+                if (!PlainDirectoryPath(folder) || !StagedFile(path)) return;
+                File.Delete(path);
+            }
+            if (PlainDirectoryPath(folder)) Directory.Delete(folder.FullName);
+        }
+
+        static bool StagedFile(string path)
+        {
+            return StagedFileName.IsMatch(Path.GetFileName(path)) &&
+                (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == 0;
+        }
+
+        static bool PlainDirectoryPath(DirectoryInfo folder)
+        {
+            DirectoryInfo parent = folder.Parent;
+            if (parent != null && !PlainDirectoryPath(parent)) return false;
+            string path = parent == null ? folder.FullName : folder.FullName.TrimEnd(Path.DirectorySeparatorChar);
+            return (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == FileAttributes.Directory;
         }
 
         public void Dispose()

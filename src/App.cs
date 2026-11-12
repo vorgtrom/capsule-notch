@@ -37,6 +37,7 @@ namespace Capsule
                 };
                 app.Startup += delegate
                 {
+                    ThreadPool.QueueUserWorkItem(_ => Shelf.SweepTempFolders());
                     try { controller.Start(); }
                     catch (Exception e)
                     {

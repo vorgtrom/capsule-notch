@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -14,6 +15,8 @@ namespace Capsule
             References();
             CroppedCaptureAndBudget();
             CleanupWithLockedFile();
+            SweepStaleTempFolders();
+            SweepSkipsJunctions();
             DragGap();
             OutboundDragRechecksWindowActivation();
             IncomingDragKeepsTheCurrentPage();
@@ -263,6 +266,98 @@ namespace Capsule
             File.Delete(locked);
             File.Delete(unrelated);
             Directory.Delete(folder);
+        }
+
+        static void SweepStaleTempFolders()
+        {
+            string root = TestRunner.NewTempDir();
+            var now = new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc);
+            DateTime cutoff = now.AddHours(-24);
+            string old = SweepFixture(root, "Capsule-Shelf-0123456789abCDEF0123456789abCDEF", cutoff.AddSeconds(-1), "Capture-01.png", "Capture-02.png");
+            string exact = SweepFixture(root, "Capsule-Shelf-" + new string('a', 32), cutoff, "Capture-01.png");
+            string fresh = SweepFixture(root, "Capsule-Shelf-" + new string('b', 32), cutoff.AddSeconds(1), "Capture-01.png");
+            string shortName = SweepFixture(root, "Capsule-Shelf-" + new string('c', 31), cutoff.AddDays(-1), "Capture-01.png");
+            string nonHex = SweepFixture(root, "Capsule-Shelf-" + new string('g', 32), cutoff.AddDays(-1), "Capture-01.png");
+            string mixed = SweepFixture(root, "Capsule-Shelf-" + new string('d', 32), cutoff.AddDays(-1), "Capture-01.png", "Capture-002.png");
+            string nested = SweepFixture(root, "Capsule-Shelf-" + new string('e', 32), cutoff.AddDays(-1), "Capture-01.png");
+            string child = Directory.CreateDirectory(Path.Combine(nested, "Capture-02.png")).FullName;
+            Directory.SetLastWriteTimeUtc(nested, cutoff.AddDays(-1));
+
+            Shelf.SweepTempFolders(root, now);
+
+            TestRunner.Check(!Directory.Exists(old), "Shelf sweeps a matching folder older than 24 hours");
+            TestRunner.Check(Directory.Exists(exact), "Shelf leaves a folder exactly 24 hours old");
+            TestRunner.Check(Directory.Exists(fresh), "Shelf leaves a folder younger than 24 hours");
+            TestRunner.Check(Directory.Exists(shortName) && Directory.Exists(nonHex), "Shelf requires a 32-character hex suffix");
+            TestRunner.Check(File.Exists(Path.Combine(mixed, "Capture-01.png")), "Shelf leaves every file if a name is unexpected");
+            TestRunner.Check(Directory.Exists(child) && File.Exists(Path.Combine(nested, "Capture-01.png")), "Shelf leaves folders with nested directories");
+
+            if (Directory.Exists(child)) Directory.Delete(child);
+            foreach (string folder in new[] { old, exact, fresh, shortName, nonHex, mixed, nested })
+            {
+                if (!Directory.Exists(folder)) continue;
+                foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
+                Directory.Delete(folder);
+            }
+            Directory.Delete(root);
+        }
+
+        static void SweepSkipsJunctions()
+        {
+            string root = TestRunner.NewTempDir();
+            DateTime now = DateTime.UtcNow;
+            string target = SweepFixture(root, "target", now.AddDays(-2), "Capture-01.png");
+            string name = "Capsule-Shelf-" + new string('f', 32);
+            string junction = Path.Combine(root, name);
+            var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/d /c mklink /j " + name + " target")
+            {
+                WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true
+            };
+            using (Process process = Process.Start(start))
+            {
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                {
+                    Console.WriteLine("  Shelf junction checks skipped: Windows did not create a test junction");
+                    File.Delete(Path.Combine(target, "Capture-01.png"));
+                    Directory.Delete(target);
+                    Directory.Delete(root);
+                    return;
+                }
+            }
+            try
+            {
+                string png = Path.Combine(target, "Capture-01.png");
+                Shelf.SweepTempFolders(root, now);
+                TestRunner.Check(Directory.Exists(junction) && File.Exists(png), "Shelf leaves a candidate junction and its target alone");
+
+                string sub = Directory.CreateDirectory(Path.Combine(target, "sub")).FullName;
+                string direct = SweepFixture(target, name, now.AddDays(-2), "Capture-01.png");
+                string indirect = SweepFixture(sub, name, now.AddDays(-2), "Capture-01.png");
+                Shelf.SweepTempFolders(junction + Path.DirectorySeparatorChar, now);
+                Shelf.SweepTempFolders(Path.Combine(junction, "sub"), now);
+                TestRunner.Check(Directory.Exists(direct), "Shelf skips a junction used as the temp root");
+                TestRunner.Check(Directory.Exists(indirect), "Shelf skips a temp root reached through a junction");
+                foreach (string folder in new[] { direct, indirect })
+                {
+                    if (!Directory.Exists(folder)) continue;
+                    File.Delete(Path.Combine(folder, "Capture-01.png"));
+                    Directory.Delete(folder);
+                }
+                Directory.Delete(sub);
+                File.Delete(png);
+            }
+            finally { if (Directory.Exists(junction)) Directory.Delete(junction); }
+            Directory.Delete(target);
+            Directory.Delete(root);
+        }
+
+        static string SweepFixture(string root, string name, DateTime lastWrite, params string[] files)
+        {
+            string folder = Directory.CreateDirectory(Path.Combine(root, name)).FullName;
+            foreach (string file in files) File.WriteAllText(Path.Combine(folder, file), "fixture");
+            Directory.SetLastWriteTimeUtc(folder, lastWrite);
+            return folder;
         }
 
         static void DragGap()
