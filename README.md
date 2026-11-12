@@ -440,9 +440,10 @@ To see when Claude is working or waiting on you, choose **Connect to Claude Code
 
 ### Google Calendar
 
-There are three ways to connect.
+There are three ways to connect. The one-click sign-in isn't in a release yet, so use the link or your own client
+for now.
 
-**Sign in with Google (one click)**
+**Sign in with Google (one click, coming in a later release)**
 
 In Capsule, open the panel, click ⚙, and under **Google Calendar** click **Sign in with Google**. Your browser opens at
 Google's sign-in. Pick your account and allow access to your events, your list of calendars and your tasks. That's all:
@@ -451,8 +452,7 @@ all your calendars show, changes come within 5 minutes, and you can add, edit an
 - Until Google finishes reviewing Capsule's sign-in, Google shows a warning that it hasn't verified the app. Click
   **Advanced**, then **Go to Capsule**. Google also limits an app under review to 100 users; if you hit that, use one of
   the ways below.
-- This button isn't in a release yet: it comes in a later one. Until then, use the link or your own client. A build
-  from source never has it.
+- A build from source never has this button.
 
 **The quick way: your calendar's secret link (read-only)**
 
