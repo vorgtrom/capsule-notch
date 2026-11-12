@@ -50,6 +50,7 @@ namespace Capsule
         PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
         DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd;
+        bool refreshHooks = true;
         bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
@@ -452,8 +453,6 @@ namespace Capsule
             Guard("limits", CheckLimits);
             Guard("render", Render);
         }
-
-        bool refreshHooks = true;
 
         void Tick()
         {

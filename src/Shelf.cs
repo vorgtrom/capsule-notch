@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Microsoft.Win32.SafeHandles;
 
 namespace Capsule
 {
@@ -119,36 +120,41 @@ namespace Capsule
             try
             {
                 var root = new DirectoryInfo(tempRoot ?? Path.GetTempPath());
-                if (!PlainDirectoryPath(root)) return;
                 DateTime cutoff = (nowUtc ?? DateTime.UtcNow).AddHours(-24);
-                foreach (string path in Directory.EnumerateDirectories(root.FullName, FolderPrefix + "*"))
+                WithPlainDirectoryPath(root, delegate
                 {
-                    if (!StagedFolderName.IsMatch(Path.GetFileName(path))) continue;
-                    try { SweepFolder(new DirectoryInfo(path), cutoff); }
-                    catch (Exception e) { Log.Error("shelf temp cleanup", e); }
-                }
+                    foreach (string path in Directory.EnumerateDirectories(root.FullName, FolderPrefix + "*"))
+                    {
+                        if (!StagedFolderName.IsMatch(Path.GetFileName(path))) continue;
+                        try { SweepFolder(path, cutoff); }
+                        catch (Exception e) { Log.Error("shelf temp cleanup", e); }
+                    }
+                });
             }
             catch (Exception e) { Log.Error("shelf temp cleanup", e); }
         }
 
-        static void SweepFolder(DirectoryInfo folder, DateTime cutoff)
+        static void SweepFolder(string folder, DateTime cutoff)
         {
-            if (!PlainDirectoryPath(folder)) return;
-            DateTime lastWrite = Directory.GetLastWriteTimeUtc(folder.FullName);
-            if (lastWrite >= cutoff) return;
-
-            string[] entries = Directory.GetFileSystemEntries(folder.FullName);
-            foreach (string path in entries)
-                if (!PlainDirectoryPath(folder) || !StagedFile(path)) return;
-
-            // Check for changes during inspection. Keep every deletion nonrecursive.
-            if (!PlainDirectoryPath(folder) || Directory.GetLastWriteTimeUtc(folder.FullName) != lastWrite) return;
-            foreach (string path in entries)
+            using (var handle = OpenSweepDirectory(folder))
             {
-                if (!PlainDirectoryPath(folder) || !StagedFile(path)) return;
-                File.Delete(path);
+                if (handle.IsInvalid || !PlainDirectory(folder)) return;
+                DateTime lastWrite = Directory.GetLastWriteTimeUtc(folder);
+                if (lastWrite >= cutoff) return;
+
+                string[] entries = Directory.GetFileSystemEntries(folder);
+                foreach (string path in entries)
+                    if (!StagedFile(path)) return;
+
+                if (Directory.GetLastWriteTimeUtc(folder) != lastWrite) return;
+                foreach (string path in entries)
+                {
+                    if (!StagedFile(path)) return;
+                    File.Delete(path);
+                }
             }
-            if (PlainDirectoryPath(folder)) Directory.Delete(folder.FullName);
+            // The parent remains pinned. The nonrecursive delete cannot descend into a replacement.
+            if (PlainDirectory(folder)) Directory.Delete(folder);
         }
 
         static bool StagedFile(string path)
@@ -157,13 +163,35 @@ namespace Capsule
                 (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == 0;
         }
 
-        static bool PlainDirectoryPath(DirectoryInfo folder)
+        // Open each component itself and deny write and delete sharing so it cannot redirect child operations.
+        static void WithPlainDirectoryPath(DirectoryInfo folder, Action action)
         {
             DirectoryInfo parent = folder.Parent;
-            if (parent != null && !PlainDirectoryPath(parent)) return false;
-            string path = parent == null ? folder.FullName : folder.FullName.TrimEnd(Path.DirectorySeparatorChar);
+            Action visit = delegate
+            {
+                string path = parent == null ? folder.FullName : folder.FullName.TrimEnd(Path.DirectorySeparatorChar);
+                using (var handle = OpenSweepDirectory(path))
+                    if (!handle.IsInvalid && PlainDirectory(path)) action();
+            };
+            if (parent == null) visit();
+            else WithPlainDirectoryPath(parent, visit);
+        }
+
+        static bool PlainDirectory(string path)
+        {
             return (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) == FileAttributes.Directory;
         }
+
+        static SafeFileHandle OpenSweepDirectory(string path)
+        {
+            const uint GenericRead = 0x80000000, BackupSemantics = 0x02000000, OpenReparsePoint = 0x00200000;
+            return CreateFile(path, GenericRead, FileShare.Read, IntPtr.Zero, FileMode.Open,
+                BackupSemantics | OpenReparsePoint, IntPtr.Zero);
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern SafeFileHandle CreateFile(string path, uint access, FileShare share, IntPtr security,
+            FileMode mode, uint flags, IntPtr template);
 
         public void Dispose()
         {

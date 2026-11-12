@@ -67,7 +67,7 @@ namespace Capsule
             string image = Path.Combine(legacy, "Capsule.exe");
             TestRunner.Eq(image, PipePeer.ExpectedImage(legacy, staged), "the legacy hook still trusts its neighbor");
             TestRunner.Check(PipePeer.ExpectedImage(staged, staged) == null, "the staged hook fails closed when the marker is missing");
-            foreach (string bad in new[] { "", "Capsule.exe", @"relative\Capsule.exe", @"C:Capsule.exe", @"\Capsule.exe", Path.Combine(legacy, "Other.exe") })
+            foreach (string bad in new[] { "", "Capsule.exe", @"relative\Capsule.exe", @"C:Capsule.exe", @"\Capsule.exe", @"\\server\Capsule.exe", Path.Combine(legacy, "Other.exe") })
             {
                 File.WriteAllText(marker, bad);
                 TestRunner.Check(PipePeer.ExpectedImage(staged, staged) == null, "rejects an empty, relative, or wrong image path: " + bad);

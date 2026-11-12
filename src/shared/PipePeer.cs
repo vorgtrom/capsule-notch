@@ -103,7 +103,8 @@ namespace Capsule
                         image = reader.ReadToEnd().Trim().TrimStart('\uFEFF').TrimStart();
                 }
                 string root = Path.GetPathRoot(image);
-                if (root == null || root.Length <= 2 || !string.Equals(Path.GetFileName(image), "Capsule.exe", StringComparison.OrdinalIgnoreCase))
+                if (root == null || root.Length <= 2 || root.Length >= image.Length ||
+                    !string.Equals(Path.GetFileName(image), "Capsule.exe", StringComparison.OrdinalIgnoreCase))
                     return null;
                 return Path.GetFullPath(image);
             }
