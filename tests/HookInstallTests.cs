@@ -9,7 +9,10 @@ namespace Capsule
         public static void Run()
         {
             StagesAndRefreshesTheHook();
-            StagedPathIsValidated();
+            CodexConnectRejectsUnsupportedStagedPath();
+            RefreshWithUnsupportedCodexPath(claudeConnected: true, codexConnected: false);
+            RefreshWithUnsupportedCodexPath(claudeConnected: true, codexConnected: true);
+            RefreshWithUnsupportedCodexPath(claudeConnected: false, codexConnected: true);
             MarkerControlsOnlyTheStagedHook();
             MigratesOnlyCapsuleCommands();
         }
@@ -49,15 +52,51 @@ namespace Capsule
             TestRunner.Eq("new", File.ReadAllText(staged), "the next attempt replaces changed content of the same length");
         }
 
-        static void StagedPathIsValidated()
+        static void CodexConnectRejectsUnsupportedStagedPath()
+        {
+            string data = Path.Combine(TestRunner.NewTempDir(), "User (Work)");
+            string previous = Environment.GetEnvironmentVariable("CAPSULE_DATA");
+            bool rejected = false;
+            try
+            {
+                Environment.SetEnvironmentVariable("CAPSULE_DATA", data);
+                HookInstall.Prepare(codex: true);
+            }
+            catch (ArgumentException e) { rejected = e.Message.Contains("Rename the folder"); }
+            finally { Environment.SetEnvironmentVariable("CAPSULE_DATA", previous); }
+            TestRunner.Check(rejected, "Codex connect keeps the rename message for unsupported staged paths");
+            TestRunner.Check(!Directory.Exists(Path.Combine(data, "bin")), "Codex connect validates before staging");
+        }
+
+        static void RefreshWithUnsupportedCodexPath(bool claudeConnected, bool codexConnected)
         {
             string root = TestRunner.NewTempDir();
-            string folder = Path.Combine(root, "User (Work)", "bin");
-            bool rejected = false;
-            try { HookInstall.Stage(Path.Combine(root, "source.exe"), Path.Combine(folder, "capsule-hook.exe"), Path.Combine(root, "Capsule.exe")); }
-            catch (ArgumentException e) { rejected = e.Message.Contains("Rename the folder"); }
-            TestRunner.Check(rejected, "special characters in the staged path trigger the rename message");
-            TestRunner.Check(!Directory.Exists(folder), "validation precedes staging");
+            string claude = Path.Combine(root, "settings.json"), codex = Path.Combine(root, "hooks.json");
+            string source = Path.Combine(root, "capsule-hook.exe");
+            string staged = Path.Combine(root, "User (Work) & $team `ops`", "bin", "capsule-hook.exe");
+            string image = Path.Combine(root, "Capsule.exe");
+            DateTime now = new DateTime(2026, 11, 13);
+            File.WriteAllText(source, "hook");
+
+            if (claudeConnected)
+                HookSetup.Connect(claude, source, new[] { new[] { "Stop", "*" } }, new[] { "--probe" }, true, now);
+            if (codexConnected) HookSetup.ConnectCodex(codex, source, now);
+            string before = Files.ReadText(codex);
+
+            TestRunner.Check(!HookInstall.RefreshConnected(claude, codex, source, staged, image),
+                "a Codex-incompatible path completes refresh without reporting a Codex migration");
+            if (claudeConnected)
+            {
+                TestRunner.Eq("hook", File.ReadAllText(staged), "Claude stages the hook in a folder with parentheses");
+                object[] entries = Json.Arr(Json.Get(Json.Parse(File.ReadAllText(claude)), "hooks", "Stop"));
+                string quoted = "\"" + root.Replace('\\', '/') + "/User (Work) & \\$team \\`ops\\`/bin/capsule-hook.exe\"";
+                TestRunner.Eq(quoted + " --probe", Command(entries[0]), "Claude migrates its shell hook with a literal path");
+                TestRunner.Check(!HookSetup.Migrate(claude, staged, now), "an escaped shell path needs no further rewrite");
+            }
+            else TestRunner.Check(!File.Exists(staged), "a rejected Codex-only migration does not stage an unused hook");
+
+            TestRunner.Eq(before ?? "<missing>", Files.ReadText(codex) ?? "<missing>", "refresh leaves Codex settings untouched");
+            TestRunner.Eq(0, Directory.GetFiles(root, "hooks.json.capsule-bak-*").Length, "a skipped Codex migration makes no backup");
         }
 
         static void MarkerControlsOnlyTheStagedHook()
@@ -109,13 +148,19 @@ namespace Capsule
             TestRunner.Eq("--probe", Json.Str(Json.Arr(Json.Get(Json.Arr(Json.Get(exec, "hooks"))[0], "args"))[0]), "exec migration keeps its argument list");
 
             HookSetup.ConnectCodex(codex, old, now);
-            HookSetup.Migrate(codex, staged, now);
+            TestRunner.Check(HookSetup.Migrate(codex, staged, now), "moving a Codex hook from its old path reports a change");
             object request = Json.Arr(Json.Get(Json.Parse(File.ReadAllText(codex)), "hooks", "PermissionRequest"))[0];
             TestRunner.Eq(CodexHook.Command(staged), Command(request), "Codex migration preserves the command wrapper");
             int backups = Directory.GetFiles(root, "hooks.json.capsule-bak-*").Length;
             TestRunner.Eq(1, backups, "migration backs up the original hooks");
-            HookSetup.Migrate(codex, staged, now);
+            TestRunner.Check(!HookSetup.Migrate(codex, staged, now), "an already staged Codex hook reports no change");
             TestRunner.Eq(backups, Directory.GetFiles(root, "hooks.json.capsule-bak-*").Length, "already staged hooks need no rewrite or backup");
+
+            HookSetup.ConnectCodex(codex, old, now);
+            string source = Path.Combine(root, "capsule-hook.exe"), image = Path.Combine(root, "Capsule.exe");
+            File.WriteAllText(source, "hook");
+            TestRunner.Check(HookInstall.RefreshConnected(claude, codex, source, staged, image), "startup reports a Codex migration for the trust notice");
+            TestRunner.Check(!HookInstall.RefreshConnected(claude, codex, source, staged, image), "another refresh does not report the same migration");
         }
 
         static string Command(object entry)

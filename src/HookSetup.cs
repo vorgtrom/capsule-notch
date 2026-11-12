@@ -81,7 +81,7 @@ namespace Capsule
                 }
                 else if (shellForm)
                 {
-                    handler["command"] = "\"" + hookExePath.Replace('\\', '/') + "\"" + (args.Length > 0 ? " " + string.Join(" ", args) : "");
+                    handler["command"] = "\"" + ClaudeShellPath(hookExePath) + "\"" + (args.Length > 0 ? " " + string.Join(" ", args) : "");
                 }
                 else
                 {
@@ -100,17 +100,22 @@ namespace Capsule
             return "connected " + wiring.Length + " hook events (replaced " + replaced + " old entries)";
         }
 
+        static string ClaudeShellPath(string path)
+        {
+            return path.Replace('\\', '/').Replace("$", "\\$").Replace("`", "\\`");
+        }
+
         public static string ConnectCodex(string settingsPath, string hookExePath, DateTime now)
         {
             CodexHook.Command(hookExePath); // Validate before touching settings or making a backup.
             return Connect(settingsPath, hookExePath, CodexHook.Wiring, new[] { "--codex" }, true, now);
         }
 
-        internal static void Migrate(string settingsPath, string staged, DateTime now)
+        internal static bool Migrate(string settingsPath, string staged, DateTime now)
         {
             var root = LoadForEdit(settingsPath);
             var hooks = Json.Obj(Json.Get(root, "hooks"));
-            if (hooks == null) return;
+            if (hooks == null) return false;
             bool changed = false;
             foreach (var pair in hooks)
                 foreach (object entry in Json.Arr(pair.Value) ?? new object[0])
@@ -130,14 +135,15 @@ namespace Capsule
                             && !name.Equals("notch-hook.exe", StringComparison.OrdinalIgnoreCase)) continue;
                         if (exe.IndexOfAny(Path.GetInvalidPathChars()) >= 0 || !Path.IsPathRooted(exe)) continue;
                         // Unquoted entries are exec-form paths. Quoted Claude shell entries use forward slashes.
-                        string target = quoted && start == 1 ? staged.Replace('\\', '/') : staged;
+                        string target = quoted && start == 1 ? ClaudeShellPath(staged) : staged;
                         if (exe.Equals(target, StringComparison.OrdinalIgnoreCase)) continue;
                         Json.Obj(handler)["command"] = command.Substring(0, start) + target + command.Substring(end);
                         changed = true;
                     }
-            if (!changed) return;
+            if (!changed) return false;
             Backup(settingsPath, now);
             Save(settingsPath, root);
+            return true;
         }
 
         public static string Disconnect(string settingsPath, DateTime now)

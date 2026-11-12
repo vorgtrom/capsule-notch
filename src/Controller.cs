@@ -457,7 +457,20 @@ namespace Capsule
         void Tick()
         {
             if (refreshHooks)
-                Guard("hook staging", delegate { HookInstall.RefreshConnected(); refreshHooks = false; });
+            {
+                try
+                {
+                    bool codexMigrated = HookInstall.RefreshConnected();
+                    refreshHooks = false;
+                    if (codexMigrated)
+                        tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.");
+                }
+                catch (Exception e)
+                {
+                    refreshHooks = e is IOException;
+                    Log.Error("hook staging", e);
+                }
+            }
             long now = Clock.NowMs();
             foreach (IModule m in modules) if (ModuleOn(m)) m.Tick(now);
             Guard("updates", delegate { updates.Tick(now); });
@@ -1627,7 +1640,7 @@ namespace Capsule
             }
             catch (Exception e)
             {
-                if (connect) refreshHooks = true;
+                if (connect && e is IOException) refreshHooks = true;
                 Log.Error("hooks", e);
                 tray.Balloon("Capsule", "Couldn't change Claude Code's settings.json: " + e.Message);
             }
@@ -1646,7 +1659,7 @@ namespace Capsule
             {
                 bool connected = HookSetup.IsConnected(Paths.CodexHooks);
                 string result = connected ? HookSetup.Disconnect(Paths.CodexHooks, DateTime.Now)
-                    : HookSetup.ConnectCodex(Paths.CodexHooks, HookInstall.Prepare(), DateTime.Now);
+                    : HookSetup.ConnectCodex(Paths.CodexHooks, HookInstall.Prepare(codex: true), DateTime.Now);
                 Log.Info("Codex hooks: " + result);
                 if (connected) codexPrompts.ReleaseAll();
                 tray.Balloon("Capsule", connected ? "Disconnected from Codex / Work."
@@ -1654,7 +1667,7 @@ namespace Capsule
             }
             catch (Exception e)
             {
-                refreshHooks = true;
+                if (e is IOException) refreshHooks = true;
                 Log.Error("Codex hooks (" + e.GetType().Name + ")", null);
                 tray.Balloon("Capsule", "Couldn't change Codex / Work hooks.json: " + e.Message);
             }
