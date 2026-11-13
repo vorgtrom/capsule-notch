@@ -5,6 +5,11 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Hooks stay connected when you move Capsule.** Claude Code and Codex use a fixed hook folder under your user
+  profile. Start Capsule from its new folder to update the connection. Codex asks you to trust the new hook path once.
+- **Scoop updates.** The tray update notice copies `scoop update capsule` for Scoop installs.
+- **Shelf cleanup.** On startup, Capsule removes temporary Shelf captures older than 24 hours that a crash left behind.
+
 - **Clearer panel feedback.** Usage shows how much you used and flags higher levels in words. Clipboard history confirms
   when a copy succeeds, Shelf highlights where to drop files, and approval cards say **Allow once**.
 

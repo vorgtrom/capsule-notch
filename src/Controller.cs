@@ -19,6 +19,7 @@ namespace Capsule
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
         const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11, CmdFocus = 12, CmdCapture = 13;
+        const string ScoopUpdateCommand = "scoop update capsule";
 
         readonly Application app;
         Config config;
@@ -30,6 +31,7 @@ namespace Capsule
         MusicModule music;
         GitHubMonitor github;
         UpdateCheck updates;   // a release build's once-a-day look for a newer release
+        bool scoopInstall;
         CodexActivity codexActivity;
         UsageHistory history;        // token use per day and model, from the Claude Code and Codex logs
         SampleStore samples;         // the limit readings behind the pace forecast, and the alerts already shown
@@ -48,12 +50,13 @@ namespace Capsule
         PromptBroker codexPrompts;
         PromptServer promptServer;   // the pipe the hook asks through
         DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd;
+        bool refreshHooks = true;
         bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
         readonly Shelf shelf = new Shelf();
         ClipboardWatcher clipWatcher;
-        long clipIgnoreUntil;   // a copy put back from the tile: its own clipboard change isn't read as a new copy
+        long clipIgnoreUntil;   // a copy from Capsule isn't read as a new copy
         int clipRetries;        // reads tried again while another app held the clipboard
         SessionTally tally;     // each session's model and tokens, from its transcript
         readonly SessionAlerts sessionAlerts = new SessionAlerts();   // context nearly full, a waiting session's cache nearly cold
@@ -124,8 +127,13 @@ namespace Capsule
             music = new MusicModule(new WindowsMusicSource(), TaskScheduler.FromCurrentSynchronizationContext());
             music.Changed += delegate { Guard("music render", RenderMusic); };
             modules = new List<IModule> { sessions, claude, codex, calendar, weather, ideas, history, music };
+            scoopInstall = Updates.InstalledWithScoop(Paths.ExeDir);
             updates = new UpdateCheck(AppVersion.Current, Clock.NowMs(), TaskScheduler.FromCurrentSynchronizationContext()) { Enabled = config.CheckUpdates };
-            updates.Found += delegate { if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to open its download page."); };
+            updates.Found += delegate
+            {
+                if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to "
+                    + (scoopInstall ? "copy the update command." : "open its download page."));
+            };
             codexActivity = new CodexActivity(Paths.CodexHome);
             tally = new SessionTally(Paths.ClaudeDir);
             focus.SetLengths(config.FocusMinutes, config.ShortBreakMinutes, config.LongBreakMinutes);
@@ -448,6 +456,21 @@ namespace Capsule
 
         void Tick()
         {
+            if (refreshHooks)
+            {
+                try
+                {
+                    bool codexMigrated = HookInstall.RefreshConnected();
+                    refreshHooks = false;
+                    if (codexMigrated)
+                        tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.");
+                }
+                catch (Exception e)
+                {
+                    refreshHooks = e is IOException;
+                    Log.Error("hook staging", e);
+                }
+            }
             long now = Clock.NowMs();
             foreach (IModule m in modules) if (ModuleOn(m)) m.Tick(now);
             Guard("updates", delegate { updates.Tick(now); });
@@ -800,7 +823,7 @@ namespace Capsule
             if (card.IsOpen && cardCell >= 0 && cardCell == focusCell) ShowCard(focusCell);
         }
 
-        // The clipboard changed: what is on it now joins the history, unless it is private or was put back from the tile.
+        // The clipboard changed: what is on it now joins the history, unless it is private or was copied by Capsule.
         // Nothing about it is logged but the type of a failure.
         void ReadClipboard() { ReadClipboard(ClipboardHistory.Read); }
 
@@ -876,15 +899,22 @@ namespace Capsule
             return true;
         }
 
-        void CopyBack(ClipItem item)
+        bool CopyToClipboard(ClipItem item)
         {
             clipIgnoreUntil = Clock.NowMs() + 500;
-            if (!ClipboardHistory.CopyBack(item))
+            if (ClipboardHistory.CopyBack(item))
             {
-                clipIgnoreUntil = 0;
-                tray.Balloon("Capsule", "Another app is using the clipboard. Try again in a moment.");
-                return;
+                clipIgnoreUntil = Clock.NowMs() + 500;
+                return true;
             }
+            clipIgnoreUntil = 0;
+            tray.Balloon("Capsule", "Another app is using the clipboard. Try again in a moment.");
+            return false;
+        }
+
+        void CopyBack(ClipItem item)
+        {
+            if (!CopyToClipboard(item)) return;
             clips.Add(item);   // to the top
             panel.View.UpdateClipboard(ClipTile(), item);
         }
@@ -1501,7 +1531,8 @@ namespace Capsule
             var items = new List<MenuItemSpec>();
             if (updates.Available != null)
             {
-                items.Add(new MenuItemSpec { Id = CmdUpdate, Text = "Capsule " + updates.Available + " is available…" });
+                string action = scoopInstall ? ": copy update command" : "…";
+                items.Add(new MenuItemSpec { Id = CmdUpdate, Text = "Capsule " + updates.Available + " is available" + action });
                 items.Add(new MenuItemSpec { Separator = true });
             }
             items.AddRange(new List<MenuItemSpec>
@@ -1550,8 +1581,16 @@ namespace Capsule
                     System.Diagnostics.Process.Start("explorer.exe", "\"" + Paths.DataDir + "\"");
                     break;
                 case CmdUpdate:
-                    try { System.Diagnostics.Process.Start(updates.PageUrl); }   // github.com, built from the checked version
-                    catch (Exception e) { Log.Error("updates: opening the release page", e); }
+                    if (scoopInstall)
+                    {
+                        if (CopyToClipboard(new ClipItem { Kind = ClipKind.Text, Text = ScoopUpdateCommand }))
+                            tray.Balloon("Capsule", "Copied `" + ScoopUpdateCommand + "`. Run it in a terminal.");
+                    }
+                    else
+                    {
+                        try { System.Diagnostics.Process.Start(updates.PageUrl); }   // github.com, built from the checked version
+                        catch (Exception e) { Log.Error("updates: opening the release page", e); }
+                    }
                     break;
                 case CmdCheckUpdates:
                     config.CheckUpdates = !config.CheckUpdates;
@@ -1591,7 +1630,7 @@ namespace Capsule
             try
             {
                 string result = connect
-                    ? HookSetup.Connect(Paths.ClaudeSettings, hookExe, HookEvents.Wiring, new string[0], HookSetup.UseShellForm, DateTime.Now)
+                    ? HookSetup.Connect(Paths.ClaudeSettings, HookInstall.Prepare(), HookEvents.Wiring, new string[0], HookSetup.UseShellForm, DateTime.Now)
                     : HookSetup.Disconnect(Paths.ClaudeSettings, DateTime.Now);
                 Log.Info("hooks: " + result);
                 sessions.ReadHookState();
@@ -1601,6 +1640,7 @@ namespace Capsule
             }
             catch (Exception e)
             {
+                if (connect && e is IOException) refreshHooks = true;
                 Log.Error("hooks", e);
                 tray.Balloon("Capsule", "Couldn't change Claude Code's settings.json: " + e.Message);
             }
@@ -1619,7 +1659,7 @@ namespace Capsule
             {
                 bool connected = HookSetup.IsConnected(Paths.CodexHooks);
                 string result = connected ? HookSetup.Disconnect(Paths.CodexHooks, DateTime.Now)
-                    : HookSetup.ConnectCodex(Paths.CodexHooks, hookExe, DateTime.Now);
+                    : HookSetup.ConnectCodex(Paths.CodexHooks, HookInstall.Prepare(codex: true), DateTime.Now);
                 Log.Info("Codex hooks: " + result);
                 if (connected) codexPrompts.ReleaseAll();
                 tray.Balloon("Capsule", connected ? "Disconnected from Codex / Work."
@@ -1627,6 +1667,7 @@ namespace Capsule
             }
             catch (Exception e)
             {
+                if (e is IOException) refreshHooks = true;
                 Log.Error("Codex hooks (" + e.GetType().Name + ")", null);
                 tray.Balloon("Capsule", "Couldn't change Codex / Work hooks.json: " + e.Message);
             }

@@ -249,12 +249,11 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
 
 ### Codex and local ChatGPT Work
 
-1. Keep `Capsule.exe` and `capsule-hook.exe` together in a permanent folder whose path has none of
-   `` % $ ` " & < > ( ) @ ^ | ``. Windows' `cmd` launches the hook and would misread them. A second unzip into
-   `Capsule (1)` is the usual culprit: rename the folder, or Connect says so.
-2. Right-click Capsule and choose **Connect to Codex / Work**.
-3. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Capsule does not grant trust.
-4. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.
+1. Right-click Capsule and choose **Connect to Codex / Work**. Capsule copies the hook to `%USERPROFILE%\.capsule\bin`.
+   If your Windows user folder contains `` % $ ` " & < > ( ) @ ^ | ``, Windows' `cmd` can't launch the hook from it.
+2. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Trust the new hook path
+   once after upgrading from an older install.
+3. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.
 
 Codex only asks when its permission mode lets it. On **Full access** it runs commands without asking, so nothing
 reaches the capsule; choose **Auto** (or another mode that asks) next to the message box if you want approvals.
@@ -301,8 +300,9 @@ scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule
 scoop install capsule/capsule
 ```
 
-Then start **Capsule** from the Start menu (Scoop Apps → Capsule). `scoop update capsule` updates it; the bucket picks
-up each new release within a few hours.
+Then start **Capsule** from the Start menu (Scoop Apps → Capsule). When Capsule shows an update in its tray menu,
+select the notice to copy `scoop update capsule`. Run the command in a terminal. The bucket gets each new release
+within a few hours.
 
 **With winget** (once Microsoft has accepted the package):
 
@@ -312,12 +312,11 @@ winget install vorgtrom.Capsule
 
 Then start it with `capsule-notch` in a terminal. `winget upgrade vorgtrom.Capsule` updates it.
 
-Installed either way, ignore Capsule's own "is available" notice and update with the command above instead.
+If you installed with winget, use that command when Capsule shows an update notice.
 
 **Download it (no building):**
 1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
-2. Unzip it into a folder that stays, such as `Documents\Capsule`. Start with Windows and Connect to Claude Code point
-   at that folder, so don't run it from Downloads or from inside the zip.
+2. Unzip it into a folder such as `Documents\Capsule`. If you enable **Start with Windows**, keep Capsule in that folder.
 3. Start `Capsule.exe`.
    - Capsule isn't code-signed, so Windows may say **Windows protected your PC**. Click **More info**, then **Run
      anyway**. Each release is built and tested by GitHub from the code in this repo; the zip's SHA-256 is next to it.
@@ -387,8 +386,7 @@ again. Your settings carry over, as below. To stop the daily check, untick **Che
 
 What carries over:
 - **Your settings, sign-ins and ideas** are in `%USERPROFILE%\.capsule\`, which a build never touches.
-- **Start with Windows and Connect to Claude Code** both point at `bin\`, so they keep working.
-- **If a new version changes the hook,** the menu says **Reconnect to Claude Code**; choose it once.
+- **Start with Windows** points at `bin\`. Capsule refreshes its staged hooks when it starts.
 
 Only one Capsule runs at a time. `bin-dev\Capsule.exe` quits at once while `bin\Capsule.exe` runs, so `build.cmd dev` is
 for running the tests (and `--preview`) without stopping the running copy, not for running a second one.
@@ -431,7 +429,8 @@ The shortcut can be changed in the panel's settings (⚙). By default it isn't C
 Claude desktop app uses that for its own quick entry.
 
 To see when Claude is working or waiting on you, choose **Connect to Claude Code** in the menu.
-- This adds Capsule's hook to `~/.claude/settings.json`, after saving a backup next to it.
+- Capsule copies the hook to `%USERPROFILE%\.capsule\bin`, then registers it in `~/.claude/settings.json` after
+  saving a backup. If you move Capsule, start it from its new folder to refresh the connection.
 - New sessions report in from then on. In the desktop app, running ones do too.
 - `Capsule.exe --connect` and `--disconnect` do the same from a terminal. They print nothing; the
   result goes to the log.
@@ -732,17 +731,17 @@ anywhere else.
 
 ## Uninstall
 
-1. Menu → **Disconnect from Claude Code**, if you connected it.
+1. Disconnect Claude Code and Codex / Work from the menu if you connected them. Disconnect leaves the staged
+   hook in `%USERPROFILE%\.capsule\bin` for future connections.
 2. Menu → untick **Start with Windows**, then **Quit Capsule**.
 3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it), or run
    `scoop uninstall capsule` or `winget uninstall vorgtrom.Capsule` if you installed it that way. Then delete
-   `%USERPROFILE%\.capsule\`.
-4. Menu → **Disconnect from Codex / Work**, if you connected it.
-5. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings,
+   `%USERPROFILE%\.capsule\`, including its `bin` folder.
+4. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings,
    `~/.claude/settings.json.capsule-bak-*` (older ones may be named `usage-notch-bak-*`), and next to Codex's,
    `~/.codex/hooks.json.capsule-bak-*`.
-6. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
-7. If you connected Google Calendar:
+5. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
+6. If you connected Google Calendar:
    - With the link: **Remove link** in the settings. Optionally, **Reset** the secret address in Google Calendar's
      **Integrate calendar**, so the old link stops working.
    - Signed in: choose **Sign out** in the settings first, which revokes Capsule's access.

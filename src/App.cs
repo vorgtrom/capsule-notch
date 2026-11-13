@@ -37,6 +37,7 @@ namespace Capsule
                 };
                 app.Startup += delegate
                 {
+                    ThreadPool.QueueUserWorkItem(_ => Shelf.SweepTempFolders());
                     try { controller.Start(); }
                     catch (Exception e)
                     {
@@ -74,6 +75,8 @@ namespace Capsule
             }
             try
             {
+                if (command == "--connect" || command == "--connect-probe" || command == "--connect-probe-shell" || command == "--connect-codex")
+                    hookExe = HookInstall.Prepare(command == "--connect-codex");
                 string result;
                 if (command == "--connect") result = HookSetup.Connect(Paths.ClaudeSettings, hookExe, HookEvents.Wiring, new string[0], HookSetup.UseShellForm, DateTime.Now);
                 else if (command == "--connect-probe") result = HookSetup.Connect(Paths.ClaudeSettings, hookExe, HookEvents.ProbeWiring, new[] { "--probe" }, false, DateTime.Now);

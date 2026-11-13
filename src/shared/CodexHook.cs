@@ -6,6 +6,7 @@ namespace Capsule
     // Codex and local Work use command hooks, not Claude's updatedInput/updatedPermissions protocol.
     public static class CodexHook
     {
+        internal const string CommandPrefix = "cmd.exe /d /v:off /c ";
         static readonly char[] UnsafePathChars = { '%', '$', '`', '"', '&', '<', '>', '(', ')', '@', '^', '|' };
 
         public static readonly string[][] Wiring = {
@@ -20,8 +21,8 @@ namespace Capsule
             // cmd also drops the quotes round a path holding & < > ( ) @ ^ | and then splits it ("Capsule (1)", "A&B"), so
             // the hook would fail, or run two commands.
             if (exe.IndexOfAny(UnsafePathChars) >= 0 || !PromptRequest.VisibleText(exe, false))
-                throw new ArgumentException("Install Capsule in a folder whose path has none of % $ ` \" & < > ( ) @ ^ | before connecting Codex.");
-            return "cmd.exe /d /v:off /c \"" + exe + "\" --codex";
+                throw new ArgumentException("Rename the folder with special characters in the hook path. The path can't contain % $ ` \" & < > ( ) @ ^ |.");
+            return CommandPrefix + "\"" + exe + "\" --codex";
         }
 
         public static PromptRequest Request(Dictionary<string, object> root, long now)

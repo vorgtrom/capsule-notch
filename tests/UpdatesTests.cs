@@ -9,6 +9,7 @@ namespace Capsule
         public static void Run()
         {
             VersionsAreCompared();
+            ScoopInstallPathsAreRecognized();
             ANewerReleaseIsFoundOnce();
             FailuresTryAgainLater();
             SourceBuildsAndTurnedOffNeverAsk();
@@ -42,6 +43,18 @@ namespace Capsule
             TestRunner.Check(!UpdateCheck.Newer("v1.1.0", "v1.1.0") && !UpdateCheck.Newer("v1.0.9", "v1.1.0"), "the same or an older one isn't");
             TestRunner.Check(UpdateCheck.Parse("dev") == null && UpdateCheck.Parse("1.2.0") == null && UpdateCheck.Parse("v1.2") == null && UpdateCheck.Parse("v1.2.0-beta") == null
                 && UpdateCheck.Parse("v1.2.0/../../evil") == null && !UpdateCheck.Newer("v9.0.0", "dev"), "only v1.2.3 is a version; a source build has none");
+        }
+
+        static void ScoopInstallPathsAreRecognized()
+        {
+            TestRunner.Check(Updates.InstalledWithScoop(@"C:\Users\Ann\scoop\apps\capsule\current\"), "Scoop user install under current");
+            TestRunner.Check(Updates.InstalledWithScoop(@"C:\ProgramData\SCOOP\Apps\Capsule\1.2.3"), "versioned Scoop global install with mixed case");
+            TestRunner.Check(Updates.InstalledWithScoop(@"D:\Tools\Apps\Capsule\current", "D:/Tools/", @"E:\Shared"), "custom Scoop user root");
+            TestRunner.Check(Updates.InstalledWithScoop(@"E:\Shared\apps\capsule\1.2.3", @"D:\Tools", @"E:\Shared"), "custom Scoop global root");
+            TestRunner.Check(!Updates.InstalledWithScoop(@"D:\Downloads\scoop\capsule\current", null, null), "a folder called scoop alone is insufficient");
+            TestRunner.Check(!Updates.InstalledWithScoop(@"D:\scoop\apps\capsule-backup\current", null, null), "the package name must be capsule");
+            TestRunner.Check(!Updates.InstalledWithScoop(@"D:\Tools-old\apps\capsule\current", @"D:\Tools", null), "a custom root must match the whole folder");
+            TestRunner.Check(!Updates.InstalledWithScoop(@"D:\Downloads\Capsule (1)", null, null), "a zip install is not Scoop");
         }
 
         static void ANewerReleaseIsFoundOnce()
