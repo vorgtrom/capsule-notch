@@ -566,6 +566,10 @@ namespace Capsule
             PaceNeedsTwoInARow();
             QuietWhenOffOrStale();
             RemembersWhatWasSent();
+            ResetsOnceOnTheClock();
+            ResetsNeedAWarningAndEnabledRing();
+            SkipsLateAndMovedResets();
+            ResetNamesMatchTheWarnings();
             NamesAndGaps();
         }
 
@@ -640,6 +644,108 @@ namespace Capsule
             TestRunner.Eq(0, LimitAlerts.Check(back, R(86, Now + Min), true, Now + Min, En).Count, "an alert already shown isn't shown again after a restart");
             File.WriteAllText(path, "nope");
             TestRunner.Check(SampleStore.Load(path).Samples.Count == 0 && File.Exists(path + ".bad"), "a damaged file starts over, kept as .bad");
+        }
+
+        static string AlertKey(string provider = "claude", string window = "five_hour", string kind = "80")
+        {
+            return provider + "|" + window + "|" + (Reset / Min).ToString(CultureInfo.InvariantCulture) + "|" + kind;
+        }
+
+        static List<string> ResetAlerts(SampleStore store, long now, Reading reading = null, bool enabled = true, bool ringOn = true)
+        {
+            return LimitAlerts.Resets(store, provider => reading, enabled, provider => ringOn, now);
+        }
+
+        static void ResetsOnceOnTheClock()
+        {
+            var store = new SampleStore();
+            Feed(store, R(82, Now));
+            TestRunner.Eq(0, ResetAlerts(store, Reset - 1).Count, "the tick before reset stays quiet");
+            TestRunner.Check(!store.Sent.Contains(AlertKey(kind: "reset")), "before reset the window is still eligible");
+            TestRunner.Eq("Claude's 5-hour limit has reset.", string.Join("", ResetAlerts(store, Reset)), "the clock fires at reset without a reading");
+            TestRunner.Eq(0, ResetAlerts(store, Reset + 5000).Count, "the next tick cannot repeat the alert");
+            string path = Path.Combine(TestRunner.NewTempDir(), "usage-samples.json");
+            store.Save(path);
+            SampleStore restored = SampleStore.Load(path);
+            TestRunner.Check(restored.Sent.Contains(AlertKey(kind: "reset")), "the reset mark survives a restart");
+            TestRunner.Eq(0, ResetAlerts(restored, Reset + Min).Count, "the restart cannot repeat the alert");
+
+            var both = new SampleStore();
+            Feed(both, R(96, Now));
+            TestRunner.Eq(1, ResetAlerts(both, Reset).Count, "80 and 95 keys for one instance make one reset alert");
+            both = new SampleStore();
+            both.Sent.Add(AlertKey(kind: "95"));
+            TestRunner.Eq(1, ResetAlerts(both, Reset + Hour).Count, "95 alone is enough, including exactly one hour late");
+        }
+
+        static void ResetsNeedAWarningAndEnabledRing()
+        {
+            var store = new SampleStore();
+            TestRunner.Eq(0, ResetAlerts(store, Reset).Count, "no prior warning means no reset alert");
+            store.Sent.Add(AlertKey(kind: "pace"));
+            TestRunner.Eq(0, ResetAlerts(store, Reset).Count, "a pace-only warning does not qualify");
+            store.Sent.Add(AlertKey());
+            TestRunner.Eq(0, ResetAlerts(store, Reset, enabled: false).Count, "limit alerts off means no reset alert");
+            TestRunner.Eq(0, ResetAlerts(store, Reset, ringOn: false).Count, "the provider ring off means no reset alert");
+            TestRunner.Check(!store.Sent.Contains(AlertKey(kind: "reset")), "disabled alerts leave the saved warning intact");
+            store.Sent.Add(AlertKey("codex", "secondary"));
+            TestRunner.Eq("Codex's limit has reset.", string.Join("", LimitAlerts.Resets(store, provider => null, true,
+                provider => provider == "codex", Reset)), "another provider's enabled ring still gets its alert");
+        }
+
+        static void SkipsLateAndMovedResets()
+        {
+            var late = new SampleStore();
+            late.Sent.Add(AlertKey());
+            TestRunner.Eq(0, ResetAlerts(late, Reset + Hour + 1).Count, "over one hour late is stale");
+            TestRunner.Check(late.Sent.Contains(AlertKey(kind: "reset")), "a late reset is permanently marked");
+
+            var moved = new SampleStore();
+            moved.Sent.Add(AlertKey());
+            Reading reading = R(80, Reset);
+            reading.Windows[0].ResetsAtMs = Reset + Hour;
+            TestRunner.Eq(0, ResetAlerts(moved, Reset, reading).Count, "a fresh high reading with a future reset supersedes the old instance");
+            TestRunner.Check(moved.Sent.Contains(AlertKey(kind: "reset")), "a superseded reset is permanently marked");
+
+            var stale = new SampleStore();
+            stale.Sent.Add(AlertKey());
+            reading.LastCheckFailed = true;
+            TestRunner.Eq(1, ResetAlerts(stale, Reset, reading).Count, "a stale reading does not override the clock");
+
+            var sameMinute = new SampleStore();
+            sameMinute.Sent.Add(AlertKey());
+            reading.LastCheckFailed = false;
+            reading.Windows[0].ResetsAtMs = Reset + 20000;
+            TestRunner.Eq(1, ResetAlerts(sameMinute, Reset, reading).Count, "seconds within the same minute do not create a new instance");
+
+            var low = new SampleStore();
+            low.Sent.Add(AlertKey());
+            reading.Windows[0].Used = 79;
+            reading.Windows[0].ResetsAtMs = Reset + Hour;
+            TestRunner.Eq(1, ResetAlerts(low, Reset, reading).Count, "a fresh low reading does not suppress the reset notice");
+        }
+
+        static void ResetNamesMatchTheWarnings()
+        {
+            var store = new SampleStore();
+            store.Sent.Add(AlertKey(window: "seven_day"));
+            store.Sent.Add(AlertKey(window: "seven_day_opus"));
+            store.Sent.Add(AlertKey("codex", "primary"));
+            store.Sent.Add(AlertKey("codex", "secondary"));
+            Reading codex = R(20, Reset, "codex");
+            codex.Windows.Add(new LimitWindow { Id = "secondary", Label = "Weekly limit" });
+            List<string> messages = LimitAlerts.Resets(store, provider => provider == "codex" ? codex : null, true, provider => true, Reset);
+            TestRunner.Eq(4, messages.Count, "all four warned limits reset");
+            TestRunner.Check(messages.Contains("Claude's weekly limit has reset."), "Claude weekly wording");
+            TestRunner.Check(messages.Contains("Claude's weekly Opus limit has reset."), "Claude weekly Opus wording");
+            TestRunner.Check(messages.Contains("Codex's 5-hour limit has reset."), "Codex primary wording");
+            TestRunner.Check(messages.Contains("Codex's weekly limit has reset."), "Codex secondary wording");
+
+            var missingLabel = new SampleStore();
+            missingLabel.Sent.Add(AlertKey("codex", "secondary"));
+            codex.Windows[1].Label = "";
+            TestRunner.Eq("Codex's limit has reset.", string.Join("", ResetAlerts(missingLabel, Reset, codex)),
+                "a cached window with no label uses the generic limit name");
         }
 
         static void NamesAndGaps()
