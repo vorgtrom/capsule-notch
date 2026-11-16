@@ -23,8 +23,8 @@ namespace Capsule
         public const long RenewRetryBaseMs = 10 * 60 * 1000;
         public const long RenewRetryCapMs = 60 * 60 * 1000;
 
-        // Step 6 of Task 6 sets this to false if `claude -p` turns out not to be a harmless no-op.
-        public static readonly bool RenewWithCli = true;
+        internal const int RenewalTimeoutMs = 60 * 1000;
+        internal const string RefreshInClaude = "Open Claude Code to refresh.";
 
         readonly string credentialPath;
         readonly object gate = new object();
@@ -34,7 +34,9 @@ namespace Capsule
         long renewAttemptedFor, renewLastAttempt;
         int renewFailures;
 
+        public volatile bool BackgroundRenewal = true;
         public bool RenewalDisabled;                  // set by tests so they never launch the real CLI
+        internal Func<string> LocateRenewalCli = () => FindCli(Paths.Home, Environment.GetEnvironmentVariable("PATH"));
         public Func<string, HttpResult> Transport;    // set by tests; null = the real endpoint
         public int RequestsSent;                      // read by tests
         public bool LastCheckUnreachable { get; private set; }   // the last check got no reply at all (network down)
@@ -57,16 +59,17 @@ namespace Capsule
             Reading r = Current.Clone();
             LastCheckUnreachable = false;
             ClaudeCredential cred = ReadCredential(credentialPath);
-            if (cred != null && RenewWithCli && !RenewalDisabled) MaybeRenew(cred, now);
-            if (backoffUntilMs > now) return r;   // inside a rate-limit wait: send nothing
+            if (cred != null && BackgroundRenewal && !RenewalDisabled) MaybeRenew(cred, now);
             cred = ReadCredential(credentialPath);
             if (cred == null) return Publish(Failed(r, "signin", "Sign in to the Claude CLI to see your usage"));
             r.Plan = Format.PlanName(cred.Plan);
             string keep = r.Windows.Count > 0 ? "ok" : "error";
             // An expired token is never sent: the endpoint answers it with a long 429, not a 401.
             if (cred.ExpiresAtMs > 0 && cred.ExpiresAtMs <= now)
-                return Publish(Failed(r, r.Windows.Count > 0 ? "ok" : "signin", "Sign-in expired — run claude once in a terminal to renew it"));
+                return Publish(Failed(r, r.Windows.Count > 0 ? "ok" : "signin", BackgroundRenewal
+                    ? "Sign-in expired — run claude once in a terminal to renew it" : RefreshInClaude));
 
+            if (backoffUntilMs > now) return Current;   // inside a rate-limit wait: send nothing
             HttpResult res = Fetch(cred.Token);
             if (res.Status == 401)
             {
@@ -135,28 +138,41 @@ namespace Capsule
             if (renewAttemptedFor != cred.ExpiresAtMs) renewFailures = 0;
             renewAttemptedFor = cred.ExpiresAtMs;
             renewLastAttempt = now;
-            string cli = FindCli(Paths.Home, Environment.GetEnvironmentVariable("PATH"));
+            string cli = LocateRenewalCli();
             if (cli == null)
             {
                 renewFailures++;
                 Log.Info("claude: sign-in about to expire and no standalone claude.exe found to renew it");
                 return;
             }
-            try { RunRenewal(cli); }
-            catch (Exception e) { Log.Error("claude: renewal could not start", e); }
+            if (!BackgroundRenewal) return;
+            long started = Stopwatch.GetTimestamp();
+            int? exitCode = null;
+            bool timedOut = false;
+            Exception error = null;
+            try
+            {
+                exitCode = RunRenewal(cli, out timedOut);
+            }
+            catch (Exception e) { error = e; }
             ClaudeCredential after = ReadCredential(credentialPath);
-            if (after != null && after.ExpiresAtMs > cred.ExpiresAtMs)
+            bool moved = after != null && after.ExpiresAtMs > cred.ExpiresAtMs;
+            if (moved)
             {
                 renewFailures = 0;
                 consecutive429 = 0;
                 backoffUntilMs = 0;
-                Log.Info("claude: sign-in renewed");
             }
-            else
-            {
-                renewFailures++;
-                Log.Info("claude: ran claude -p but the sign-in expiry did not move");
-            }
+            else renewFailures++;
+            string summary = RenewalSummary((Stopwatch.GetTimestamp() - started) * 1000 / Stopwatch.Frequency, exitCode, moved, timedOut);
+            if (error == null) Log.Info(summary);
+            else Log.Error(summary, error);
+        }
+
+        internal static string RenewalSummary(long elapsedMs, int? exitCode, bool moved, bool timedOut)
+        {
+            return "claude: renewal " + elapsedMs + " ms, exit=" + (exitCode.HasValue ? exitCode.Value.ToString() : "unavailable")
+                + ", expiry moved=" + (moved ? "yes" : "no") + (timedOut ? ", timed out" : "");
         }
 
         // Whether to launch `claude -p` now. Claude Code only renews a token within 5 minutes of expiry, so an
@@ -292,7 +308,7 @@ namespace Capsule
 
         // `claude -p` with stdin closed starts up, renews an ageing token as it does, then exits for want of a
         // prompt: no conversation, no quota. Its output is thrown away unread.
-        static void RunRenewal(string cli)
+        static int? RunRenewal(string cli, out bool timedOut)
         {
             var psi = new ProcessStartInfo(cli, "-p");
             psi.UseShellExecute = false;
@@ -310,12 +326,31 @@ namespace Capsule
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
                 p.StandardInput.Close();
-                if (!p.WaitForExit(30000))
-                {
-                    try { p.Kill(); }
-                    catch (Exception) { }
-                }
+                return WaitForRenewal(p, RenewalTimeoutMs, KillRenewalTree, out timedOut);
             }
+        }
+
+        internal static int? WaitForRenewal(Process process, int timeoutMs, Action<Process> killTree, out bool timedOut)
+        {
+            timedOut = !process.WaitForExit(timeoutMs);
+            if (timedOut) killTree(process);
+            return process.WaitForExit(1000) ? process.ExitCode : (int?)null;
+        }
+
+        static void KillRenewalTree(Process process)
+        {
+            try
+            {
+                if (process.HasExited) return;
+                var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "taskkill.exe"),
+                    "/F /T /PID " + process.Id);
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                using (Process kill = Process.Start(psi)) kill.WaitForExit(5000);
+            }
+            catch (Exception) { }
+            try { if (!process.HasExited) process.Kill(); }
+            catch (Exception) { }
         }
 
         // Opens a console window running `claude auth login`; onExit runs (on a worker thread) when it closes.

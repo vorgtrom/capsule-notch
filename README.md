@@ -715,8 +715,9 @@ anywhere else.
 
   The file is deleted when the session ends. It never records a file's folder or contents, a command's text, or
   anything Claude reads or writes, and nothing from it goes into Capsule's log.
-- When Claude's sign-in is about to expire, Capsule runs `claude -p` with no input. That renews it without
-  starting a conversation.
+- Capsule can run `claude -p` with no input to renew an expiring sign-in. Claude Code can start its configured
+  hooks, plugins and MCP servers during renewal. Turn off **Renew Claude sign-in in the background** in Settings
+  to stop these launches. If your sign-in expires, open Claude Code to refresh it.
 - Capsule's own files are in `%USERPROFILE%\.capsule\`:
   - its settings (`config.json`);
   - the last readings, and session status files;

@@ -21,6 +21,7 @@ namespace Capsule
         public string GitHubRepo = "";   // one public owner/repo; "" means off
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
+        public bool RenewClaudeSignIn = true;
         public bool Sounds = true;           // a short sound when a session needs you or finishes
         public string GoogleClientId = "";   // the user's own OAuth client (Desktop app); "" = not set up. Its secret is in google-client-secret.bin
         // Calendars whose box the user changed: calendar id -> shown. The others follow Google's own "selected". Ids
@@ -75,6 +76,7 @@ namespace Capsule
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
+            c.RenewClaudeSignIn = Json.Get(o, "renew_claude_sign_in") as bool? ?? true;
             c.GoogleClientId = (Json.Str(Json.Get(o, "google_client_id")) ?? "").Trim();
             Dictionary<string, object> choices = Json.Obj(Json.Get(o, "google_calendars"));
             if (choices != null)
@@ -117,6 +119,7 @@ namespace Capsule
             d["check_updates"] = CheckUpdates;
             d["limit_alerts"] = LimitAlerts;
             d["sounds"] = Sounds;
+            d["renew_claude_sign_in"] = RenewClaudeSignIn;
             d["google_client_id"] = GoogleClientId;
             var choices = new Dictionary<string, object>();
             foreach (KeyValuePair<string, bool> choice in CalendarChoices) choices[choice.Key] = choice.Value;

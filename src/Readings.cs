@@ -34,7 +34,8 @@ namespace Capsule
         // A failed check or a log snapshot over 10 minutes old is visibly stale.
         public bool IsDimmed(long now)
         {
-            return (LastCheckFailed || FromLogs) && DataAtMs > 0 && now - DataAtMs > 10 * 60 * 1000;
+            return (LastCheckFailed || FromLogs) && DataAtMs > 0 &&
+                (Note == ClaudeUsage.RefreshInClaude || now - DataAtMs > 10 * 60 * 1000);
         }
 
         public Reading Clone()

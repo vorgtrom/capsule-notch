@@ -24,6 +24,7 @@ namespace Capsule
         readonly Application app;
         Config config;
         UsageModule claude, codex;
+        ClaudeUsage claudeUsage;
         SessionsModule sessions;
         IdeasModule ideas;
         CalendarModule calendar;
@@ -51,6 +52,13 @@ namespace Capsule
         PromptServer promptServer;   // the pipe the hook asks through
         DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd;
         bool refreshHooks = true;
+        bool codexHooksConnected;
+        readonly HookHealth claudeHookHealth = new HookHealth(), codexHookHealth = new HookHealth();
+        readonly TimingCounter tickTime = new TimingCounter("tick"), screenTime = new TimingCounter("screenCheck"),
+            codexTime = new TimingCounter("codexCheck"), musicTime = new TimingCounter("musicTick"),
+            focusTime = new TimingCounter("focusTick"), promptTime = new TimingCounter("promptTick"),
+            moduleTime = new TimingCounter("modules"), folderTime = new TimingCounter("codexFolders");
+        long nextTimingLog;
         bool linkWatch;   // Get link was clicked: a copied iCal address is saved, for a few minutes
         readonly FocusTimer focus = new FocusTimer();
         readonly ClipboardHistory clips = new ClipboardHistory();   // in memory only
@@ -103,7 +111,12 @@ namespace Capsule
             cached.TryGetValue("codex", out cachedCodex);
             sessions = new SessionsModule(Paths.SessionsDir, Paths.ClaudeSettings);
             sessions.Changed += OnSessionsChanged;
-            claude = new UsageModule(new ClaudeUsage(Paths.ClaudeCredentials, cachedClaude), () => sessions.Activity != null ? ClaudeActiveMs : ClaudeIdleMs);
+            ReadClaudeHookHealth();
+            codexHooksConnected = HookSetup.IsConnected(Paths.CodexHooks);
+            codexHookHealth.Reset(askForTrust: codexHooksConnected);
+            nextTimingLog = Clock.NowMs() + TimingCounter.HourMs;
+            claudeUsage = new ClaudeUsage(Paths.ClaudeCredentials, cachedClaude) { BackgroundRenewal = config.RenewClaudeSignIn };
+            claude = new UsageModule(claudeUsage, () => sessions.Activity != null ? ClaudeActiveMs : ClaudeIdleMs);
             codex = new UsageModule(new CodexUsage(Paths.CodexHome, cachedCodex), () => CodexEveryMs);
             claude.Changed += OnUsageChecked;
             codex.Changed += OnUsageChecked;
@@ -134,7 +147,7 @@ namespace Capsule
                 if (!disposed) tray.Balloon("Capsule", "Capsule " + updates.Available + " is available. Choose it in Capsule's menu to "
                     + (scoopInstall ? "copy the update command." : "open its download page."));
             };
-            codexActivity = new CodexActivity(Paths.CodexHome);
+            codexActivity = new CodexActivity(Paths.CodexHome, folderTime);
             tally = new SessionTally(Paths.ClaudeDir);
             focus.SetLengths(config.FocusMinutes, config.ShortBreakMinutes, config.LongBreakMinutes);
             lastActivity = sessions.Activity;
@@ -145,12 +158,12 @@ namespace Capsule
 
             openCard = NewTimer(110, OpenCard);   // long enough to pass over a ring without opening its card
             closeCard = NewTimer(200, CloseCardIfAway);
-            tick = NewTimer(5000, Tick);
-            screenCheck = NewTimer(2000, CheckScreen);
-            codexCheck = NewTimer(2000, CheckCodex);
-            promptTick = NewTimer(250, delegate { Guard("prompts", PromptTick); });   // runs only while a request is held
-            musicTick = NewTimer(1000, delegate { music.Tick(Clock.NowMs()); });
-            focusTick = NewTimer(1000, delegate { Guard("focus", FocusTick); });   // runs only while the timer does
+            tick = NewTimer(5000, Tick, tickTime);
+            screenCheck = NewTimer(2000, CheckScreen, screenTime);
+            codexCheck = NewTimer(2000, CheckCodex, codexTime);
+            promptTick = NewTimer(250, delegate { Guard("prompts", PromptTick); }, promptTime);   // runs only while a request is held
+            musicTick = NewTimer(1000, delegate { music.Tick(Clock.NowMs()); }, musicTime);
+            focusTick = NewTimer(1000, delegate { Guard("focus", FocusTick); }, focusTime);   // runs only while the timer does
             clipRead = NewTimer(100, delegate { clipRead.Stop(); Guard("clipboard", ReadClipboard); });   // once the copying app has let go
             linkWatchEnd = NewTimer(LinkWatchMs, delegate { Guard("calendar link", EndLinkWatch); });
             clipWatcher = new ClipboardWatcher();
@@ -222,6 +235,13 @@ namespace Capsule
             };
             panel.View.RingToggled += delegate(string name, bool on) { Guard("rings", delegate { OnRingToggled(name, on); }); };
             panel.View.ClipboardToggled += delegate(bool on) { Guard("clipboard", delegate { OnClipboardToggled(on); }); };
+            panel.View.ClaudeRenewalToggled += on => Guard("Claude renewal setting", delegate
+            {
+                config.RenewClaudeSignIn = claudeUsage.BackgroundRenewal = on;
+                config.Save(Paths.ConfigFile);
+                panel.View.ShowRings(config);
+                if (config.RingOn("claude")) claude.Refresh();
+            });
             panel.View.FocusLengthChanged += delegate(string which, int minutes) { Guard("focus", delegate { OnFocusLength(which, minutes); }); };
             panel.View.FocusQuietToggled += delegate(bool on) { Guard("focus", delegate { OnFocusQuiet(on); }); };
             card.View.FocusCommand += delegate(string command) { Guard("focus", delegate { OnFocusCommand(command); }); };
@@ -286,7 +306,7 @@ namespace Capsule
             panel.View.GoogleQuickSignIn += delegate { Guard("calendar sign-in", delegate { calendar.SignInWithCapsule(); }); };
             panel.View.GoogleClientDraft += delegate(string id, string secret) { Guard("calendar client", delegate { calendar.KeepClient(id, secret); }); };
             shortcut = new GlobalHotkey();
-            shortcut.Pressed += delegate { Guard("shortcut", delegate { OpenPanel(true); }); };
+            shortcut.Pressed += delegate { Guard("shortcut", OpenFromShortcut); };
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
             capture.KeepOnShelf = shelf.Keep;
@@ -324,10 +344,16 @@ namespace Capsule
             Log.Info("started");
         }
 
-        static DispatcherTimer NewTimer(int ms, Action action)
+        static DispatcherTimer NewTimer(int ms, Action action, TimingCounter timing = null)
         {
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
-            timer.Tick += delegate { action(); };
+            timer.Tick += delegate
+            {
+                if (timing == null) { action(); return; }
+                long started = TimingCounter.Start();
+                try { action(); }
+                finally { timing.Stop(started); }
+            };
             return timer;
         }
 
@@ -339,8 +365,14 @@ namespace Capsule
             catch (Exception e) { Log.Error(what, e); }
         }
 
+        void ReadClaudeHookHealth()
+        {
+            foreach (SessionStatus status in sessions.All) claudeHookHealth.Record(status.At);
+        }
+
         void OnSessionsChanged()
         {
+            ReadClaudeHookHealth();
             // A session just started working: check Claude every minute from now on, not in five.
             string activity = sessions.Activity;
             if (lastActivity == null && activity != null) claude.CheckBy(Clock.NowMs() + ClaudeActiveMs);
@@ -469,7 +501,10 @@ namespace Capsule
                     bool codexMigrated = HookInstall.RefreshConnected();
                     refreshHooks = false;
                     if (codexMigrated)
+                    {
+                        codexHookHealth.Reset(askForTrust: true);
                         tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.", OpenAlertPanel);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -479,7 +514,20 @@ namespace Capsule
             }
             long now = Clock.NowMs();
             foreach (IModule m in modules)
-                if (ModuleOn(m)) Guard(m is UsageModule ? ((UsageModule)m).Provider : m.GetType().Name, delegate { m.Tick(now); });
+                if (ModuleOn(m))
+                {
+                    long started = TimingCounter.Start();
+                    try { Guard(m == claude ? "claude" : m == codex ? "codex" : m.GetType().Name, delegate { m.Tick(now); }); }
+                    finally { moduleTime.Stop(started); }
+                }
+            ReadClaudeHookHealth();
+            codexHooksConnected = HookSetup.ConnectedState(Paths.CodexHooks) ?? codexHooksConnected;
+            if (now >= nextTimingLog)
+            {
+                nextTimingLog = now + TimingCounter.HourMs;
+                Log.Info("idle timing: " + string.Join(" ", new[] { tickTime, screenTime, codexTime, musicTime, focusTime,
+                    promptTime, moduleTime, folderTime }.Select(counter => counter.Take())));
+            }
             Guard("updates", delegate { updates.Tick(now); });
             Guard("GitHub checks", delegate { github.Tick(now); });
             lastActivity = sessions.Activity;
@@ -504,7 +552,9 @@ namespace Capsule
                         link.Send(PromptReply.Passing());
                         return;
                     }
-                    PromptBroker broker = request.Provider == "codex" ? codexPrompts : prompts;
+                    bool forCodex = request.Provider == "codex";
+                    (forCodex ? codexHookHealth : claudeHookHealth).Record(Clock.NowMs());
+                    PromptBroker broker = forCodex ? codexPrompts : prompts;
                     HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply)
                     {
                         if (link.Send(reply) && broker == prompts && reply.Kind != PromptReply.Pass)
@@ -692,7 +742,7 @@ namespace Capsule
                 PanelHome = config.PanelHome,
                 Claude = config.RingOn("claude") ? claude.Tile(now, CultureInfo.CurrentCulture) : null,
                 Codex = config.RingOn("codex") ? codex.Tile(now, CultureInfo.CurrentCulture) : null,
-                Sessions = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null,
+                Sessions = PanelSessions(now),
                 Calendar = config.RingOn("calendar") ? calendar.Tile(now, CultureInfo.CurrentCulture) : null,
                 Weather = weather.Tile(now),
                 Music = config.RingOn("music") ? music.Current : null,
@@ -701,6 +751,19 @@ namespace Capsule
                 Ideas = ideas.Tile(),
                 NeedsYou = NeedsYouTile.From(config.RingOn("claude") ? prompts : null, config.RingOn("codex") ? codexPrompts : null, github.Current, now),
             };
+        }
+
+        SessionsTile PanelSessions(long now)
+        {
+            SessionsTile tile = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null;
+            if (tile != null && sessions.HooksConnected && claudeHookHealth.NeedsPanelHint(now))
+                tile.Hint = "Claude: " + claudeHookHealth.Text(now);
+            if (config.RingOn("codex") && codexHooksConnected && codexHookHealth.NeedsPanelHint(now))
+            {
+                if (tile == null) tile = new SessionsTile();
+                tile.CodexHint = "Codex: " + codexHookHealth.Text(now);
+            }
+            return tile;
         }
 
         ClipboardTile ClipTile()
@@ -965,6 +1028,22 @@ namespace Capsule
             {
                 if (!OpenHeldPrompt(broker, held, Clock.NowMs())) OpenPanel(false);
             });
+        }
+
+        internal static PromptBroker ShortcutPrompt(PromptBroker claude, PromptBroker codex)
+        {
+            HeldPrompt a = claude.Current, b = codex.Current;
+            if (a == null) return b == null ? null : codex;
+            return b == null || a.Arrived <= b.Arrived ? claude : codex;
+        }
+
+        void OpenFromShortcut()
+        {
+            if (captureHidden) return;
+            PromptBroker broker = ShortcutPrompt(prompts, codexPrompts);
+            if (broker != null && OpenHeldPrompt(broker, broker.Current, Clock.NowMs()))
+                card.TakePromptKeyboard();
+            else OpenPanel(true);
         }
 
         bool OpenHeldPrompt(PromptBroker broker, HeldPrompt held, long now)
@@ -1431,7 +1510,7 @@ namespace Capsule
         void OnHover(int cell)
         {
             hoverCell = cell;
-            if (panel.IsOpen) return;   // the panel already shows everything
+            if (panel.IsOpen || card.HasPromptKeyboard) return;
             if (cell < 0)
             {
                 openCard.Stop();
@@ -1458,7 +1537,7 @@ namespace Capsule
         void CloseCardIfAway()
         {
             closeCard.Stop();
-            if (hoverCell >= 0 || card.IsMouseOver || card.IsTyping) return;   // not while you type in Other…
+            if (hoverCell >= 0 || card.IsMouseOver || card.IsTyping || card.HasPromptKeyboard) return;
             openCard.Stop();
             card.Fold();
         }
@@ -1564,6 +1643,8 @@ namespace Capsule
             HideCard();
             sessions.ReadHookState();
             bool reconnect = sessions.HooksConnected && HookSetup.NeedsUpdate(Paths.ClaudeSettings);
+            codexHooksConnected = HookSetup.ConnectedState(Paths.CodexHooks) ?? codexHooksConnected;
+            long now = Clock.NowMs();
             bool autostart = false;
             try { autostart = Autostart.IsEnabled(); }
             catch (Exception) { }
@@ -1581,7 +1662,9 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdShow, Text = "Show notch", Checked = config.ShowNotch },
                 new MenuItemSpec { Separator = true },
                 new MenuItemSpec { Id = CmdHooks, Text = HookSetup.MenuText(sessions.HooksConnected, reconnect) },
-                new MenuItemSpec { Id = CmdCodexHooks, Text = HookSetup.IsConnected(Paths.CodexHooks) ? "Disconnect from Codex / Work" : "Connect to Codex / Work" },
+                new MenuItemSpec { Disabled = true, Text = sessions.HooksConnected ? claudeHookHealth.Text(now) : "Hooks disconnected" },
+                new MenuItemSpec { Id = CmdCodexHooks, Text = codexHooksConnected ? "Disconnect from Codex / Work" : "Connect to Codex / Work" },
+                new MenuItemSpec { Disabled = true, Text = codexHooksConnected ? codexHookHealth.Text(now) : "Hooks disconnected" },
                 new MenuItemSpec { Id = CmdAutostart, Text = "Start with Windows", Checked = autostart },
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
             });
@@ -1700,6 +1783,8 @@ namespace Capsule
                 string result = connected ? HookSetup.Disconnect(Paths.CodexHooks, DateTime.Now)
                     : HookSetup.ConnectCodex(Paths.CodexHooks, HookInstall.Prepare(codex: true), DateTime.Now);
                 Log.Info("Codex hooks: " + result);
+                codexHooksConnected = !connected;
+                codexHookHealth.Reset(askForTrust: !connected);
                 if (connected) codexPrompts.ReleaseAll();
                 tray.Balloon("Capsule", connected ? "Disconnected from Codex / Work."
                     : "Connected. Review and trust Capsule's hooks in Codex / Work, then start a new local chat. Command approvals and questions can use the capsule.");

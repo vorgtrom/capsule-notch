@@ -45,6 +45,8 @@ namespace Capsule
 
         public PromptView()
         {
+            Focusable = true;
+            KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
             PanelView.Plain(otherBox);
             otherBox.MaxLength = QuestionFlow.MaxOther;
             otherBox.TextWrapping = TextWrapping.Wrap;
@@ -621,7 +623,27 @@ namespace Capsule
                 pressedStep = Step;
             };
             b.MouseLeave += delegate { down = false; };
+            b.Focusable = true;
+            b.BorderThickness = new Thickness(1);
+            b.Padding = new Thickness(Math.Max(0, padding.Left - 1), Math.Max(0, padding.Top - 1),
+                Math.Max(0, padding.Right - 1), Math.Max(0, padding.Bottom - 1));
+            b.BorderBrush = Brushes.Transparent;
+            b.IsKeyboardFocusedChanged += delegate
+            {
+                b.BorderBrush = b.IsKeyboardFocused ? NotchView.Brush(Palette.Text) : Brushes.Transparent;
+            };
+            b.PreviewKeyDown += delegate(object sender, KeyEventArgs e)
+            {
+                if (e.Key != Key.Enter || !b.IsKeyboardFocused) return;
+                e.Handled = true;
+                if (ActivatesButton(e.Key, e.IsRepeat, Settled)) click();
+            };
             return b;
+        }
+
+        internal static bool ActivatesButton(Key key, bool repeat, bool settled)
+        {
+            return key == Key.Enter && !repeat && settled;
         }
 
         static Border Badge(string text)

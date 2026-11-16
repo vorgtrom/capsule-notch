@@ -30,6 +30,8 @@ namespace Capsule
             FindsTheStandaloneCli();
             SignInNeededWithoutACredential();
             ExpiredTokenIsNeverSent();
+            RenewalCanBeTurnedOff();
+            RenewalTimeoutAndLogging();
             ReadsUsageWhenSignedIn();
             RateLimitKeepsTheReadingAndWaits();
             RejectedSignInAsksToSignIn();
@@ -328,6 +330,54 @@ namespace Capsule
             Reading r = poller.Poll(Exp);
             TestRunner.Check(r.Note.StartsWith("Sign-in expired", StringComparison.Ordinal), "expired note: " + r.Note);
             TestRunner.Eq(0, poller.RequestsSent, "no request made");
+        }
+
+        static void RenewalCanBeTurnedOff()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            TestRunner.Check(Config.Load(path).RenewClaudeSignIn, "background renewal defaults on");
+            new Config { RenewClaudeSignIn = false }.Save(path);
+            TestRunner.Check(!Config.Load(path).RenewClaudeSignIn, "the preference stays off after restart");
+
+            var cached = new Reading { DataAtMs = Exp - Min, Windows = new List<LimitWindow> { new LimitWindow { Used = 42 } } };
+            var poller = new ClaudeUsage(Credential("expired-test-token", Exp - 1), cached) { BackgroundRenewal = false };
+            int lookups = 0;
+            poller.LocateRenewalCli = delegate { lookups++; return null; };
+            Reading r = poller.Poll(Exp);
+            TestRunner.Eq(0, lookups, "turning renewal off skips even looking for the executable");
+            TestRunner.Eq(0, poller.RequestsSent, "expired token is never sent");
+            TestRunner.Eq("Open Claude Code to refresh.", r.Note, "the tile explains how to refresh");
+            TestRunner.Check(r.IsDimmed(Exp) && r.Windows[0].Used == 42, "the cached reading stays visible and dimmed");
+        }
+
+        static void RenewalTimeoutAndLogging()
+        {
+            string cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+            var psi = new ProcessStartInfo(cmd, "/d /c exit 7") { UseShellExecute = false, CreateNoWindow = true };
+            int kills = 0;
+            bool timedOut;
+            using (Process process = Process.Start(psi))
+                TestRunner.Check(ClaudeUsage.WaitForRenewal(process, 5000, p => kills++, out timedOut) == 7 && !timedOut,
+                    "a completed renewal reports its exit code");
+            TestRunner.Eq(0, kills, "a completed renewal does not trigger cleanup");
+
+            psi.Arguments = "/d /c set /p reply=";
+            psi.RedirectStandardInput = true;
+            using (Process process = Process.Start(psi))
+            {
+                try
+                {
+                    int? exitCode = ClaudeUsage.WaitForRenewal(process, 50, p => { kills++; p.Kill(); }, out timedOut);
+                    TestRunner.Check(timedOut && exitCode.HasValue, "a timed out renewal reports the exit code after cleanup");
+                }
+                finally { if (!process.HasExited) process.Kill(); }
+            }
+            TestRunner.Eq(1, kills, "the timeout invokes cleanup once");
+            TestRunner.Eq(60000, ClaudeUsage.RenewalTimeoutMs, "renewal timeout is one minute");
+            TestRunner.Eq("claude: renewal 60000 ms, exit=unavailable, expiry moved=no, timed out",
+                ClaudeUsage.RenewalSummary(60000, null, false, true), "one line describes a timeout without process output");
+            TestRunner.Eq("claude: renewal 500 ms, exit=7, expiry moved=yes",
+                ClaudeUsage.RenewalSummary(500, 7, true, false), "the summary contains the exit code and expiry result");
         }
 
         static void ReadsUsageWhenSignedIn()
