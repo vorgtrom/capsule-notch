@@ -40,6 +40,7 @@ namespace Capsule
         public static string GoogleLinkFile { get { return Path.Combine(DataDir, "google-calendar-link.bin"); } }
         public static string IdeasQueueFile { get { return Path.Combine(DataDir, "ideas-queue.json"); } }
         public static string UsageHistoryFile { get { return Path.Combine(DataDir, "usage-history.json"); } }
+        public static string UsageDetailFile { get { return Path.Combine(DataDir, "usage-detail.json"); } }
         public static string UsageSamplesFile { get { return Path.Combine(DataDir, "usage-samples.json"); } }
         public static string FocusFile { get { return Path.Combine(DataDir, "focus.json"); } }
         public static string IdeasDiscardedFile { get { return Path.Combine(DataDir, "ideas-discarded.json"); } }

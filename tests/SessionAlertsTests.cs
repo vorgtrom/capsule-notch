@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 
 namespace Capsule
 {
@@ -13,9 +14,91 @@ namespace Capsule
             Context();
             Cache();
             AfterFocus();
+            FinishedTurn();
+            FinishedAfterRestart();
+            FinishedSetting();
         }
 
         static List<SessionStatus> One(string state) { return new List<SessionStatus> { new SessionStatus { SessionId = "s1", Project = "capsule", State = state } }; }
+
+        static List<SessionStatus> Snapshot(string state, long at, string project = "capsule")
+        {
+            var sessions = One(state);
+            sessions[0].At = sessions[0].Since = at;
+            sessions[0].Project = project;
+            return sessions;
+        }
+
+        static void FinishedTurn()
+        {
+            var alerts = new FinishedAlerts(Snapshot(States.Idle, Now - Minute));
+            TestRunner.Eq(0, alerts.Check(Snapshot(States.Working, Now), true, false, () => false).Count, "working starts the timer");
+            TestRunner.Eq(0, alerts.Check(Snapshot(States.Done, Now + 5 * Minute - 1), true, false, () => false).Count, "under five minutes is quiet");
+
+            alerts.Check(Snapshot(States.Working, Now + 6 * Minute), true, false, () => false);
+            alerts.Check(Snapshot(States.Waiting, Now + 7 * Minute), true, false, () => false);
+            alerts.Check(Snapshot(States.Working, Now + 17 * Minute), true, false, () => false);
+            var done = Snapshot(States.Done, Now + 18 * Minute);
+            List<string> texts = alerts.Check(done, true, false, () => false);
+            TestRunner.Eq(1, texts.Count, "a long turn alerts once");
+            TestRunner.Check(texts.Count == 1 && texts[0] == "capsule finished after 12 min", "the message names the project and includes the wait");
+            TestRunner.Eq(0, alerts.Check(done, true, false, () => false).Count, "the same completion does not alert again");
+
+            var empty = new List<SessionStatus>();
+            alerts = new FinishedAlerts(empty);
+            alerts.Check(Snapshot(States.Working, Now), true, false, () => false);
+            alerts.Check(Snapshot(States.Waiting, Now + Minute), true, false, () => false);
+            texts = alerts.Check(Snapshot(States.Done, Now + 5 * Minute, ""), true, false, () => false);
+            TestRunner.Check(texts.Count == 1 && texts[0] == "Claude finished after 5 min", "waiting to done at five minutes alerts with the row's fallback name");
+
+            alerts.Check(Snapshot(States.Working, Now + 6 * Minute), true, false, () => false);
+            alerts.Check(empty, true, false, () => false);
+            TestRunner.Eq(0, alerts.Check(Snapshot(States.Done, Now + 12 * Minute), true, false, () => false).Count, "a removed session loses its timer");
+        }
+
+        static void FinishedAfterRestart()
+        {
+            var working = Snapshot(States.Working, Now);
+            var waiting = Snapshot(States.Waiting, Now + Minute);
+            var done = Snapshot(States.Done, Now + 7 * Minute);
+            var alerts = new FinishedAlerts(working);
+            alerts.Check(working, true, false, () => false);
+            TestRunner.Eq(0, alerts.Check(done, true, false, () => false).Count, "restart during work leaves the turn untimed");
+
+            alerts = new FinishedAlerts(waiting);
+            alerts.Check(Snapshot(States.Working, Now + 2 * Minute), true, false, () => false);
+            TestRunner.Eq(0, alerts.Check(done, true, false, () => false).Count, "restart during approval leaves the turn untimed after resume");
+        }
+
+        static void FinishedSetting()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            TestRunner.Check(!Config.Load(path).FinishedAlerts, "finished notifications default off on new installs");
+            File.WriteAllText(path, "{}");
+            var config = Config.Load(path);
+            TestRunner.Check(!config.FinishedAlerts, "finished notifications default off for existing settings");
+            var working = Snapshot(States.Working, Now);
+            var done = Snapshot(States.Done, Now + 5 * Minute);
+            var alerts = new FinishedAlerts(new List<SessionStatus>());
+            alerts.Check(working, config.FinishedAlerts, false, () => false);
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, false, () => false).Count, "off suppresses a long completion");
+
+            config.FinishedAlerts = true;
+            config.Save(path);
+            config = Config.Load(path);
+            TestRunner.Check(config.FinishedAlerts, "finished notifications stay on after restart");
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, false, () => false).Count, "enabling does not replay a completion");
+
+            alerts = new FinishedAlerts(new List<SessionStatus>());
+            alerts.Check(working, config.FinishedAlerts, false, () => false);
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, true, () => false).Count, "Focus suppresses a long completion");
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, false, () => false).Count, "the break does not replay a completion");
+
+            alerts = new FinishedAlerts(new List<SessionStatus>());
+            alerts.Check(working, config.FinishedAlerts, false, () => false);
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, false, () => true).Count, "Claude in front suppresses a long completion");
+            TestRunner.Eq(0, alerts.Check(done, config.FinishedAlerts, false, () => false).Count, "leaving Claude does not replay a completion");
+        }
 
         static void Context()
         {

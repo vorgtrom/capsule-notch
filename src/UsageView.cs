@@ -1,15 +1,16 @@
 using System;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using WEllipse = System.Windows.Shapes.Ellipse;
 
 namespace Capsule
 {
-    // The Usage page (usage history spec §3), shown in the panel in place of the tiles: ← Usage and ‹ ›, the period,
-    // Week / Month / Year, the pace lines, the total, stacked bars by model, the legend and Details.
+    // The Usage page replaces the tiles in the panel. It shows the period, pace, total, heatmap, legend and Details.
     public sealed class UsageView : StackPanel
     {
         const string BackGlyph = "", PrevGlyph = "", NextGlyph = "", DownGlyph = "", UpGlyph = "";   // icon-font glyphs, kept as escapes
@@ -20,9 +21,11 @@ namespace Capsule
         readonly StackPanel body = new StackPanel();
         UsageModel model = new UsageModel();
         bool detailsOpen;
+        RadioButton selectedGrouping;
 
         public event Action BackClicked, PreviousClicked, NextClicked;
         public event Action<UsagePeriod> PeriodChosen;
+        public event Action<bool> GroupingChosen;
 
         public UsageView()
         {
@@ -47,9 +50,11 @@ namespace Capsule
 
         public void Update(UsageModel m)
         {
+            bool restoreFocus = Keyboard.FocusedElement is RadioButton && body.IsKeyboardFocusWithin;
             model = m;
             BuildHeader();
             BuildBody();
+            if (restoreFocus && selectedGrouping != null) selectedGrouping.Focus();
         }
 
         public void Restyle() { if (model != null) Update(model); }
@@ -74,6 +79,7 @@ namespace Capsule
         void BuildBody()
         {
             body.Children.Clear();
+            selectedGrouping = null;
             body.Children.Add(CardView.MakeText(model.Title, 12, Palette.Secondary, FontWeights.Normal));
             if (model.Heat == null) body.Children.Add(Switch());
             else body.Children.Add(new Border { Height = 8 });
@@ -93,6 +99,15 @@ namespace Capsule
             unit.Margin = new Thickness(6, 0, 0, 5);
             total.Children.Add(unit);
             body.Children.Add(total);
+            if (model.ApiValue != "")
+            {
+                TextBlock estimate = CardView.MakeText(model.ApiValue, 12.5, Palette.Secondary, FontWeights.Normal);
+                estimate.ToolTip = model.ApiValueTip;
+                AutomationProperties.SetHelpText(estimate, model.ApiValueTip);
+                body.Children.Add(estimate);
+                if (model.MissingPrices)
+                    body.Children.Add(CardView.MakeText("Some models have no listed price", 11.5, Palette.Secondary, FontWeights.Normal));
+            }
             if (model.Progress != "") body.Children.Add(CardView.MakeText(model.Progress, 11.5, Palette.Secondary, FontWeights.Normal));
 
             if (model.Empty && model.Progress == "")
@@ -100,6 +115,7 @@ namespace Capsule
                 TextBlock empty = CardView.Wrap(CardView.MakeText("No Claude Code or Codex activity found on this PC yet.", 12, Palette.Secondary, FontWeights.Normal));
                 empty.Margin = new Thickness(0, 10, 0, 4);
                 body.Children.Add(empty);
+                if (model.Heat != null) body.Children.Add(GroupingSwitch());
                 return;
             }
 
@@ -110,7 +126,10 @@ namespace Capsule
             }
             else body.Children.Add(Chart());
 
-            var legend = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            if (model.Heat != null) body.Children.Add(GroupingSwitch());
+            var legend = new StackPanel { Margin = new Thickness(0, model.Heat == null ? 10 : 4, 0, 0) };
+            if (model.ByProject && model.Legend.Count == 0 && model.Total > 0)
+                legend.Children.Add(CardView.MakeText("No project breakdown for these dates.", 11.5, Palette.Secondary, FontWeights.Normal));
             foreach (LegendRow row in model.Legend)
             {
                 var line = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 2, 0, 2) };
@@ -118,7 +137,10 @@ namespace Capsule
                 TextBlock amount = CardView.MakeText(Format.Tokens(row.Tokens), 12.5, Palette.Secondary, FontWeights.Normal);
                 DockPanel.SetDock(amount, Dock.Right);
                 line.Children.Add(amount);
-                line.Children.Add(CardView.MakeText(row.Name, 12.5, Palette.Text, FontWeights.Normal));
+                TextBlock name = CardView.MakeText(row.Name, 12.5, Palette.Text, FontWeights.Normal);
+                name.Margin = new Thickness(0, 0, 6, 0);
+                if (model.ByProject) name.ToolTip = row.Name;
+                line.Children.Add(name);
                 legend.Children.Add(line);
             }
             body.Children.Add(legend);
@@ -161,6 +183,48 @@ namespace Capsule
                 pills.Children.Add(pill);
             }
             return track;
+        }
+
+        UIElement GroupingSwitch()
+        {
+            var pills = new StackPanel { Orientation = Orientation.Horizontal };
+            KeyboardNavigation.SetDirectionalNavigation(pills, KeyboardNavigationMode.Cycle);
+            Brush selected = Theme.Current.Brush(Theme.Current.Light ? Colors.White : Color.FromRgb(0x5A, 0x5A, 0x5E));
+            var surface = new FrameworkElementFactory(typeof(Border));
+            surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            surface.SetValue(Border.PaddingProperty, new Thickness(12, 3, 12, 4));
+            surface.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            surface.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
+            var template = new ControlTemplate(typeof(RadioButton)) { VisualTree = surface };
+            var style = new Style(typeof(RadioButton));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, NotchView.Brush(Palette.Secondary)));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+            var active = new Trigger { Property = ToggleButton.IsCheckedProperty, Value = true };
+            active.Setters.Add(new Setter(Control.BackgroundProperty, selected));
+            active.Setters.Add(new Setter(Control.ForegroundProperty, NotchView.Brush(Palette.Text)));
+            active.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+            style.Triggers.Add(active);
+            var hover = new Trigger { Property = IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Control.ForegroundProperty, NotchView.Brush(Palette.Text)));
+            style.Triggers.Add(hover);
+            foreach (bool byProject in new[] { false, true })
+            {
+                string text = byProject ? "By project" : "By model";
+                var button = new RadioButton
+                {
+                    Content = text, FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"), FontSize = 12,
+                    IsChecked = model.ByProject == byProject, Style = style, Template = template, Cursor = Cursors.Hand,
+                };
+                if (button.IsChecked == true) selectedGrouping = button;
+                AutomationProperties.SetName(button, text);
+                button.Click += delegate
+                {
+                    if (model.ByProject != byProject && GroupingChosen != null) GroupingChosen(byProject);
+                };
+                pills.Children.Add(button);
+            }
+            return new Border { CornerRadius = new CornerRadius(10), Background = NotchView.Brush(Palette.Track), Padding = new Thickness(2),
+                Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = pills };
         }
 
         UIElement Chart()

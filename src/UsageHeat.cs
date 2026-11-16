@@ -32,7 +32,7 @@ namespace Capsule
         public List<string> DayNames = new List<string>();   // the rows' names, from the week's first day
         public List<HeatStat> Stats = new List<HeatStat>();
 
-        public static HeatModel Build(UsageStore store, DateTime from, DateTime to, DateTime today, CultureInfo culture)
+        public static HeatModel Build(UsageStore store, DateTime from, DateTime to, DateTime today, CultureInfo culture, ILookup<string, LegendRow> dayProjects = null)
         {
             var m = new HeatModel();
             today = today.Date;
@@ -51,7 +51,13 @@ namespace Capsule
                     perModel[p.Key] = t + p.Value[0];
                 }
                 c.Tip = d.ToString("ddd, MMM d", culture) + " · " + (c.Tokens > 0 ? Format.Tokens(c.Tokens) + " tokens" : "no activity");
-                foreach (var p in models.OrderByDescending(p => p.Value).Take(3)) c.Tip += "\n" + UsageModel.ModelName(p.Key) + " · " + Format.Tokens(p.Value);
+                if (dayProjects == null)
+                    foreach (var p in models.OrderByDescending(p => p.Value).Take(3))
+                        c.Tip += "\n" + UsageModel.ModelName(p.Key) + " · " + Format.Tokens(p.Value);
+                else
+                    foreach (LegendRow p in dayProjects[d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)]
+                        .OrderByDescending(p => p.Tokens).ThenBy(p => p.Name, StringComparer.Ordinal).Take(3))
+                        c.Tip += "\n" + p.Name + " · " + Format.Tokens(p.Tokens);
                 days.Add(c);
             }
             // Four shades, split at the quartiles of the busy days shown, as GitHub's and Claude Code's do.

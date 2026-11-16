@@ -19,6 +19,7 @@ namespace Capsule
     {
         const long ClaudeActiveMs = 60 * 1000, ClaudeIdleMs = 300 * 1000, CodexEveryMs = 300 * 1000;
         const int CmdRefresh = 1, CmdShow = 2, CmdHooks = 3, CmdAutostart = 4, CmdFolder = 5, CmdQuit = 6, CmdUpdate = 7, CmdCheckUpdates = 8, CmdCodexHooks = 9, CmdLimitAlerts = 10, CmdSounds = 11, CmdFocus = 12, CmdCapture = 13;
+        const int CmdFinishedAlerts = 14;
         const string ScoopUpdateCommand = "scoop update capsule";
 
         readonly Application app;
@@ -75,6 +76,7 @@ namespace Capsule
         List<CellModel> notchCells;
         string lastActivity;
         readonly SessionCues cues = new SessionCues();   // which sound a change in the sessions calls for
+        FinishedAlerts finishedAlerts;
         bool fullscreen, signInOpen, menuOpen;
         bool codexWorking, codexChecking;   // a Codex turn is running; a check of Codex's logs is under way
         string codexFault;                  // the exception type the last logged fault of that check had: logged once, not every 2 s
@@ -110,6 +112,7 @@ namespace Capsule
             cached.TryGetValue("claude", out cachedClaude);
             cached.TryGetValue("codex", out cachedCodex);
             sessions = new SessionsModule(Paths.SessionsDir, Paths.ClaudeSettings);
+            finishedAlerts = new FinishedAlerts(sessions.All);
             sessions.Changed += OnSessionsChanged;
             ReadClaudeHookHealth();
             codexHooksConnected = HookSetup.IsConnected(Paths.CodexHooks);
@@ -133,7 +136,7 @@ namespace Capsule
             calendar.ClientIdChosen += OnGoogleClientIdChosen;
             weather = new WeatherModule(config.WeatherPlace, config.WeatherUnits, TaskScheduler.FromCurrentSynchronizationContext());
             weather.Changed += delegate { if (!disposed && panel.IsOpen) panel.Refresh(PanelNow()); };
-            history = new UsageHistory(Paths.UsageHistoryFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
+            history = new UsageHistory(Paths.UsageHistoryFile, Paths.UsageDetailFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
             history.Changed += delegate { Guard("usage", ShowUsageIfOpen); };
             samples = SampleStore.Load(Paths.UsageSamplesFile);
             music = new MusicModule(new WindowsMusicSource(), TaskScheduler.FromCurrentSynchronizationContext());
@@ -284,6 +287,7 @@ namespace Capsule
             panel.View.MonthClicked += delegate { Guard("month", OpenMonth); };
             panel.View.UsageClicked += delegate { Guard("usage", OpenUsage); };
             panel.View.Usage.PeriodChosen += delegate(UsagePeriod p) { Guard("usage", delegate { usagePeriod = p; usageOffset = 0; ShowUsage(); }); };
+            panel.View.Usage.GroupingChosen += delegate(bool byProject) { Guard("usage", delegate { SetUsageGrouping(byProject); }); };
             panel.View.Usage.PreviousClicked += delegate { Guard("usage", delegate { usageOffset--; ShowUsage(); }); };
             panel.View.Usage.NextClicked += delegate { Guard("usage", delegate { if (usageOffset < 0) usageOffset++; ShowUsage(); }); };
             panel.View.MonthClosed += delegate { calendar.CloseMonth(); };
@@ -386,6 +390,7 @@ namespace Capsule
             lastActivity = activity;
             prompts.SessionsChanged(sessions.All);   // a session that moved on was answered in the app: Capsule lets go
             PlayCue(cues.Next(ClaudeSessionsForCues()));
+            CheckFinishedAlerts();
             UpdateTally();
             Render();
         }
@@ -540,6 +545,7 @@ namespace Capsule
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
             PlayCue(cues.Next(ClaudeSessionsForCues()));
+            CheckFinishedAlerts();
             tally.Subscription = claude.Current == null || claude.Current.Plan != "" || claude.Current.Status != "signin";   // signed in to a plan, or not known yet
             UpdateTally();
             Guard("limit resets", delegate { CheckLimitResets(now); });
@@ -1315,6 +1321,15 @@ namespace Capsule
             }
         }
 
+        void CheckFinishedAlerts()
+        {
+            foreach (string text in finishedAlerts.Check(sessions.All, config.FinishedAlerts && sessions.HooksConnected, Quiet, ClaudeApp.IsInFront))
+            {
+                tray.Balloon("Capsule", text, OpenAlertPanel);
+                Log.Info("sessions: finished alert shown");
+            }
+        }
+
         Forecast PaceFor(Reading r, LimitWindow w) { return Pace.Shown(samples, r, w, Clock.NowMs()); }
 
         void OpenUsage()
@@ -1324,9 +1339,18 @@ namespace Capsule
             ShowUsage();
         }
 
+        void SetUsageGrouping(bool byProject)
+        {
+            if (config.UsageByProject == byProject) return;
+            config.UsageByProject = byProject;
+            if (!config.Save(Paths.ConfigFile)) Log.Info("usage: couldn't write config.json; the choice holds only until Capsule restarts");
+            ShowUsage();
+        }
+
         void ShowUsage()
         {
-            UsageModel m = UsageModel.Build(history.Snapshot, usagePeriod, usageOffset, DateTime.Today, CultureInfo.CurrentCulture, !Theme.Current.Light);
+            UsageModel m = UsageModel.Build(history.Snapshot, history.DetailSnapshot, usagePeriod, usageOffset, DateTime.Today,
+                CultureInfo.CurrentCulture, !Theme.Current.Light, config.UsageByProject);
             long now = Clock.NowMs();
             foreach (UsageModule u in new[] { claude, codex })
             {
@@ -1703,6 +1727,7 @@ namespace Capsule
             });
             items.Add(new MenuItemSpec { Id = CmdLimitAlerts, Text = "Limit alerts", Checked = config.LimitAlerts });
             items.Add(new MenuItemSpec { Id = CmdSounds, Text = "Sounds", Checked = config.Sounds });
+            items.Add(new MenuItemSpec { Id = CmdFinishedAlerts, Text = "Notify when long turns finish", Checked = config.FinishedAlerts });
             if (config.RingOn("focus")) items.Add(new MenuItemSpec { Id = CmdFocus, Text = focus.Active ? "Stop focus" : "Start focus" });
             if (updates.CanCheck) items.Add(new MenuItemSpec { Id = CmdCheckUpdates, Text = "Check for updates", Checked = config.CheckUpdates });   // a release build only
             items.Add(new MenuItemSpec { Separator = true });
@@ -1762,6 +1787,10 @@ namespace Capsule
                     break;
                 case CmdLimitAlerts:
                     config.LimitAlerts = !config.LimitAlerts;
+                    config.Save(Paths.ConfigFile);
+                    break;
+                case CmdFinishedAlerts:
+                    config.FinishedAlerts = !config.FinishedAlerts;
                     config.Save(Paths.ConfigFile);
                     break;
                 case CmdQuit:

@@ -251,16 +251,19 @@ reaches the capsule; choose **Auto** (or another mode that asks) next to the mes
 
 Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
 
-<img src="docs/images/usage.png" width="340" alt="The Usage page: two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 48M tokens, a heatmap of the last 26 weeks in shades of orange with today ringed, the figures under it (per active day, active days, current and longest streak, most active day, favourite model), and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
+<img src="docs/images/usage.png" width="340" alt="The Usage page with pace lines, the token total and estimated API value, a 26-week heatmap, activity figures, and the By model / By project switch above the legend">
 
 - **Pace lines** at the top: how each ring's limit is going, such as "Claude · 5-hour · 73% · full at 4:10 PM".
 - **A heatmap** of the last 26 weeks: a square a day, a column a week, in four shades of orange by how busy the day
-  was. Today is ringed. Hover a day for its tokens and biggest models; ‹ › looks back another 26 weeks.
+  was. Today is ringed. Hover a day for its tokens and biggest models or projects; ‹ › looks back another 26 weeks.
 - **The figures** under it: tokens per active day, active days, your current and longest streak, your most active day
   and your favourite model.
 - **Tokens without cache reads:** input, output and cache writes. Claude re-reads its cached context every turn,
   which would bury everything else, so **Details** shows cache reads apart, with the busiest day and the daily average.
-- **The legend** totals each model over the period shown, biggest first. Claude and Codex count together.
+- **By model / By project** changes the legend, day hover, and **Details**. Projects are ranked by tokens.
+  Claude and Codex count together. Capsule can show projects only for logs it has read.
+- **API value** estimates the USD value of the tokens at listed API prices. Hover the amount to see the split by
+  model or project. Your plan is billed differently.
 - **Where the numbers come from:** the logs Claude Code and Codex already write on this PC, archived Codex chats
   included. A turn copied into a forked chat counts once. Claude Code deletes its logs after 30 days, so the first
   launch counts the last 30 days or so; from then on Capsule keeps its own history. Claude Code inside the Claude
@@ -286,6 +289,10 @@ Windows notifications from Capsule's tray icon, each once per limit window. Clic
   hour-long cache, once per reply. An answer after that re-reads the whole conversation.)
 
 Untick **Limit alerts** in the menu to turn them off. While you focus, they wait for your break.
+
+Turn on **Notify when long turns finish** in the menu to get a notice when a Claude Code turn takes at least five
+minutes. Click it to open the panel. The switch starts off. During Focus or while Claude is in front, Capsule skips
+the notice.
 
 ## The panel's tiles
 
@@ -562,8 +569,9 @@ redirects, so a request can't end up anywhere else.
 - Capsule reads the end of Codex's recent session logs every couple of seconds to see when a turn starts and ends,
   and scans Codex's day folders every 15 seconds for logs written recently. Nothing from them is kept, shown or logged.
 - **Usage history** reads only what's new in Claude Code's and Codex's logs every 5 minutes, and keeps the model, the
-  time and the token counts per day in `usage-history.json`. Prompts, replies, file paths and project names are never
-  kept, shown or logged; each log is known only by a hash.
+  time and the token counts per day in `usage-history.json`. It keeps project folder names and token breakdowns on
+  this PC in `usage-detail.json` to show usage by project. It never stores full paths, prompts, replies, or tool
+  inputs and outputs in either store. Project names are never logged or sent anywhere. Each log is known only by a hash.
 - To renew an expiring sign-in, Capsule can run `claude -p` with no input, which may start your Claude Code hooks,
   plugins and MCP servers. Turn off **Renew Claude sign-in in the background** in Settings to stop it; then open Claude
   Code when your sign-in expires.

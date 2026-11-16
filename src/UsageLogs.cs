@@ -13,6 +13,9 @@ namespace Capsule
         public string Model = "";
         public long Tokens;
         public long CacheRead;
+        internal UsageParts Parts;
+        internal bool SplitCacheWrites;
+        internal string ProjectKey = "", ProjectName = "";
         public long Context;          // Claude: the reply's input, cache writes and cache reads, how full its window was
         public long CacheTtlMs;       // Claude: the cache lifetime its writes used (1 h or 5 min), or 0 when it doesn't say
     }
@@ -25,21 +28,26 @@ namespace Capsule
         public long[] Totals;     // input, cached input, output; null before the first count
         public string Lineage = "";   // the root chat's id from the log's own session_meta: shared by a chat and its forks
         public string Fallback = "";  // set by the scanner: this log's own key, for a log without session_meta
+        internal bool ProjectMetaSeen;
+        internal string ProjectKey = "", ProjectName = "";
 
         public CodexFileState Clone()
         {
-            return new CodexFileState { Model = Model, Totals = Totals == null ? null : (long[])Totals.Clone(), Lineage = Lineage, Fallback = Fallback };
+            return new CodexFileState { Model = Model, Totals = Totals == null ? null : (long[])Totals.Clone(),
+                Lineage = Lineage, Fallback = Fallback, ProjectMetaSeen = ProjectMetaSeen, ProjectKey = ProjectKey, ProjectName = ProjectName };
         }
     }
 
     // Reads token use out of single log lines (spec: usage history §1). Never touches the disk, and never keeps any
-    // text from a line except the model name and the reply key.
+    // text from a line except model names, reply keys and project folder names. Full paths are only hashed.
     public static class UsageLogs
     {
         public const string CodexKeyPrefix = "cx:";
 
         // A Claude Code transcript line: an assistant reply with usage, or null.
-        public static UsageEntry ParseClaude(string line)
+        public static UsageEntry ParseClaude(string line) { return ParseClaude(line, true); }
+
+        internal static UsageEntry ParseClaude(string line, bool detail)
         {
             if (string.IsNullOrEmpty(line) || line.IndexOf("\"usage\"", StringComparison.Ordinal) < 0 || line.IndexOf("\"assistant\"", StringComparison.Ordinal) < 0) return null;
             object o = Json.TryParse(line);
@@ -52,23 +60,34 @@ namespace Capsule
             long at = Time(Json.Str(Json.Get(o, "timestamp")));
             if (at <= 0) return null;
             string request = Json.Str(Json.Get(o, "requestId"));
-            return new UsageEntry
+            long input = N(usage, "input_tokens"), writes = N(usage, "cache_creation_input_tokens");
+            long reads = N(usage, "cache_read_input_tokens"), output = N(usage, "output_tokens");
+            object creation = Json.Get(usage, "cache_creation");
+            long write5 = N(creation, "ephemeral_5m_input_tokens"), write1 = N(creation, "ephemeral_1h_input_tokens");
+            bool split = Json.Num(Json.Get(creation, "ephemeral_5m_input_tokens")).HasValue ||
+                Json.Num(Json.Get(creation, "ephemeral_1h_input_tokens")).HasValue;
+            var entry = new UsageEntry
             {
                 Key = string.IsNullOrEmpty(request) ? id : id + ":" + request,
                 AtMs = at,
                 Model = model,
-                Tokens = N(usage, "input_tokens") + N(usage, "cache_creation_input_tokens") + N(usage, "output_tokens"),
-                CacheRead = N(usage, "cache_read_input_tokens"),
-                Context = N(usage, "input_tokens") + N(usage, "cache_creation_input_tokens") + N(usage, "cache_read_input_tokens"),
-                CacheTtlMs = N(Json.Get(usage, "cache_creation"), "ephemeral_1h_input_tokens") > 0 ? SessionContext.HourMs
-                    : N(Json.Get(usage, "cache_creation"), "ephemeral_5m_input_tokens") > 0 ? SessionContext.FiveMinutesMs : 0,
+                Tokens = input + writes + output,
+                CacheRead = reads,
+                Context = input + writes + reads,
+                CacheTtlMs = write1 > 0 ? SessionContext.HourMs : write5 > 0 ? SessionContext.FiveMinutesMs : 0,
+                Parts = new UsageParts { Input = input, Write5m = split ? write5 : writes, Write1h = write1, CacheRead = reads, Output = output },
+                SplitCacheWrites = split,
             };
+            if (detail) Project(Json.Str(Json.Get(o, "cwd")), out entry.ProjectKey, out entry.ProjectName);
+            return entry;
         }
 
         // A Codex rollout line. A session_meta line names the log's chat family; a turn_context line updates the file's
         // model; both return null. A token_count line with a new running total returns the turn's use. Everything else
         // returns null.
-        public static UsageEntry ParseCodex(string line, CodexFileState state)
+        public static UsageEntry ParseCodex(string line, CodexFileState state) { return ParseCodex(line, state, true); }
+
+        internal static UsageEntry ParseCodex(string line, CodexFileState state, bool detail)
         {
             if (string.IsNullOrEmpty(line)) return null;
             bool context = line.IndexOf("\"turn_context\"", StringComparison.Ordinal) >= 0;
@@ -81,9 +100,14 @@ namespace Capsule
                 // Only the log's own, first session_meta: a fork can carry a copy of its parent's further down. Codex's
                 // session_id is the root chat's id, the same in every fork; older logs without it fall back to the fork's
                 // parent, then to the chat's own id.
-                if (state.Lineage != "") return null;
                 object p = Json.Get(o, "payload");
-                state.Lineage = Json.Str(Json.Get(p, "session_id")) ?? Json.Str(Json.Get(p, "forked_from_id")) ?? Json.Str(Json.Get(p, "id")) ?? "";
+                if (detail && !state.ProjectMetaSeen)
+                {
+                    Project(Json.Str(Json.Get(p, "cwd")), out state.ProjectKey, out state.ProjectName);
+                    state.ProjectMetaSeen = true;
+                }
+                if (state.Lineage == "")
+                    state.Lineage = Json.Str(Json.Get(p, "session_id")) ?? Json.Str(Json.Get(p, "forked_from_id")) ?? Json.Str(Json.Get(p, "id")) ?? "";
                 return null;
             }
             if (type == "turn_context")
@@ -103,6 +127,9 @@ namespace Capsule
             long at = Time(Json.Str(Json.Get(o, "timestamp")));
             if (at <= 0) return null;
             long cached = N(last, "cached_input_tokens");
+            long input = Math.Max(0, N(last, "input_tokens") - cached);
+            // Codex copies Responses API output_tokens, which already includes reasoning_output_tokens.
+            long output = N(last, "output_tokens");
             return new UsageEntry
             {
                 // The chat family and the running total name the turn: a fork's copy of it, in another log, has the same
@@ -110,9 +137,19 @@ namespace Capsule
                 Key = CodexKeyPrefix + (state.Lineage != "" ? state.Lineage : state.Fallback) + ":" + totals[0] + "." + totals[1] + "." + totals[2] + "." + reasoning + "." + all,
                 AtMs = at,
                 Model = state.Model == "" ? "codex" : state.Model,
-                Tokens = Math.Max(0, N(last, "input_tokens") - cached) + N(last, "output_tokens"),
+                Tokens = input + output,
                 CacheRead = cached,
+                Parts = new UsageParts { Input = input, CacheRead = cached, Output = output },
+                ProjectKey = state.ProjectKey,
+                ProjectName = state.ProjectName,
             };
+        }
+
+        static void Project(string cwd, out string key, out string name)
+        {
+            name = HookEvents.ProjectName(cwd);
+            if (name.Length == 2 && name[1] == ':') name = "";
+            key = name == "" ? "" : UsageScanner.Hash(cwd);
         }
 
         static long N(object obj, string key)
