@@ -190,7 +190,7 @@ namespace Capsule
                 new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "e", ProjectName = "moons", Input = 200000 },
                 new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "f", ProjectName = "harbor", Input = 100000 },
                 new UsageDetailRow { Day = day, Model = "unpriced-fixture", ProjectKey = "g", ProjectName = "park", Input = 50000 },
-                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "h", ProjectName = "sample", Input = 40000 },
+                new UsageDetailRow { Day = "2026-10-19", Model = sonnet, ProjectKey = "h", ProjectName = "sample", Input = 40000 },
                 new UsageDetailRow { Day = day, Model = sonnet, Input = 20000 },
                 new UsageDetailRow { Day = "2025-01-01", Model = opus, ProjectKey = "i", ProjectName = "old project", Input = 10000000 },
             });
@@ -211,6 +211,8 @@ namespace Capsule
                 "the day's hover shares the duplicate labels and shows its three biggest projects");
             TestRunner.Check(modelCells.First(c => c.Today).Tip.Contains("Opus 4.1"), "the model hover retains the model names");
             TestRunner.Check(!projectCells.First(c => c.Day == today.AddDays(-1)).Tip.Contains("\n"), "the legacy-only day has no project attribution");
+            TestRunner.Check(projectCells.First(c => c.Day == today.AddDays(-2)).Tip.Contains("\nsample · 40K"),
+                "the day names its biggest project even when that project is outside the period's top six");
 
             TestRunner.Eq("≈ $15.18 API value", byModel.ApiValue, "cache reads are priced and an out-of-period row and missing prices are excluded");
             TestRunner.Eq(byModel.ApiValue, byProject.ApiValue, "the estimate does not change with the grouping");

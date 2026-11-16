@@ -129,7 +129,7 @@ namespace Capsule
                 AddProjectRow(m.Legend, OtherProjectsName, Palette.Secondary, projects.Where(p => !kept.Contains(p.Key)).Sum(p => p.Value));
                 foreach (LegendRow row in m.Legend) m.Details.Add(row.Name + " · " + Format.Tokens(row.Tokens));
                 dayProjects = rows.Where(r => r.Tokens > 0).GroupBy(r => r.Day)
-                    .SelectMany(day => day.GroupBy(projectBucket).Select(g => new
+                    .SelectMany(day => day.GroupBy(r => projectNames[r.ProjectKey]).Select(g => new
                     {
                         Day = day.Key,
                         Row = new LegendRow { Name = g.Key, Tokens = g.Sum(r => r.Tokens) },

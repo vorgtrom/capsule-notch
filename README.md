@@ -251,7 +251,7 @@ reaches the capsule; choose **Auto** (or another mode that asks) next to the mes
 
 Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
 
-<img src="docs/images/usage.png" width="340" alt="The Usage page: two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 48M tokens, a heatmap of the last 26 weeks in shades of orange with today ringed, the figures under it (per active day, active days, current and longest streak, most active day, favourite model), and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
+<img src="docs/images/usage.png" width="340" alt="The Usage page with pace lines, the token total and estimated API value, a 26-week heatmap, activity figures, and the By model / By project switch above the legend">
 
 - **Pace lines** at the top: how each ring's limit is going, such as "Claude · 5-hour · 73% · full at 4:10 PM".
 - **A heatmap** of the last 26 weeks: a square a day, a column a week, in four shades of orange by how busy the day

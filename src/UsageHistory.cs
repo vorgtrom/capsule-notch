@@ -413,17 +413,17 @@ namespace Capsule
             if (entry.Key != null && store.Seen.TryGetValue(entry.Key, out seen))
             {
                 if (IsCodexKey(entry.Key)) return;
-                UsageParts next = seen.Parts.Merged(entry.Parts, seen.Split, entry.SplitCacheWrites);
+                if (entry.SplitCacheWrites) seen.KnownWrite5m = Math.Max(seen.KnownWrite5m, entry.Parts.Write5m);
+                UsageParts next = seen.Parts.Merged(entry.Parts, seen.KnownWrite5m);
                 store.Add(seen.Day, seen.Model, seen.ProjectKey, seen.ProjectName, next.Minus(seen.Parts));
                 seen.Parts = next;
-                seen.Split |= entry.SplitCacheWrites;
                 return;
             }
             string day = Day(entry.AtMs);
             store.Add(day, entry.Model, entry.ProjectKey, entry.ProjectName, entry.Parts);
             if (entry.Key != null)
                 store.Seen[entry.Key] = new SeenUsageDetail { Day = day, Model = entry.Model, ProjectKey = entry.ProjectKey,
-                    ProjectName = entry.ProjectName, AtMs = entry.AtMs, Split = entry.SplitCacheWrites, Parts = entry.Parts };
+                    ProjectName = entry.ProjectName, AtMs = entry.AtMs, KnownWrite5m = entry.SplitCacheWrites ? entry.Parts.Write5m : 0, Parts = entry.Parts };
         }
 
         // A repeated Claude reply tops up to its largest numbers; a Codex turn already counted (a fork's copy) adds nothing;

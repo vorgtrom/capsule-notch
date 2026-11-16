@@ -14,13 +14,12 @@ namespace Capsule
                 Write1h = Write1h - before.Write1h, CacheRead = CacheRead - before.CacheRead, Output = Output - before.Output };
         }
 
-        internal UsageParts Merged(UsageParts next, bool splitBefore, bool splitNext)
+        internal UsageParts Merged(UsageParts next, long knownWrite5m)
         {
             long write1 = Math.Max(Write1h, next.Write1h);
-            long write5 = splitBefore == splitNext ? Math.Max(Write5m, next.Write5m) : splitBefore ? Write5m : next.Write5m;
             // An earlier unsplit cache count can be reclassified once the log supplies the durations.
             long writes = Math.Max(Write5m + Write1h, next.Write5m + next.Write1h);
-            return new UsageParts { Input = Math.Max(Input, next.Input), Write5m = Math.Max(write5, writes - write1),
+            return new UsageParts { Input = Math.Max(Input, next.Input), Write5m = Math.Max(knownWrite5m, writes - write1),
                 Write1h = write1, CacheRead = Math.Max(CacheRead, next.CacheRead), Output = Math.Max(Output, next.Output) };
         }
 
@@ -37,8 +36,7 @@ namespace Capsule
     internal sealed class SeenUsageDetail
     {
         internal string Day, Model, ProjectKey, ProjectName;
-        internal long AtMs;
-        internal bool Split;
+        internal long AtMs, KnownWrite5m;
         internal UsageParts Parts;
         internal SeenUsageDetail Clone() { return (SeenUsageDetail)MemberwiseClone(); }
     }
@@ -90,7 +88,7 @@ namespace Capsule
             {
                 SeenUsageDetail s = pair.Value;
                 seen[pair.Key] = new object[] { s.Day, s.Model, s.ProjectKey, s.ProjectName,
-                    s.Parts.Input, s.Parts.Write5m, s.Parts.Write1h, s.Parts.CacheRead, s.Parts.Output, s.AtMs, s.Split };
+                    s.Parts.Input, s.Parts.Write5m, s.Parts.Write1h, s.Parts.CacheRead, s.Parts.Output, s.AtMs, s.KnownWrite5m };
             }
             return new Dictionary<string, object> { { "version", 1 }, { "backfill_done", BackfillDone },
                 { "last_scan_start", LastScanStartMs }, { "rows", rows }, { "files", FileIndex(true) }, { "seen", seen } };
@@ -113,7 +111,7 @@ namespace Capsule
                 object[] s = Json.Arr(pair.Value);
                 if (s != null && s.Length == 11)
                     store.Seen[pair.Key] = new SeenUsageDetail { Day = S(s[0]), Model = S(s[1]), ProjectKey = S(s[2]),
-                        ProjectName = S(s[3]), Parts = Parts(s), AtMs = L(s[9]), Split = s[10] as bool? ?? false };
+                        ProjectName = S(s[3]), Parts = Parts(s), AtMs = L(s[9]), KnownWrite5m = L(s[10]) };
             }
             return store;
         }

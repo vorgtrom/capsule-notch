@@ -398,7 +398,7 @@ namespace Capsule
             usage["cache_read_input_tokens"] = 25;
             if (split)
                 usage["cache_creation"] = new Dictionary<string, object> { { "ephemeral_5m_input_tokens", write5 }, { "ephemeral_1h_input_tokens", write1 } };
-            return Json.Write(root);
+            return Json.Write(root).Replace("\n", "").Replace("\r", "");
         }
 
         static void BackfillsDetailsWithoutRecountingHistory()
@@ -447,6 +447,12 @@ namespace Capsule
             TestRunner.Check(row.Input == 10 && row.Write5m == 20 && row.Write1h == 80 && row.CacheRead == 25 && row.Output == 20,
                 "the larger Claude reply tops up output and corrects an unsplit cache bucket without double-counting");
             TestRunner.Eq(130L, row.Tokens, "project tokens leave cache reads apart");
+
+            File.AppendAllText(s.ClaudeLog, ProjectReply("same", oldest, a, 150, 0, false, 20) + "\n" +
+                ProjectReply("same", oldest, a, 20, 130, true, 20) + "\n");
+            UsageScanner.Scan(history, detail, s.Logs(), Now + 120000, UsageScanner.BudgetBytes, out changed);
+            TestRunner.Check(row.Write5m == 20 && row.Write1h == 130 && row.Tokens == 180,
+                "a partial aggregate can later resolve to longer cache writes without counting twice");
 
             string json = Json.Write(detail.ToJson());
             TestRunner.Check(!json.Contains("private-parent") && !json.Contains("do not retain") && !json.Contains("session-one"),
