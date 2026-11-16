@@ -40,10 +40,13 @@ namespace Capsule
     {
         public const int LegendMax = 6;
         public const string OtherName = "Other";
+        const string OtherProjectsName = "Other projects";
 
         public UsagePeriod Period;
         public string Title = "";
-        public bool CanNext;
+        public bool CanNext, ByProject;
+        public string ApiValue = "", ApiValueTip = "";
+        public bool MissingPrices;
         public long Total;
         public List<UsageBar> Bars = new List<UsageBar>();
         public List<LegendRow> Legend = new List<LegendRow>();
@@ -56,7 +59,13 @@ namespace Capsule
         // offset: 0 for the current period, -1 for the one before, and so on.
         public static UsageModel Build(UsageStore store, UsagePeriod period, int offset, DateTime today, CultureInfo culture, bool dark)
         {
-            var m = new UsageModel { Period = period, CanNext = offset < 0 };
+            return Build(store, null, period, offset, today, culture, dark, false);
+        }
+
+        public static UsageModel Build(UsageStore store, UsageDetailStore detail, UsagePeriod period, int offset, DateTime today, CultureInfo culture, bool dark, bool byProject)
+        {
+            byProject = byProject && period == UsagePeriod.Heat;
+            var m = new UsageModel { Period = period, CanNext = offset < 0, ByProject = byProject };
             today = today.Date;
             DateTime from, to;   // inclusive days
             Range(period, offset, today, culture, out from, out to);
@@ -90,12 +99,44 @@ namespace Capsule
             List<string> ordered = perModel.Where(p => p.Value > 0).OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key).ToList();
             List<string> shown = ordered.Take(ordered.Count > LegendMax ? LegendMax - 1 : LegendMax).ToList();
             Dictionary<string, string> colors = Colors(shown, dark);
-            foreach (string model in shown) m.Legend.Add(new LegendRow { Name = ModelName(model), Color = colors[model], Tokens = perModel[model] });
-            if (ordered.Count > shown.Count)
-                m.Legend.Add(new LegendRow { Name = OtherName, Color = Palette.Secondary, Tokens = ordered.Skip(shown.Count).Sum(k => perModel[k]) });
+            if (!byProject)
+            {
+                foreach (string model in shown) m.Legend.Add(new LegendRow { Name = ModelName(model), Color = colors[model], Tokens = perModel[model] });
+                if (ordered.Count > shown.Count)
+                    m.Legend.Add(new LegendRow { Name = OtherName, Color = Palette.Secondary, Tokens = ordered.Skip(shown.Count).Sum(k => perModel[k]) });
+            }
 
             // Bars: a day each for a week or a month, a month each for a year. The heatmap has its own cells instead.
-            if (period == UsagePeriod.Heat) m.Heat = HeatModel.Build(store, from, to, today, culture);
+            string firstDay = DayKey(from), lastDay = DayKey(to);
+            var rows = detail == null ? new List<UsageDetailRow>() : detail.Rows
+                .Where(r => string.CompareOrdinal(r.Day, firstDay) >= 0 && string.CompareOrdinal(r.Day, lastDay) <= 0).ToList();
+            Func<UsageDetailRow, string> projectBucket = null;
+            ILookup<string, LegendRow> dayProjects = null;
+            if (byProject)
+            {
+                var projects = rows.GroupBy(r => r.ProjectKey).ToDictionary(g => g.Key, g => g.Sum(r => r.Tokens));
+                var ranked = projects.Where(p => p.Key != "").OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal)
+                    .Take(LegendMax).ToList();
+                var projectNames = ProjectNames(detail == null ? rows : detail.Rows);
+                var kept = new HashSet<string>(ranked.Select(p => p.Key), StringComparer.Ordinal) { "" };
+                projectBucket = r => kept.Contains(r.ProjectKey) ? projectNames[r.ProjectKey] : OtherProjectsName;
+
+                for (int i = 0; i < ranked.Count; i++)
+                    AddProjectRow(m.Legend, projectNames[ranked[i].Key], ProjectColors[i], ranked[i].Value);
+                long other;
+                if (projects.TryGetValue("", out other)) AddProjectRow(m.Legend, OtherName, Palette.Secondary, other);
+                m.Legend = m.Legend.OrderByDescending(p => p.Tokens).ToList();
+                AddProjectRow(m.Legend, OtherProjectsName, Palette.Secondary, projects.Where(p => !kept.Contains(p.Key)).Sum(p => p.Value));
+                foreach (LegendRow row in m.Legend) m.Details.Add(row.Name + " · " + Format.Tokens(row.Tokens));
+                dayProjects = rows.Where(r => r.Tokens > 0).GroupBy(r => r.Day)
+                    .SelectMany(day => day.GroupBy(projectBucket).Select(g => new
+                    {
+                        Day = day.Key,
+                        Row = new LegendRow { Name = g.Key, Tokens = g.Sum(r => r.Tokens) },
+                    })).ToLookup(p => p.Day, p => p.Row);
+            }
+            m.SetApiValue(rows, projectBucket, culture);
+            if (period == UsagePeriod.Heat) m.Heat = HeatModel.Build(store, from, to, today, culture, dayProjects);
             else if (period == UsagePeriod.Year)
                 for (int i = 0; i < 12; i++)
                 {
@@ -119,12 +160,13 @@ namespace Capsule
                     m.Bars.Add(bar);
                 }
 
-            foreach (string tool in new[] { "Claude", "Codex" })
-            {
-                long[] t;
-                if (perTool.TryGetValue(tool, out t) && t[0] + t[1] > 0)
-                    m.Details.Add(tool + " " + Format.Tokens(t[0]) + " · " + Format.Tokens(t[1]) + (tool == "Claude" ? " cache reads" : " cached"));
-            }
+            if (!byProject)
+                foreach (string tool in new[] { "Claude", "Codex" })
+                {
+                    long[] t;
+                    if (perTool.TryGetValue(tool, out t) && t[0] + t[1] > 0)
+                        m.Details.Add(tool + " " + Format.Tokens(t[0]) + " · " + Format.Tokens(t[1]) + (tool == "Claude" ? " cache reads" : " cached"));
+                }
             if (busiest > 0) m.Details.Add("Busiest day: " + busiestDay.ToString("ddd, MMM d", culture) + " · " + Format.Tokens(busiest));
             DateTime lastCounted = to < today ? to : today;
             int elapsed = Math.Max(1, (int)(lastCounted - from).TotalDays + 1);
@@ -137,6 +179,58 @@ namespace Capsule
             }
             return m;
         }
+
+        static readonly string[] ProjectColors = { "#0A84FF", "#BF5AF2", "#40C8E0", "#FF9F0A", "#30D158", "#FF375F" };
+
+        static void AddProjectRow(List<LegendRow> legend, string name, string color, long tokens)
+        {
+            if (tokens > 0) legend.Add(new LegendRow { Name = name, Color = color, Tokens = tokens });
+        }
+
+        // Reserve literal folder names before adding suffixes, so "demo (2)" cannot collide with a second "demo".
+        static Dictionary<string, string> ProjectNames(IEnumerable<UsageDetailRow> rows)
+        {
+            var names = new Dictionary<string, string>(StringComparer.Ordinal) { { "", OtherName } };
+            var baseNames = rows.Where(r => r.ProjectKey != "").GroupBy(r => r.ProjectKey, StringComparer.Ordinal)
+                .Select(g => new { Key = g.Key, Name = g.Select(r => r.ProjectName).Where(n => n != "").OrderBy(n => n, StringComparer.Ordinal).FirstOrDefault() ?? OtherName })
+                .OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+            var reserved = new HashSet<string>(baseNames.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { OtherName, OtherProjectsName };
+            foreach (var project in baseNames)
+            {
+                string name = project.Name;
+                if (!used.Add(name))
+                {
+                    int suffix = 2;
+                    do { name = project.Name + " (" + (suffix++).ToString(CultureInfo.InvariantCulture) + ")"; }
+                    while (reserved.Contains(name) || !used.Add(name));
+                }
+                names.Add(project.Key, name);
+            }
+            return names;
+        }
+
+        void SetApiValue(List<UsageDetailRow> rows, Func<UsageDetailRow, string> projectBucket, CultureInfo culture)
+        {
+            if (rows.Count == 0) return;
+            var prices = rows.Select(r => new
+            {
+                Name = projectBucket == null ? ModelName(r.Model) : projectBucket(r),
+                Value = Prices.Estimate(r.Model, r.Input, r.Write5m, r.Write1h, r.CacheRead, r.Output),
+            }).ToList();
+            MissingPrices = prices.Any(p => !p.Value.HasValue);
+            var usd = (NumberFormatInfo)culture.NumberFormat.Clone();
+            usd.CurrencySymbol = "$";
+            usd.CurrencyDecimalDigits = 2;
+            ApiValue = "≈ " + prices.Sum(p => p.Value ?? 0m).ToString("C", usd) + " API value";
+            var split = prices.Where(p => p.Value.HasValue).GroupBy(p => p.Name, StringComparer.Ordinal)
+                .Select(g => new { Name = g.Key, Value = g.Sum(p => p.Value.Value) })
+                .OrderByDescending(p => p.Value).ThenBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => p.Name + " · " + p.Value.ToString("C", usd));
+            ApiValueTip = string.Join("\n", split.Concat(new[] { "Estimate at API prices. Your plan is billed differently." }));
+        }
+
+        static string DayKey(DateTime day) { return day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); }
 
         static UsageBar MakeBar(UsageStore store, DateTime first, DateTime last, List<string> shown, Dictionary<string, string> colors, CultureInfo culture)
         {
@@ -165,7 +259,7 @@ namespace Capsule
         static IEnumerable<KeyValuePair<string, long[]>> DayModels(UsageStore store, DateTime d)
         {
             Dictionary<string, long[]> models;
-            return store.Days.TryGetValue(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), out models) ? models : Enumerable.Empty<KeyValuePair<string, long[]>>();
+            return store.Days.TryGetValue(DayKey(d), out models) ? models : Enumerable.Empty<KeyValuePair<string, long[]>>();
         }
 
         public static void Range(UsagePeriod period, int offset, DateTime today, CultureInfo culture, out DateTime from, out DateTime to)

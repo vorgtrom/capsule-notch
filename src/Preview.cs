@@ -193,6 +193,11 @@ namespace Capsule
         {
             DateTime saturday = DateTime.Today.AddDays(6 - (int)DateTime.Today.DayOfWeek);
             var store = new UsageStore { BackfillDone = true };
+            var detail = new UsageDetailStore();
+            string[] projects = { "moonbase-demo", "lantern-demo", "atlas-demo", "orchard-demo", "moonbase-demo", "harbor-demo", "lilac-demo", "tundra-demo" };
+            // Some projects have more activity. Two independent folders have the same display name.
+            int[] projectMix = { 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 4, 4, 4, 4, 2, 2, 2, 3, 3, 5, 5, 6, 7 };
+            var projectRng = new Random(11);
             long[][] week =
             {
                 new long[] { 60000, 40000, 20000, 15000 },   // Sun: Opus, Sonnet, GPT-5 Codex, Haiku
@@ -204,9 +209,19 @@ namespace Capsule
                 new long[] { 90000, 50000, 40000, 20000 },
             };
             string[] models = { "claude-opus-4-1-20250805", "claude-sonnet-4-5-20250929", "gpt-5-codex", "claude-haiku-4-5-20251001" };
+            Action<DateTime, int, int, long, long> add = (day, i, project, tokens, cacheRead) =>
+            {
+                string date = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                store.Add(date, models[i], tokens, cacheRead);
+                detail.Rows.Add(new UsageDetailRow
+                {
+                    Day = date, Model = models[i], ProjectKey = project.ToString(CultureInfo.InvariantCulture),
+                    ProjectName = projects[project], Input = tokens - tokens / 4, Output = tokens / 4, CacheRead = cacheRead,
+                });
+            };
             for (int d = 0; d < 7; d++)
                 for (int i = 0; i < models.Length; i++)
-                    store.Add(saturday.AddDays(d - 6).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[i], week[d][i], week[d][i] * 30);
+                    add(saturday.AddDays(d - 6), i, (i + d) % projects.Length, week[d][i], week[d][i] * 30);
             // And a made-up half-year before it for the heatmap: busier on weekdays, quieter at weekends, a few days off.
             var rng = new Random(7);
             for (int d = 7; d < 7 * HeatModel.Weeks; d++)
@@ -216,18 +231,21 @@ namespace Capsule
                 if (rng.NextDouble() < (weekend ? 0.55 : 0.12)) continue;
                 double scale = (weekend ? 0.35 : 1.0) * (0.25 + rng.NextDouble()) * (1 + 0.6 * Math.Sin(d / 9.0));
                 for (int i = 0; i < models.Length; i++)
-                    store.Add(day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), models[i], (long)(week[3][i] * scale), 0);
+                    add(day, i, projectMix[projectRng.Next(projectMix.Length)], (long)(week[3][i] * scale), 0);
             }
             DateTime wednesday = saturday.AddDays(-3);
-            UsageModel m = UsageModel.Build(store, UsagePeriod.Heat, 0, wednesday, en, !Theme.Current.Light);
-            m.Pace.Add(new PaceLine { Text = "Claude · 5-hour · 73% · full at 4:10 PM", Warn = true });
-            m.Pace.Add(new PaceLine { Text = "Codex · 5-hour · 21% · about 40% at reset" });
-            var view = new PanelView();
-            view.ShowUsage(m);
-            view.Relayout();
-            var host = new Grid { Background = NotchView.Brush(Wallpaper) };
-            host.Children.Add(view);
-            SavePng(host, Path.Combine(dir, "usage" + suffix + ".png"));
+            foreach (bool byProject in suffix == "" ? new[] { false, true } : new[] { false })
+            {
+                UsageModel m = UsageModel.Build(store, detail, UsagePeriod.Heat, 0, wednesday, en, !Theme.Current.Light, byProject);
+                m.Pace.Add(new PaceLine { Text = "Claude · 5-hour · 73% · full at 4:10 PM", Warn = true });
+                m.Pace.Add(new PaceLine { Text = "Codex · 5-hour · 21% · about 40% at reset" });
+                var view = new PanelView();
+                view.ShowUsage(m);
+                view.Relayout();
+                var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+                host.Children.Add(view);
+                SavePng(host, Path.Combine(dir, "usage" + (byProject ? "-project" : suffix) + ".png"));
+            }
         }
 
         // The month page (month spec §2): the month with today picked, then with + Add event's form open, then with a

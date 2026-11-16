@@ -287,6 +287,7 @@ namespace Capsule
             panel.View.MonthClicked += delegate { Guard("month", OpenMonth); };
             panel.View.UsageClicked += delegate { Guard("usage", OpenUsage); };
             panel.View.Usage.PeriodChosen += delegate(UsagePeriod p) { Guard("usage", delegate { usagePeriod = p; usageOffset = 0; ShowUsage(); }); };
+            panel.View.Usage.GroupingChosen += delegate(bool byProject) { Guard("usage", delegate { SetUsageGrouping(byProject); }); };
             panel.View.Usage.PreviousClicked += delegate { Guard("usage", delegate { usageOffset--; ShowUsage(); }); };
             panel.View.Usage.NextClicked += delegate { Guard("usage", delegate { if (usageOffset < 0) usageOffset++; ShowUsage(); }); };
             panel.View.MonthClosed += delegate { calendar.CloseMonth(); };
@@ -1338,9 +1339,18 @@ namespace Capsule
             ShowUsage();
         }
 
+        void SetUsageGrouping(bool byProject)
+        {
+            if (config.UsageByProject == byProject) return;
+            config.UsageByProject = byProject;
+            if (!config.Save(Paths.ConfigFile)) Log.Info("usage: couldn't write config.json; the choice holds only until Capsule restarts");
+            ShowUsage();
+        }
+
         void ShowUsage()
         {
-            UsageModel m = UsageModel.Build(history.Snapshot, usagePeriod, usageOffset, DateTime.Today, CultureInfo.CurrentCulture, !Theme.Current.Light);
+            UsageModel m = UsageModel.Build(history.Snapshot, history.DetailSnapshot, usagePeriod, usageOffset, DateTime.Today,
+                CultureInfo.CurrentCulture, !Theme.Current.Light, config.UsageByProject);
             long now = Clock.NowMs();
             foreach (UsageModule u in new[] { claude, codex })
             {

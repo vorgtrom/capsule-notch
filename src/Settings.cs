@@ -20,6 +20,7 @@ namespace Capsule
         public string WeatherUnits = "automatic";
         public string GitHubRepo = "";   // one public owner/repo; "" means off
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
+        public bool UsageByProject;
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
         public bool FinishedAlerts;
         public bool RenewClaudeSignIn = true;
@@ -77,6 +78,7 @@ namespace Capsule
             c.WeatherUnits = WeatherApi.NormalizeUnits(Json.Str(Json.Get(o, "weather_units")));
             c.GitHubRepo = GitHubMonitor.NormalizeRepo(Json.Str(Json.Get(o, "github_repo")));
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
+            c.UsageByProject = Json.Get(o, "usage_by_project") as bool? ?? false;
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
             c.FinishedAlerts = Json.Get(o, "finished_alerts") as bool? ?? false;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
@@ -125,6 +127,7 @@ namespace Capsule
             d["weather_units"] = WeatherUnits;
             d["github_repo"] = GitHubMonitor.NormalizeRepo(GitHubRepo);
             d["check_updates"] = CheckUpdates;
+            d["usage_by_project"] = UsageByProject;
             d["limit_alerts"] = LimitAlerts;
             d["finished_alerts"] = FinishedAlerts;
             d["sounds"] = Sounds;

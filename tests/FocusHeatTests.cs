@@ -4,7 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
 namespace Capsule
@@ -24,6 +26,8 @@ namespace Capsule
             FocusCard();
             Heat();
             HeatPage();
+            ProjectGroupingAndApiValue();
+            UsageGroupingSetting();
         }
 
         static FocusTimer Back(FocusTimer t, long now, out FocusPhase? ended)
@@ -168,6 +172,94 @@ namespace Capsule
             TestRunner.Eq(26 * 7 - 3, squares.Count, "a square for every day so far this half-year");
             TestRunner.Check(squares.Count(r => r.Stroke != null) == 1, "today is ringed");
             TestRunner.Check(squares.All(r => r.Width < 12 && r.Width > 7), "squares fit the panel (" + squares[0].Width + ")");
+        }
+
+        static void ProjectGroupingAndApiValue()
+        {
+            DateTime today = new DateTime(2026, 10, 21);
+            const string sonnet = "claude-sonnet-4-5", opus = "claude-opus-4-1-20250805";
+            const string day = "2026-10-21";
+            var store = new UsageStore { BackfillDone = true };
+            var detail = new UsageDetailStore();
+            detail.Rows.AddRange(new[]
+            {
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "b", ProjectName = "demo", Input = 500000 },
+                new UsageDetailRow { Day = day, Model = opus, ProjectKey = "a", ProjectName = "demo", Input = 600000, CacheRead = 1000000 },
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "c", ProjectName = "farm", Input = 400000 },
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "d", ProjectName = "atlas", Input = 300000 },
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "e", ProjectName = "moons", Input = 200000 },
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "f", ProjectName = "harbor", Input = 100000 },
+                new UsageDetailRow { Day = day, Model = "unpriced-fixture", ProjectKey = "g", ProjectName = "park", Input = 50000 },
+                new UsageDetailRow { Day = day, Model = sonnet, ProjectKey = "h", ProjectName = "sample", Input = 40000 },
+                new UsageDetailRow { Day = day, Model = sonnet, Input = 20000 },
+                new UsageDetailRow { Day = "2025-01-01", Model = opus, ProjectKey = "i", ProjectName = "old project", Input = 10000000 },
+            });
+            foreach (UsageDetailRow row in detail.Rows) store.Add(row.Day, row.Model, row.Tokens, row.CacheRead);
+            store.Add("2026-10-20", sonnet, 1234, 0);   // The legacy history has a day whose logs are gone.
+
+            UsageModel byModel = UsageModel.Build(store, detail, UsagePeriod.Heat, 0, today, En, true, false);
+            UsageModel byProject = UsageModel.Build(store, detail, UsagePeriod.Heat, 0, today, En, true, true);
+            var modelCells = byModel.Heat.Columns.SelectMany(week => week).ToList();
+            var projectCells = byProject.Heat.Columns.SelectMany(week => week).ToList();
+            TestRunner.Check(modelCells.Select(c => c.Level).SequenceEqual(projectCells.Select(c => c.Level)), "the grouping cannot change heatmap shades");
+            TestRunner.Eq(byModel.Total, byProject.Total, "the grouping cannot change the legacy total");
+            TestRunner.Check(byProject.Legend.Select(p => p.Name).SequenceEqual(new[] { "demo", "demo (2)", "farm", "atlas", "moons", "harbor", "Other", "Other projects" }),
+                "the six named projects in token order, unknown cwd, then the rest");
+            TestRunner.Eq(90000L, byProject.Legend.Last().Tokens, "Other projects combines lower-ranked named projects");
+            TestRunner.Check(byProject.Details.Contains("demo (2) · 500K") && byProject.Details.Contains("Other projects · 90K"), "Details shows the same project totals as the legend");
+            TestRunner.Check(projectCells.First(c => c.Today).Tip.EndsWith("\ndemo · 600K\ndemo (2) · 500K\nfarm · 400K", StringComparison.Ordinal),
+                "the day's hover shares the duplicate labels and shows its three biggest projects");
+            TestRunner.Check(modelCells.First(c => c.Today).Tip.Contains("Opus 4.1"), "the model hover retains the model names");
+            TestRunner.Check(!projectCells.First(c => c.Day == today.AddDays(-1)).Tip.Contains("\n"), "the legacy-only day has no project attribution");
+
+            TestRunner.Eq("≈ $15.18 API value", byModel.ApiValue, "cache reads are priced and an out-of-period row and missing prices are excluded");
+            TestRunner.Eq(byModel.ApiValue, byProject.ApiValue, "the estimate does not change with the grouping");
+            TestRunner.Check(byProject.MissingPrices && byModel.MissingPrices, "an unpriced model triggers the hint in both modes");
+            TestRunner.Check(byModel.ApiValueTip.Contains("Opus 4.1 · $10.50") && byProject.ApiValueTip.Contains("demo · $10.50") &&
+                byProject.ApiValueTip.Contains("Other projects · $0.12") && byProject.ApiValueTip.EndsWith("Estimate at API prices. Your plan is billed differently.", StringComparison.Ordinal),
+                "the estimate hover follows the grouping and explains the billing difference");
+
+            UsageModel german = UsageModel.Build(store, detail, UsagePeriod.Heat, 0, today, CultureInfo.GetCultureInfo("de-DE"), true, false);
+            TestRunner.Check(german.ApiValue.Contains("15,18") && german.ApiValue.Contains("$"), "local currency formatting retains the USD symbol");
+
+            UsageModel noBreakdown = UsageModel.Build(store, detail, UsagePeriod.Heat, -1, today, En, true, true);
+            TestRunner.Check(noBreakdown.ApiValue == "" && !noBreakdown.MissingPrices, "a period with no breakdown has no estimate or hint");
+
+            var view = new UsageView();
+            view.Update(byModel);
+            Lay(view);
+            bool? picked = null;
+            view.GroupingChosen += delegate(bool project) { picked = project; };
+            var buttons = All(view).OfType<RadioButton>().ToDictionary(b => AutomationProperties.GetName(b));
+            TestRunner.Check(buttons["By model"].IsChecked == true && buttons["By project"].IsChecked == false, "the model switch has the model option selected");
+            buttons["By project"].RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            TestRunner.Eq(true, picked, "the project switch asks the controller for the project view");
+            view.Update(byProject);
+            Lay(view);
+            TestRunner.Check(All(view).OfType<RadioButton>().Any(b => b.IsChecked == true && AutomationProperties.GetName(b) == "By project"), "the project option is selected");
+            var estimate = All(view).OfType<TextBlock>().First(t => t.Text == byProject.ApiValue);
+            TestRunner.Eq(byProject.ApiValueTip, estimate.ToolTip as string, "the estimate has its group split on hover");
+            TestRunner.Check(Texts(view).Contains("Some models have no listed price"), "the estimate shows the missing-price hint");
+            Click(view, "Details");
+            Lay(view);
+            TestRunner.Check(Texts(view).Contains("demo (2) · 500K"), "expanded Details draws the project figures");
+
+            var legacyOnly = UsageModel.Build(store, new UsageDetailStore(), UsagePeriod.Heat, 0, today, En, true, true);
+            view.Update(legacyOnly);
+            Lay(view);
+            TestRunner.Check(Texts(view).Contains("No project breakdown for these dates.") && !Texts(view).Any(t => t.Contains("API value")), "legacy-only usage has a project status without an estimate");
+            TestRunner.Eq(2, All(view).OfType<RadioButton>().Count(), "the grouping switch works before a breakdown is available");
+        }
+
+        static void UsageGroupingSetting()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            var config = Config.Load(path);
+            TestRunner.Check(!config.UsageByProject, "the Usage page defaults to By model");
+            config.UsageByProject = true;
+            TestRunner.Check(config.Save(path) && Config.Load(path).UsageByProject, "By project survives a restart");
+            config.UsageByProject = false;
+            TestRunner.Check(config.Save(path) && !Config.Load(path).UsageByProject, "switching back to By model survives a restart");
         }
 
         static void Click(DependencyObject root, string text)
