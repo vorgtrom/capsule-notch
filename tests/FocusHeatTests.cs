@@ -226,6 +226,16 @@ namespace Capsule
 
             UsageModel noBreakdown = UsageModel.Build(store, detail, UsagePeriod.Heat, -1, today, En, true, true);
             TestRunner.Check(noBreakdown.ApiValue == "" && !noBreakdown.MissingPrices, "a period with no breakdown has no estimate or hint");
+            TestRunner.Eq("", byModel.DetailSince, "a breakdown from the period's first used day needs no start date");
+
+            store.Add("2026-09-01", sonnet, 5000, 0);   // older history whose logs are gone
+            UsageModel partial = UsageModel.Build(store, detail, UsagePeriod.Heat, 0, today, En, true, true);
+            TestRunner.Eq("Oct 19", partial.DetailSince, "the breakdown names where it starts when history reaches further back");
+            TestRunner.Eq("≈ $15.18 API value since Oct 19", partial.ApiValue, "the estimate says which days it covers");
+            var partialView = new UsageView();
+            partialView.Update(partial);
+            Lay(partialView);
+            TestRunner.Check(Texts(partialView).Contains("Projects since Oct 19"), "the project legend says which days it covers");
 
             var view = new UsageView();
             view.Update(byModel);
