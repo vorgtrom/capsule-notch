@@ -5,8 +5,8 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
-- **See whether hooks reach Capsule.** The tray menu shows the last event for Claude and Codex. The panel offers
-  help if a connected hook has been quiet for a day.
+- **See whether hooks reach Capsule.** The tray menu shows the last Claude event and Codex request.
+  The panel shows a hint when Claude has been quiet for a day or Codex still needs hook trust.
 - **Answer requests with the keyboard.** The panel shortcut opens a waiting request. Press Tab to select a button,
   Enter to activate it, or Esc to close the card.
 - **Choose how Claude renews its sign-in.** Settings can turn off background renewal. Capsule stops a renewal

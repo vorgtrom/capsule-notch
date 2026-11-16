@@ -53,7 +53,7 @@ namespace Capsule
         DispatcherTimer tick, screenCheck, openCard, closeCard, codexCheck, promptTick, musicTick, focusTick, clipRead, linkWatchEnd;
         bool refreshHooks = true;
         bool codexHooksConnected;
-        readonly HookHealth claudeHookHealth = new HookHealth(), codexHookHealth = new HookHealth();
+        readonly HookHealth claudeHookHealth = new HookHealth();
         readonly TimingCounter tickTime = new TimingCounter("tick"), screenTime = new TimingCounter("screenCheck"),
             codexTime = new TimingCounter("codexCheck"), musicTime = new TimingCounter("musicTick"),
             focusTime = new TimingCounter("focusTick"), promptTime = new TimingCounter("promptTick"),
@@ -113,7 +113,6 @@ namespace Capsule
             sessions.Changed += OnSessionsChanged;
             ReadClaudeHookHealth();
             codexHooksConnected = HookSetup.IsConnected(Paths.CodexHooks);
-            codexHookHealth.Reset(askForTrust: codexHooksConnected);
             nextTimingLog = Clock.NowMs() + TimingCounter.HourMs;
             claudeUsage = new ClaudeUsage(Paths.ClaudeCredentials, cachedClaude) { BackgroundRenewal = config.RenewClaudeSignIn };
             claude = new UsageModule(claudeUsage, () => sessions.Activity != null ? ClaudeActiveMs : ClaudeIdleMs);
@@ -365,6 +364,14 @@ namespace Capsule
             catch (Exception e) { Log.Error(what, e); }
         }
 
+        void SaveCodexHookHealth()
+        {
+            Guard("Codex hook health", delegate
+            {
+                if (!config.Save(Paths.ConfigFile)) Log.Info("Codex hook health: couldn't save config");
+            });
+        }
+
         void ReadClaudeHookHealth()
         {
             foreach (SessionStatus status in sessions.All) claudeHookHealth.Record(status.At);
@@ -502,7 +509,7 @@ namespace Capsule
                     refreshHooks = false;
                     if (codexMigrated)
                     {
-                        codexHookHealth.Reset(askForTrust: true);
+                        if (HookHealth.SetCodexTrustPending(config, true)) SaveCodexHookHealth();
                         tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.", OpenAlertPanel);
                     }
                 }
@@ -553,13 +560,18 @@ namespace Capsule
                         return;
                     }
                     bool forCodex = request.Provider == "codex";
-                    (forCodex ? codexHookHealth : claudeHookHealth).Record(Clock.NowMs());
+                    long now = Clock.NowMs();
+                    if (forCodex)
+                    {
+                        if (HookHealth.RecordCodexRequest(config, now)) SaveCodexHookHealth();
+                    }
+                    else claudeHookHealth.Record(now);
                     PromptBroker broker = forCodex ? codexPrompts : prompts;
                     HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply)
                     {
                         if (link.Send(reply) && broker == prompts && reply.Kind != PromptReply.Pass)
                             HookEvents.MarkAnswered(sessions.All.Find(s => s.SessionId == request.SessionId), request.At, Clock.NowMs());
-                    }, Clock.NowMs());
+                    }, now);
                     if (held == null) return;
                     if (broker == codexPrompts) PlayCue(Capsule.Cue.Attention, forCodex: true);
                     int id = held.Id;
@@ -758,10 +770,11 @@ namespace Capsule
             SessionsTile tile = config.RingOn("claude") ? sessions.Tile(now, tally.For) : null;
             if (tile != null && sessions.HooksConnected && claudeHookHealth.NeedsPanelHint(now))
                 tile.Hint = "Claude: " + claudeHookHealth.Text(now);
-            if (config.RingOn("codex") && codexHooksConnected && codexHookHealth.NeedsPanelHint(now))
+            string codexHint = HookHealth.CodexPanelHint(config);
+            if (config.RingOn("codex") && codexHooksConnected && codexHint != "")
             {
                 if (tile == null) tile = new SessionsTile();
-                tile.CodexHint = "Codex: " + codexHookHealth.Text(now);
+                tile.CodexHint = "Codex: " + codexHint;
             }
             return tile;
         }
@@ -1664,7 +1677,7 @@ namespace Capsule
                 new MenuItemSpec { Id = CmdHooks, Text = HookSetup.MenuText(sessions.HooksConnected, reconnect) },
                 new MenuItemSpec { Disabled = true, Text = sessions.HooksConnected ? claudeHookHealth.Text(now) : "Hooks disconnected" },
                 new MenuItemSpec { Id = CmdCodexHooks, Text = codexHooksConnected ? "Disconnect from Codex / Work" : "Connect to Codex / Work" },
-                new MenuItemSpec { Disabled = true, Text = codexHooksConnected ? codexHookHealth.Text(now) : "Hooks disconnected" },
+                new MenuItemSpec { Disabled = true, Text = codexHooksConnected ? HookHealth.CodexMenuText(config, now) : "Hooks disconnected" },
                 new MenuItemSpec { Id = CmdAutostart, Text = "Start with Windows", Checked = autostart },
                 new MenuItemSpec { Id = CmdFolder, Text = "Open data folder" },
             });
@@ -1784,7 +1797,7 @@ namespace Capsule
                     : HookSetup.ConnectCodex(Paths.CodexHooks, HookInstall.Prepare(codex: true), DateTime.Now);
                 Log.Info("Codex hooks: " + result);
                 codexHooksConnected = !connected;
-                codexHookHealth.Reset(askForTrust: !connected);
+                if (HookHealth.SetCodexTrustPending(config, !connected)) SaveCodexHookHealth();
                 if (connected) codexPrompts.ReleaseAll();
                 tray.Balloon("Capsule", connected ? "Disconnected from Codex / Work."
                     : "Connected. Review and trust Capsule's hooks in Codex / Work, then start a new local chat. Command approvals and questions can use the capsule.");

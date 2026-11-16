@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 
 namespace Capsule
@@ -16,10 +17,7 @@ namespace Capsule
             TestRunner.Eq("Last event 3 min ago", health.Text(now), "only the newest event wins");
             TestRunner.Check(!health.NeedsPanelHint(now), "a recent event hides the hint");
             TestRunner.Check(health.NeedsPanelHint(now + Sessions.DeleteAfterMs), "after a day without events the hint returns");
-            health.Reset(askForTrust: true);
-            TestRunner.Check(health.Text(now).Contains("trust the hook in Codex (/hooks)"), "migration or connect replaces old Codex history with the trust hint");
-            health.Record(now);
-            TestRunner.Eq("Last event just now", health.Text(now), "an arriving event replaces the trust hint");
+            CodexTrustSurvivesRestart(now);
 
             var claude = new PromptBroker(() => false);
             var codex = new PromptBroker(() => false);
@@ -41,6 +39,38 @@ namespace Capsule
             timing.Stop(TimingCounter.Start());
             TestRunner.Check(timing.Take().EndsWith("ms/2"), "timing counts each call");
             TestRunner.Eq("sample=0ms/0", timing.Take(), "reading totals resets the interval");
+        }
+
+        static void CodexTrustSurvivesRestart(long now)
+        {
+            const long hour = 60 * 60 * 1000;
+            const string trust = "No events yet: trust the hook in Codex (/hooks), then start a new chat";
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            File.WriteAllText(path, "{}");
+            Config config = Config.Load(path);
+            TestRunner.Eq("No approval requests yet", HookHealth.CodexMenuText(config, now), "old config does not imply untrusted hooks");
+            TestRunner.Eq("", HookHealth.CodexPanelHint(config), "a quiet Codex hook needs no panel hint");
+
+            TestRunner.Check(HookHealth.SetCodexTrustPending(config, true) && config.Save(path),
+                "connect or migration marks trust pending and saves it");
+            config = Config.Load(path);
+            TestRunner.Eq(trust, HookHealth.CodexMenuText(config, now), "trust reminder survives restart");
+            TestRunner.Eq(trust, HookHealth.CodexPanelHint(config), "pending trust is shown in the panel");
+
+            TestRunner.Check(HookHealth.RecordCodexRequest(config, now) && config.Save(path),
+                "the first request clears trust and saves its time");
+            config = Config.Load(path);
+            TestRunner.Check(!config.CodexTrustPending && config.LastCodexRequestMs == now, "restart preserves cleared trust and last request");
+            TestRunner.Eq("Last request 3 h ago", HookHealth.CodexMenuText(config, now + 3 * hour), "shows the time of the last request");
+            TestRunner.Eq("", HookHealth.CodexPanelHint(config), "receiving a request clears the panel hint");
+            TestRunner.Eq("", HookHealth.CodexPanelHint(Config.Load(path)), "the panel hint stays clear after restart");
+            TestRunner.Check(HookHealth.CodexMenuText(config, now + 24 * hour) == "Last request 1 d ago" &&
+                HookHealth.CodexPanelHint(config) == "", "a day without a Codex request leaves the panel quiet");
+
+            TestRunner.Check(HookHealth.SetCodexTrustPending(config, true), "a later migration can require trust again");
+            TestRunner.Eq(trust, HookHealth.CodexMenuText(config, now + 24 * hour), "trust pending takes priority over prior requests");
+            TestRunner.Check(HookHealth.SetCodexTrustPending(config, false) && config.LastCodexRequestMs == now,
+                "disconnect clears the hint and preserves the last request time");
         }
 
         static PromptRequest Request(string provider)

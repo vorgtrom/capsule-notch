@@ -22,6 +22,8 @@ namespace Capsule
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
         public bool RenewClaudeSignIn = true;
+        public bool CodexTrustPending;
+        public long LastCodexRequestMs;
         public bool Sounds = true;           // a short sound when a session needs you or finishes
         public string GoogleClientId = "";   // the user's own OAuth client (Desktop app); "" = not set up. Its secret is in google-client-secret.bin
         // Calendars whose box the user changed: calendar id -> shown. The others follow Google's own "selected". Ids
@@ -77,6 +79,10 @@ namespace Capsule
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
             c.RenewClaudeSignIn = Json.Get(o, "renew_claude_sign_in") as bool? ?? true;
+            c.CodexTrustPending = Json.Get(o, "codex_trust_pending") as bool? ?? false;
+            double? lastCodexRequest = Json.Num(Json.Get(o, "last_codex_request_ms"));
+            if (lastCodexRequest > 0 && lastCodexRequest < long.MaxValue)
+                c.LastCodexRequestMs = (long)lastCodexRequest.Value;
             c.GoogleClientId = (Json.Str(Json.Get(o, "google_client_id")) ?? "").Trim();
             Dictionary<string, object> choices = Json.Obj(Json.Get(o, "google_calendars"));
             if (choices != null)
@@ -120,6 +126,8 @@ namespace Capsule
             d["limit_alerts"] = LimitAlerts;
             d["sounds"] = Sounds;
             d["renew_claude_sign_in"] = RenewClaudeSignIn;
+            d["codex_trust_pending"] = CodexTrustPending;
+            d["last_codex_request_ms"] = LastCodexRequestMs;
             d["google_client_id"] = GoogleClientId;
             var choices = new Dictionary<string, object>();
             foreach (KeyValuePair<string, bool> choice in CalendarChoices) choices[choice.Key] = choice.Value;
