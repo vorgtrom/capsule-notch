@@ -7,6 +7,19 @@ namespace Capsule
     {
         public static void Run()
         {
+            int clicks = 0;
+            var action = new BalloonAction();
+            action.Replace(() => clicks += 10);
+            action.Replace(() => clicks++);
+            action.Take()();
+            TestRunner.Eq(1, clicks, "click runs only the most recent balloon action");
+            TestRunner.Check(action.Take() == null, "click clears the stored action");
+            action.Replace(() => clicks++);
+            action.Replace(null);
+            TestRunner.Check(action.Take() == null, "closing or replacing with a plain balloon clears its action");
+            TestRunner.Check(!Controller.ShouldPlayCue(Cue.Attention, true), "no attention cue while its app is in front");
+            TestRunner.Check(Controller.ShouldPlayCue(Cue.Attention, false), "attention cue when the app is away");
+            TestRunner.Check(Controller.ShouldPlayCue(Cue.Done, true), "done still sounds with the app in front");
             using (Bitmap bitmap = Tray.DrawRing(73, 32))
             {
                 Color top = bitmap.GetPixel(16, 2);

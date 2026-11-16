@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Diagnostics;
+using System.Text;
 
 namespace Capsule
 {
@@ -15,7 +17,24 @@ namespace Capsule
 
         public static void Error(string message, Exception e)
         {
-            Write("ERROR", message + (e != null ? " (" + e.GetType().Name + ")" : ""));
+            try
+            {
+                if (e != null)
+                {
+                    var details = new StringBuilder(" (").Append(e.GetType().Name).Append(')');
+                    if (e.InnerException != null) details.Append(" inner=").Append(e.InnerException.GetType().Name);
+                    var trace = new StackTrace(e, false);
+                    for (int i = 0; i < Math.Min(8, trace.FrameCount); i++)
+                    {
+                        var method = trace.GetFrame(i).GetMethod();
+                        if (method == null || method.DeclaringType == null) continue;
+                        details.Append(i == 0 ? " at " : " < ").Append(method.DeclaringType.Name).Append('.').Append(method.Name);
+                    }
+                    message += details.ToString();
+                }
+            }
+            catch (Exception) { }   // formatting must never break the app
+            Write("ERROR", message);
         }
 
         static void Write(string level, string message)

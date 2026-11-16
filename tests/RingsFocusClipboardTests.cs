@@ -32,7 +32,7 @@ namespace Capsule
         {
             var c = new Config();
             foreach (string name in Config.RingNames) TestRunner.Check(c.RingOn(name), "a new config has every ring on: " + name);
-            TestRunner.Check(c.ClipboardHistory, "clipboard history is on by default");
+            TestRunner.Check(!c.ClipboardHistory, "clipboard history is off by default");
             TestRunner.Eq(25, c.FocusMinutes, "25 min focus by default");
 
             string path = Path.Combine(TestRunner.NewTempDir(), "config.json");

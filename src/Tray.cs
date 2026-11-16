@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 
 namespace Capsule
@@ -75,10 +76,24 @@ namespace Capsule
         }
     }
 
+    internal sealed class BalloonAction
+    {
+        Action current;
+        internal void Replace(Action action) { current = action; }
+        internal Action Take()
+        {
+            Action action = current;
+            current = null;
+            return action;
+        }
+    }
+
     // The tray icon: a small ring in the colour of Claude's current session, with the numbers as its tooltip.
     public sealed class Tray : IDisposable
     {
         readonly WinForms.NotifyIcon icon = new WinForms.NotifyIcon();
+        readonly Dispatcher ui = Dispatcher.CurrentDispatcher;
+        readonly BalloonAction balloonAction = new BalloonAction();
         IntPtr handle = IntPtr.Zero;
         string lastKey;
 
@@ -94,6 +109,12 @@ namespace Capsule
                 if (e.Button == WinForms.MouseButtons.Left && LeftClick != null) LeftClick();
                 if (e.Button == WinForms.MouseButtons.Right && RightClick != null) RightClick();
             };
+            icon.BalloonTipClicked += delegate
+            {
+                Action action = balloonAction.Take();
+                if (action != null) ui.BeginInvoke(action);
+            };
+            icon.BalloonTipClosed += delegate { balloonAction.Replace(null); };
             Update(null, "Capsule");
             icon.Visible = true;
         }
@@ -113,7 +134,11 @@ namespace Capsule
             icon.Text = tooltip.Length > 63 ? tooltip.Substring(0, 63) : tooltip;   // the limit NotifyIcon allows
         }
 
-        public void Balloon(string title, string text) { icon.ShowBalloonTip(5000, title, text, WinForms.ToolTipIcon.None); }
+        public void Balloon(string title, string text, Action onClick = null)
+        {
+            balloonAction.Replace(onClick);
+            icon.ShowBalloonTip(5000, title, text, WinForms.ToolTipIcon.None);
+        }
 
         public static Bitmap DrawRing(double? used, int size)
         {

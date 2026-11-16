@@ -8,7 +8,7 @@ namespace Capsule
     // The Claude Code sessions capsule-hook.exe reports, read back from their status files.
     public static class Sessions
     {
-        public const long StaleMs = 30 * 60 * 1000;               // working or waiting this long with no event: crashed, closed or left
+        public const long StaleMs = 30 * 60 * 1000;               // working this long with no event: crashed, closed or left
         public const long DeleteAfterMs = 24L * 60 * 60 * 1000;   // status files this old are deleted
         public const long RecentMs = 10 * 60 * 1000;              // done/idle sessions stay on the card this long
         public const int MaxRows = 5;
@@ -34,7 +34,7 @@ namespace Capsule
                     continue;
                 }
                 if (s.Since <= 0) s.Since = s.At;   // an older or damaged file without a start time
-                if ((s.State == States.Working || s.State == States.Waiting) && now - s.At > StaleMs)
+                if (s.State == States.Working && now - s.At > StaleMs)
                 {
                     s.State = States.Idle;
                     s.Since = s.At;

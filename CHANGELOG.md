@@ -5,6 +5,12 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Sessions update when you answer.** The ring shows Claude working as soon as you answer from Capsule.
+  A session stays waiting until Claude sends another event or its status expires.
+- **Click an alert to open Capsule.** Usage and session alerts open the panel.
+  Attention sounds stay quiet while you are looking at the app that asked.
+- **Clipboard history starts off.** New installs record copies after you enable history in Settings.
+
 - **Hooks stay connected when you move Capsule.** Claude Code and Codex use a fixed hook folder under your user
   profile. Start Capsule from its new folder to update the connection. Codex asks you to trust the new hook path once.
 - **Scoop updates.** The tray update notice copies `scoop update capsule` for Scoop installs.

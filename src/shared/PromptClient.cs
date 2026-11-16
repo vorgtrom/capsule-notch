@@ -19,7 +19,13 @@ namespace Capsule
             Dictionary<string, object> root = Json.Obj(Json.TryParse(input));
             PromptRequest request = PromptRequest.FromHookInput(root, now);
             if (request == null) return "";
-            return HookReply.Output(PromptReply.Parse(Ask(pipeName, request.ToJson(), connectMs, replyMs)), root);
+            string output = HookReply.Output(PromptReply.Parse(Ask(pipeName, request.ToJson(), connectMs, replyMs)), root);
+            if (output != "")
+            {
+                try { HookEvents.PromptAnswered(request.SessionId, now, Clock.NowMs()); }
+                catch (Exception e) { Log.Error("hook: updating the answered session", e); }
+            }
+            return output;
         }
 
         // Sends the request and waits for the reply: its text, or null when there is no pipe, the pipe's server isn't the
