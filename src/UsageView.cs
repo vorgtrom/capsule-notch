@@ -130,6 +130,8 @@ namespace Capsule
             var legend = new StackPanel { Margin = new Thickness(0, model.Heat == null ? 10 : 4, 0, 0) };
             if (model.ByProject && model.Legend.Count == 0 && model.Total > 0)
                 legend.Children.Add(CardView.MakeText("No project breakdown for these dates.", 11.5, Palette.Secondary, FontWeights.Normal));
+            else if (model.ByProject && model.DetailSince != "")
+                legend.Children.Add(CardView.MakeText("Projects since " + model.DetailSince, 11.5, Palette.Secondary, FontWeights.Normal));
             foreach (LegendRow row in model.Legend)
             {
                 var line = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 2, 0, 2) };

@@ -390,7 +390,7 @@ namespace Capsule
             lastActivity = activity;
             prompts.SessionsChanged(sessions.All);   // a session that moved on was answered in the app: Capsule lets go
             PlayCue(cues.Next(ClaudeSessionsForCues()));
-            CheckFinishedAlerts();
+            Guard("finished alerts", CheckFinishedAlerts);
             UpdateTally();
             Render();
         }
@@ -545,7 +545,7 @@ namespace Capsule
             lastActivity = sessions.Activity;
             prompts.SessionsChanged(sessions.All);
             PlayCue(cues.Next(ClaudeSessionsForCues()));
-            CheckFinishedAlerts();
+            Guard("finished alerts", CheckFinishedAlerts);
             tally.Subscription = claude.Current == null || claude.Current.Plan != "" || claude.Current.Status != "signin";   // signed in to a plan, or not known yet
             UpdateTally();
             Guard("limit resets", delegate { CheckLimitResets(now); });

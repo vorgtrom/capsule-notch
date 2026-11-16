@@ -5,6 +5,9 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Usage says which days its breakdown covers.** When your logs start later than the page, the API value and the
+  project legend say where they start, such as "since Oct 17".
+
 - **Usage by project.** See which projects use the most tokens. The Usage page also estimates their value at
   listed API prices.
 - **Know when a long turn ends.** Turn on the menu option to get a notification when Claude Code finishes a turn

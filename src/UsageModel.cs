@@ -47,6 +47,7 @@ namespace Capsule
         public bool CanNext, ByProject;
         public string ApiValue = "", ApiValueTip = "";
         public bool MissingPrices;
+        public string DetailSince = "";   // "Oct 17" when the project and price breakdown starts after the period's first used day
         public long Total;
         public List<UsageBar> Bars = new List<UsageBar>();
         public List<LegendRow> Legend = new List<LegendRow>();
@@ -78,6 +79,7 @@ namespace Capsule
             var perTool = new Dictionary<string, long[]>();
             long busiest = 0;
             DateTime busiestDay = from;
+            DateTime? firstUsed = null;
             for (DateTime d = from; d <= to; d = d.AddDays(1))
             {
                 long dayTotal = 0;
@@ -94,6 +96,7 @@ namespace Capsule
                     dayTotal += p.Value[0];
                 }
                 if (dayTotal > busiest) { busiest = dayTotal; busiestDay = d; }
+                if (dayTotal > 0 && firstUsed == null) firstUsed = d;
             }
             m.Total = perModel.Values.Sum();
             List<string> ordered = perModel.Where(p => p.Value > 0).OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key).ToList();
@@ -135,6 +138,7 @@ namespace Capsule
                         Row = new LegendRow { Name = g.Key, Tokens = g.Sum(r => r.Tokens) },
                     })).ToLookup(p => p.Day, p => p.Row);
             }
+            m.DetailSince = DetailStart(rows, firstUsed, today, culture);
             m.SetApiValue(rows, projectBucket, culture);
             if (period == UsagePeriod.Heat) m.Heat = HeatModel.Build(store, from, to, today, culture, dayProjects);
             else if (period == UsagePeriod.Year)
@@ -222,12 +226,24 @@ namespace Capsule
             var usd = (NumberFormatInfo)culture.NumberFormat.Clone();
             usd.CurrencySymbol = "$";
             usd.CurrencyDecimalDigits = 2;
-            ApiValue = "≈ " + prices.Sum(p => p.Value ?? 0m).ToString("C", usd) + " API value";
+            ApiValue = "≈ " + prices.Sum(p => p.Value ?? 0m).ToString("C", usd) + " API value" + (DetailSince != "" ? " since " + DetailSince : "");
             var split = prices.Where(p => p.Value.HasValue).GroupBy(p => p.Name, StringComparer.Ordinal)
                 .Select(g => new { Name = g.Key, Value = g.Sum(p => p.Value.Value) })
                 .OrderByDescending(p => p.Value).ThenBy(p => p.Name, StringComparer.Ordinal)
                 .Select(p => p.Name + " · " + p.Value.ToString("C", usd));
             ApiValueTip = string.Join("\n", split.Concat(new[] { "Estimate at API prices. Your plan is billed differently." }));
+        }
+
+        // The breakdown only covers logs still on this PC; history can reach further back. Name where it starts when it
+        // starts later than the period's first day with any tokens.
+        internal static string DetailStart(List<UsageDetailRow> rows, DateTime? firstUsed, DateTime today, CultureInfo culture)
+        {
+            if (rows.Count == 0 || firstUsed == null) return "";
+            string first = rows.Select(r => r.Day).OrderBy(d => d, StringComparer.Ordinal).First();
+            DateTime start;
+            if (string.CompareOrdinal(first, DayKey(firstUsed.Value)) <= 0
+                || !DateTime.TryParseExact(first, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out start)) return "";
+            return start.ToString(start.Year == today.Year ? "MMM d" : "MMM d, yyyy", culture);
         }
 
         static string DayKey(DateTime day) { return day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); }
