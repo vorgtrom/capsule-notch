@@ -21,6 +21,7 @@ namespace Capsule
         public string GitHubRepo = "";   // one public owner/repo; "" means off
         public bool CheckUpdates = true;     // a release build looks for a newer release once a day
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
+        public bool FinishedAlerts;
         public bool RenewClaudeSignIn = true;
         public bool CodexTrustPending;
         public long LastCodexRequestMs;
@@ -77,6 +78,7 @@ namespace Capsule
             c.GitHubRepo = GitHubMonitor.NormalizeRepo(Json.Str(Json.Get(o, "github_repo")));
             c.CheckUpdates = Json.Get(o, "check_updates") as bool? ?? true;
             c.LimitAlerts = Json.Get(o, "limit_alerts") as bool? ?? true;
+            c.FinishedAlerts = Json.Get(o, "finished_alerts") as bool? ?? false;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
             c.RenewClaudeSignIn = Json.Get(o, "renew_claude_sign_in") as bool? ?? true;
             c.CodexTrustPending = Json.Get(o, "codex_trust_pending") as bool? ?? false;
@@ -124,6 +126,7 @@ namespace Capsule
             d["github_repo"] = GitHubMonitor.NormalizeRepo(GitHubRepo);
             d["check_updates"] = CheckUpdates;
             d["limit_alerts"] = LimitAlerts;
+            d["finished_alerts"] = FinishedAlerts;
             d["sounds"] = Sounds;
             d["renew_claude_sign_in"] = RenewClaudeSignIn;
             d["codex_trust_pending"] = CodexTrustPending;
