@@ -512,9 +512,6 @@ namespace Capsule
                     }, Clock.NowMs());
                     if (held == null) return;
                     if (broker == codexPrompts) PlayCue(Capsule.Cue.Attention, forCodex: true);
-                    if (!Quiet)
-                        tray.Balloon("Capsule", (broker == codexPrompts ? "Codex" : "Claude") + " is waiting on you.",
-                            () => OpenPromptOrPanel(broker, held));
                     int id = held.Id;
                     link.WhenGone(delegate { app.Dispatcher.BeginInvoke(new Action(delegate { Guard("prompts", delegate { broker.Gone(id); }); })); });
                 }
