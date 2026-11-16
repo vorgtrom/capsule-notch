@@ -100,6 +100,7 @@ namespace Capsule
             Run("Log", LogTests.Run);
             Run("UsageLogs", UsageLogsTests.Run);
             Run("UsageHistory", UsageHistoryTests.Run);
+            Run("Prices", PricesTests.Run);
             Run("Pace", PaceTests.Run);
             Run("LimitAlerts", LimitAlertsTests.Run);
             Run("UsageModel", UsageModelTests.Run);
