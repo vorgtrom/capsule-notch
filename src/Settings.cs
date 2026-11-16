@@ -28,7 +28,7 @@ namespace Capsule
         public Dictionary<string, bool> CalendarChoices = new Dictionary<string, bool>();
         // The rings switched off in Settings: name -> on. A ring that isn't listed is on.
         public Dictionary<string, bool> Rings = new Dictionary<string, bool>();
-        public bool ClipboardHistory = true;   // the last copies, in memory only
+        public bool ClipboardHistory;   // the last copies, in memory only
         public bool FocusQuiet = true;         // Capsule's own sounds and alerts wait for the break while you focus
         public int FocusMinutes = 25, ShortBreakMinutes = 5, LongBreakMinutes = 15;
 
@@ -52,7 +52,11 @@ namespace Capsule
         {
             var c = new Config();
             var o = Json.Obj(Json.TryParse(Files.ReadText(path)));
-            if (o == null) return c;
+            if (o == null)
+            {
+                c.ClipboardHistory = System.IO.File.Exists(path);
+                return c;
+            }
             string edge = Json.Str(Json.Get(o, "edge"));
             if (edge == "left" || edge == "right") c.Edge = edge;
             c.Monitor = Json.Str(Json.Get(o, "monitor")) ?? "";

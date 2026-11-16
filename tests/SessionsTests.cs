@@ -19,7 +19,7 @@ namespace Capsule
             BuildsTheClaudeCard();
             BuildsTheCodexCardFromLogs();
             HintsWhenHooksAreNotConnected();
-            WaitingGoesIdleWhenSilent();
+            WaitingSurvivesUntilTheCacheAlert();
             CleansUpLeftovers();
             MissingStartTimeCountsFromTheLastEvent();
             NamesTheDayOfAnOlderLogSnapshot();
@@ -120,19 +120,23 @@ namespace Capsule
             TestRunner.Eq("Sign in to the Claude CLI to see your usage", CardModel.From(signin, null, true, Now, En).Footer, "sign-in footer");
         }
 
-        static void WaitingGoesIdleWhenSilent()
+        static void WaitingSurvivesUntilTheCacheAlert()
         {
             string dir = TestRunner.NewTempDir();
             File.WriteAllText(Path.Combine(dir, "a.json"), S("a", States.Waiting, Now - 29 * Min, Now - 29 * Min, "p", "needs permission: Bash").ToJson());
-            File.WriteAllText(Path.Combine(dir, "b.json"), S("b", States.Waiting, Now - 31 * Min, Now - 40 * Min, "p", "needs permission: Bash").ToJson());
+            File.WriteAllText(Path.Combine(dir, "b.json"), S("b", States.Waiting, Now - 56 * Min, Now - 56 * Min, "p", "needs permission: Bash").ToJson());
             File.WriteAllText(Path.Combine(dir, "c.json"), S("c", States.Working, Now - 30 * Min, Now - 30 * Min, "p", "").ToJson());
             List<SessionStatus> list = Sessions.Load(dir, Now);
             TestRunner.Eq(States.Waiting, list.Find(s => s.SessionId == "a").State, "waiting 29 min: still waiting");
             TestRunner.Eq(States.Working, list.Find(s => s.SessionId == "c").State, "silent for exactly 30 min: not stale yet");
             SessionStatus b = list.Find(s => s.SessionId == "b");
-            TestRunner.Eq(States.Idle, b.State, "silent for 30 min: waiting goes idle too");
-            TestRunner.Eq(Now - 31 * Min, b.Since, "idle since the last event");
-            TestRunner.Eq(null, Sessions.Aggregate(new List<SessionStatus> { b }), "a silent waiting session stops pulsing");
+            TestRunner.Eq(States.Waiting, b.State, "still waiting after 56 minutes");
+            var use = new SessionUse { LastReplyMs = Now - 56 * Min, CacheTtlMs = SessionContext.HourMs };
+            TestRunner.Eq(1, new SessionAlerts().Check(new[] { b }, id => use, Now).Count, "the loaded waiting session triggers the cache alert");
+            File.WriteAllText(Path.Combine(dir, "c.json"), S("c", States.Working, Now - 31 * Min, Now - 31 * Min, "p", "").ToJson());
+            TestRunner.Eq(States.Idle, Sessions.Load(dir, Now).Find(s => s.SessionId == "c").State, "working still goes idle after 31 minutes");
+            TestRunner.Check(!HookEvents.MarkAnswered(b, b.At - 1, Now), "a reply cannot replace a newer event");
+            TestRunner.Check(HookEvents.MarkAnswered(b, b.At, Now) && b.State == States.Working && b.Reason == "", "a reply clears the in-memory wait at once");
         }
 
         static void CleansUpLeftovers()

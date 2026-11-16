@@ -14,6 +14,7 @@ namespace Capsule
             APermissionRequestIsAskedAndAnswered();
             OtherEventsAskNothing();
             PassPrintsNothing();
+            DecisionUpdatesSessionStatus();
             TheHookExePrintsTheDecision();
             TheHookExePrintsAnswersAsUtf8();
             WithNoCapsuleTheHookExePrintsNothing();
@@ -29,6 +30,31 @@ namespace Capsule
             CompleteCommandsStillReachCapsule();
             CodexHooksUseTheirOwnProtocol();
             CodexLauncherPreservesInputAndOutput();
+        }
+
+        static void DecisionUpdatesSessionStatus()
+        {
+            foreach (PromptReply reply in new[] { PromptReply.Allowing(), PromptReply.AlwaysAllowing(), PromptReply.Denying("sample"), PromptReply.Passing() })
+            {
+                long now = Clock.NowMs();
+                string id = "answered-" + Guid.NewGuid().ToString("N");
+                var input = Json.Obj(Json.Parse(Bash));
+                input["session_id"] = id;
+                string json = Json.Write(input);
+                HookEvents.Handle(json, false, now);
+                string file = Path.Combine(Paths.SessionsDir, id + ".json");
+                string before = File.ReadAllText(file);
+                using (var capsule = new Answerer(reply))
+                    PromptClient.Handle(json, now, capsule.Name, 1000, 5000);
+                if (reply.Kind == PromptReply.Pass)
+                    TestRunner.Eq(before, File.ReadAllText(file), "pass leaves the waiting file unchanged");
+                else
+                {
+                    SessionStatus status = SessionStatus.Read(file);
+                    TestRunner.Eq(States.Working, status.State, "an answered request sets working");
+                    TestRunner.Eq("", status.Reason, "an answered request clears its waiting reason");
+                }
+            }
         }
 
         // A Write too big for the card to show whole stays with Claude, which asks as usual: Capsule never sees it.
@@ -376,7 +402,7 @@ namespace Capsule
                 TestRunner.Check(d != null && Json.Str(Json.Get(d, "behavior")) == "allow" && rules != null && rules.Length == 1 && Json.Str(rules[0]) == "Bash(npm test:*)",
                     "and prints Capsule's decision, with the rule Claude Code suggested");
                 SessionStatus s = SessionStatus.Read(Path.Combine(Paths.SessionsDir, "ph-1.json"));
-                TestRunner.Check(s != null && s.State == States.Waiting, "having first marked the session as waiting, as before");
+                TestRunner.Check(s != null && s.State == States.Working && s.Reason == "", "the hook executable clears the wait after printing an allow");
             }
         }
 

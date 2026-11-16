@@ -383,9 +383,15 @@ namespace Capsule
         }
 
         // A sound for what needs you, unless Sounds is off. Claude's sessions count only while its hooks are connected.
-        void PlayCue(Cue cue)
+        internal static bool ShouldPlayCue(Cue cue, bool appInFront)
         {
-            if (cue == Capsule.Cue.None) return;
+            return cue != Capsule.Cue.None && (cue != Capsule.Cue.Attention || !appInFront);
+        }
+
+        void PlayCue(Cue cue, bool forCodex = false)
+        {
+            if (!ShouldPlayCue(cue, cue == Capsule.Cue.Attention &&
+                (forCodex ? CodexApp.IsInFront() : ClaudeApp.IsInFront()))) return;
             if (Quiet)
             {
                 if (cue == Capsule.Cue.Attention) heldNeeds++;
@@ -419,7 +425,7 @@ namespace Capsule
         {
             if (Quiet) return;
             string text = HeldSummary(Clock.NowMs());
-            if (text != null) tray.Balloon("Capsule", text);
+            if (text != null) tray.Balloon("Capsule", text, OpenAlertPanel);
         }
 
         void SaveFocus()
@@ -463,7 +469,7 @@ namespace Capsule
                     bool codexMigrated = HookInstall.RefreshConnected();
                     refreshHooks = false;
                     if (codexMigrated)
-                        tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.");
+                        tray.Balloon("Capsule", "Capsule moved its Codex hook to a fixed folder. Open /hooks in Codex and trust it again to answer from the capsule.", OpenAlertPanel);
                 }
                 catch (Exception e)
                 {
@@ -472,7 +478,8 @@ namespace Capsule
                 }
             }
             long now = Clock.NowMs();
-            foreach (IModule m in modules) if (ModuleOn(m)) m.Tick(now);
+            foreach (IModule m in modules)
+                if (ModuleOn(m)) Guard(m is UsageModule ? ((UsageModule)m).Provider : m.GetType().Name, delegate { m.Tick(now); });
             Guard("updates", delegate { updates.Tick(now); });
             Guard("GitHub checks", delegate { github.Tick(now); });
             lastActivity = sessions.Activity;
@@ -498,9 +505,16 @@ namespace Capsule
                         return;
                     }
                     PromptBroker broker = request.Provider == "codex" ? codexPrompts : prompts;
-                    HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply) { link.Send(reply); }, Clock.NowMs());
+                    HeldPrompt held = broker.Arrive(request, delegate(PromptReply reply)
+                    {
+                        if (link.Send(reply) && broker == prompts && reply.Kind != PromptReply.Pass)
+                            HookEvents.MarkAnswered(sessions.All.Find(s => s.SessionId == request.SessionId), request.At, Clock.NowMs());
+                    }, Clock.NowMs());
                     if (held == null) return;
-                    if (broker == codexPrompts) PlayCue(Capsule.Cue.Attention);   // Claude's waiting shows in its session's status, which cues its own sound
+                    if (broker == codexPrompts) PlayCue(Capsule.Cue.Attention, forCodex: true);
+                    if (!Quiet)
+                        tray.Balloon("Capsule", (broker == codexPrompts ? "Codex" : "Claude") + " is waiting on you.",
+                            () => OpenPromptOrPanel(broker, held));
                     int id = held.Id;
                     link.WhenGone(delegate { app.Dispatcher.BeginInvoke(new Action(delegate { Guard("prompts", delegate { broker.Gone(id); }); })); });
                 }
@@ -811,7 +825,8 @@ namespace Capsule
                 // The end of focus also tells what waited meanwhile; its chime is the one sound for both.
                 string held = ended.Value == FocusPhase.Focus ? HeldSummary(now) : null;
                 if (held == null) PlayCue(Capsule.Cue.Done);
-                tray.Balloon("Capsule", focus.EndedText(ended.Value) + (held != null ? "\n" + held : ""));
+                tray.Balloon("Capsule", focus.EndedText(ended.Value) + (held != null ? "\n" + held : ""),
+                    held != null ? (Action)OpenAlertPanel : null);
                 SaveFocus();
             }
             if (notchCells != null && focusCell >= 0 && focusCell < notchCells.Count)
@@ -939,6 +954,33 @@ namespace Capsule
             if (forFileDrag) return;
             ideas.PanelOpened();
             calendar.PanelOpened(Clock.NowMs());
+        }
+
+        void OpenAlertPanel()
+        {
+            if (!disposed) Guard("alert panel", delegate { OpenPanel(false); });
+        }
+
+        void OpenPromptOrPanel(PromptBroker broker, HeldPrompt held)
+        {
+            if (disposed || captureHidden) return;
+            Guard("prompt alert", delegate
+            {
+                if (!OpenHeldPrompt(broker, held, Clock.NowMs())) OpenPanel(false);
+            });
+        }
+
+        bool OpenHeldPrompt(PromptBroker broker, HeldPrompt held, long now)
+        {
+            int cell = shown.IndexOf(broker == codexPrompts ? codex : claude);
+            if (held == null || cell < 0 || !notch.IsVisible || broker.Current != held) return false;
+            panel.Dismiss();
+            openCard.Stop();
+            closeCard.Stop();
+            cardCell = cell;
+            ShowPromptCard(held, broker, now, cell);
+            NotchOnTop();
+            return true;
         }
 
         void ReviewPending(PendingReview row)
@@ -1139,7 +1181,7 @@ namespace Capsule
                         continue;
                     }
                     Log.Info("limits: alert shown");
-                    tray.Balloon("Capsule", text);
+                    tray.Balloon("Capsule", text, OpenAlertPanel);
                 }
             }
             if (changed) samples.Save(Paths.UsageSamplesFile);
@@ -1160,7 +1202,7 @@ namespace Capsule
             foreach (string text in SessionAlertTexts(now))
             {
                 Log.Info("sessions: alert shown");
-                tray.Balloon("Capsule", text);
+                tray.Balloon("Capsule", text, OpenAlertPanel);
             }
         }
 

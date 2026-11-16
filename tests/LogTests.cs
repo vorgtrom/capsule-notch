@@ -11,6 +11,7 @@ namespace Capsule
         {
             AnExceptionIsNamedByItsTypeNeverItsMessage();
             AGuardedActionThatThrowsLeavesNoMessageInTheLog();
+            ClipboardDefaultsDependOnExistingConfig();
         }
 
         const string Marker = "SAMPLE-MARKER-4471";
@@ -39,13 +40,25 @@ namespace Capsule
         static void AGuardedActionThatThrowsLeavesNoMessageInTheLog()
         {
             int before = LogLength();
-            Controller.Guard("prompts", delegate { throw new InvalidOperationException("the answer was " + Marker); });
+            Controller.Guard("prompts", delegate { throw new InvalidOperationException("the answer was " + Marker, new IOException(Marker)); });
             string said = LogSince(before);
             TestRunner.Check(said.Contains("prompts (InvalidOperationException)"), "a guarded action that throws is logged by type: " + said.Trim());
             TestRunner.Check(!said.Contains(Marker), "and its message, which can carry a typed answer, is not");
+            TestRunner.Check(said.Contains("inner=IOException") && said.Contains("Controller.Guard") && said.Contains(" < "),
+                "includes inner exception type and compact stack frames");
             bool ranOn = false;
             Controller.Guard("prompts", delegate { ranOn = true; });
-            TestRunner.Check(ranOn, "an action that doesn't throw just runs");
+            TestRunner.Check(ranOn, "the next module can run after a guarded tick fails");
+        }
+
+        static void ClipboardDefaultsDependOnExistingConfig()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            TestRunner.Check(!new Config().ClipboardHistory && !Config.Load(path).ClipboardHistory, "clipboard history is off on a new install");
+            File.WriteAllText(path, "{}");
+            TestRunner.Check(Config.Load(path).ClipboardHistory, "an existing config without a key keeps the old default");
+            File.WriteAllText(path, "{\"clipboard_history\":false}");
+            TestRunner.Check(!Config.Load(path).ClipboardHistory, "an existing explicit choice stays off");
         }
     }
 }

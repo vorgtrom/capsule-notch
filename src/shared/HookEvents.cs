@@ -284,8 +284,27 @@ namespace Capsule
                 next.Activity = "";
             }
             else if (eventName == "PostToolUse") next.Activity = Activity(Json.Str(Json.Get(root, "tool_name")), Json.Obj(Json.Get(root, "tool_input")));
-            return Files.WriteAtomic(path, next.ToJson()) ? next.State : "write-failed";
+            return WriteStatus(path, next) ? next.State : "write-failed";
         }
+
+        internal static void PromptAnswered(string sessionId, long requestedAt, long now)
+        {
+            if (!IsValidSessionId(sessionId)) return;
+            string path = Path.Combine(Paths.SessionsDir, sessionId + ".json");
+            SessionStatus status = SessionStatus.Read(path);
+            if (MarkAnswered(status, requestedAt, now)) WriteStatus(path, status);
+        }
+
+        internal static bool MarkAnswered(SessionStatus status, long requestedAt, long now)
+        {
+            if (status == null || status.State != States.Waiting || status.At != requestedAt) return false;
+            status.State = States.Working;
+            status.Reason = "";
+            status.Since = status.At = now;
+            return true;
+        }
+
+        static bool WriteStatus(string path, SessionStatus status) { return Files.WriteAtomic(path, status.ToJson()); }
 
         // One line per event for the verification task. Names and types only: never prompts, messages, or tool input/output.
         static void AppendProbeLine(Dictionary<string, object> root, long now)

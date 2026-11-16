@@ -160,7 +160,8 @@ the Windows temporary folder.
 - **Quiet while focusing.** During focus, Capsule's own chimes and limit alerts wait for the break, then come as one
   note, such as "While you focused: 2 requests needed you, 1 session finished." The rings still glow and spin, so you
   can look up any time. Turn it off in Settings, under Focus lengths.
-- **Clipboard history.** The Clipboard tile lists your last 25 copies, newest first. Filter with **All**, **Links**,
+- **Clipboard history.** New installs start with history off. Turn it on in the panel's Settings (⚙), under
+  **Clipboard history**. The Clipboard tile lists your last 25 copies, newest first. Filter with **All**, **Links**,
   **Images**, **Code**, or **Text**. Colours such as `#30D158` keep their swatches under **Text** and **All**.
   Code shows its first non-empty line in monospace. Links show the host and path without the query. Up to 5
   images have thumbnails. Click a row to copy the full item again, or choose **Clear** to empty the list.
