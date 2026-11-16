@@ -156,7 +156,7 @@ namespace Capsule
                     e.Offset += consumed;
                     foreach (string line in lines)
                     {
-                        UsageEntry u = UsageLogs.ParseClaude(line);
+                        UsageEntry u = UsageLogs.ParseClaude(line, false);
                         if (u == null || !e.Keys.Add(u.Key)) continue;
                         e.Use.Tokens += u.Tokens;
                         e.Use.Model = u.Model;

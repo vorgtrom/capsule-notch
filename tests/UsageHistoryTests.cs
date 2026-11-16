@@ -88,6 +88,10 @@ namespace Capsule
             WaitsForALockedLog();
             CountsArchivedCodexChats();
             KeepsCountsFromVersion150();
+            BackfillsDetailsWithoutRecountingHistory();
+            KeepsProjectLabelsAndClaudeCacheParts();
+            CountsCodexOutputOnceAndKeepsFirstProject();
+            SharesTheBudgetAndResumeGrace();
         }
 
         sealed class Setup
@@ -381,6 +385,123 @@ namespace Capsule
             string saved = Json.Write(store.ToJson());
             TestRunner.Check(!saved.Contains("website") && !saved.Contains("projects") && !saved.Contains("session-one") && !saved.Contains("work"), "no folder or project names");
             TestRunner.Check(!saved.Contains("never be stored") && !saved.Contains("secret") && !saved.Contains("part one"), "no prompt, reply or tool text");
+        }
+
+        static string ProjectReply(string id, string at, string cwd, long write5, long write1, bool split, int output)
+        {
+            var root = Json.Obj(Json.Parse(Reply(id, at, output)));
+            root["cwd"] = cwd;
+            root["prompt"] = "do not retain this fixture text";
+            var usage = Json.Obj(Json.Get(root, "message", "usage"));
+            usage["input_tokens"] = 10;
+            usage["cache_creation_input_tokens"] = write5 + write1;
+            usage["cache_read_input_tokens"] = 25;
+            if (split)
+                usage["cache_creation"] = new Dictionary<string, object> { { "ephemeral_5m_input_tokens", write5 }, { "ephemeral_1h_input_tokens", write1 } };
+            return Json.Write(root);
+        }
+
+        static void BackfillsDetailsWithoutRecountingHistory()
+        {
+            Setup s = Make();
+            var legacy = new UsageStore();
+            UsageScanner.Scan(legacy, s.Logs(), Now, UsageScanner.BudgetBytes);
+            string oldHistory = Json.Write(legacy.ToJson());
+            var upgraded = UsageStore.FromJson(oldHistory);
+            var detail = new UsageDetailStore();
+            bool detailChanged;
+            UsageScanner.Scan(upgraded, detail, s.Logs(), Now, UsageScanner.BudgetBytes, out detailChanged);
+            TestRunner.Check(detailChanged && detail.BackfillDone && detail.Rows.Count > 0, "an upgrade backfills detail from the logs");
+            TestRunner.Eq(oldHistory, Json.Write(upgraded.ToJson()), "detail backfill leaves the legacy store byte-for-byte unchanged");
+
+            File.AppendAllText(s.ClaudeLog, ProjectReply("new", "2026-10-12T11:00:00Z", @"C:\work\café", 2, 0, false, 3) + "\r\n");
+            UsageScanner.Scan(legacy, s.Logs(), Now + 60000, UsageScanner.BudgetBytes);
+            UsageScanner.Scan(upgraded, detail, s.Logs(), Now + 60000, UsageScanner.BudgetBytes, out detailChanged);
+            TestRunner.Eq(Json.Write(legacy.ToJson()), Json.Write(upgraded.ToJson()), "appending with both cursors leaves existing totals and file marks unchanged");
+            TestRunner.Check(detail.Rows.Exists(r => r.ProjectName == "café" && r.Tokens == 15), "a shared batch preserves UTF-8 and CRLF");
+        }
+
+        static void KeepsProjectLabelsAndClaudeCacheParts()
+        {
+            Setup s = Make();
+            File.Delete(s.CodexLog);
+            const string a = @"C:\private-parent-a\capsule", b = @"D:\private-parent-b\capsule";
+            string oldest = "2026-10-12T09:00:00Z";
+            File.WriteAllText(s.ClaudeLog, ProjectReply("same", oldest, a, 100, 0, false, 5) + "\n" +
+                ProjectReply("different", oldest, b, 5, 8, true, 7) + "\n" +
+                ProjectReply("unknown", oldest, null, 0, 0, false, 1) + "\n");
+            var history = new UsageStore();
+            var detail = new UsageDetailStore();
+            bool changed;
+            UsageScanner.Scan(history, detail, s.Logs(), Now, UsageScanner.BudgetBytes, out changed);
+            detail = UsageDetailStore.FromJson(Json.Write(detail.ToJson()));
+            TestRunner.Check(detail.Rows.Count == 3 && detail.Rows.Exists(r => r.ProjectKey == "" && r.ProjectName == ""), "missing cwd is stored as Other");
+            var named = detail.Rows.Where(r => r.ProjectName == "capsule").ToList();
+            TestRunner.Check(named.Select(r => r.ProjectKey).Distinct().Count() == 2 &&
+                named.Exists(r => r.ProjectKey == UsageScanner.Hash(a)) && named.Exists(r => r.ProjectKey == UsageScanner.Hash(b)),
+                "two folders with the same name retain separate hashed keys");
+
+            File.AppendAllText(s.ClaudeLog, ProjectReply("same", oldest, a, 20, 80, true, 20) + "\n");
+            UsageScanner.Scan(history, detail, s.Logs(), Now + 60000, UsageScanner.BudgetBytes, out changed);
+            UsageDetailRow row = detail.Rows.Single(r => r.ProjectKey == UsageScanner.Hash(a));
+            TestRunner.Check(row.Input == 10 && row.Write5m == 20 && row.Write1h == 80 && row.CacheRead == 25 && row.Output == 20,
+                "the larger Claude reply tops up output and corrects an unsplit cache bucket without double-counting");
+            TestRunner.Eq(130L, row.Tokens, "project tokens leave cache reads apart");
+
+            string json = Json.Write(detail.ToJson());
+            TestRunner.Check(!json.Contains("private-parent") && !json.Contains("do not retain") && !json.Contains("session-one"),
+                "detail persistence contains no full project path, prompt, or transcript path");
+        }
+
+        static void CountsCodexOutputOnceAndKeepsFirstProject()
+        {
+            Setup s = Make();
+            File.Delete(s.ClaudeLog);
+            const string parentCwd = @"C:\private\parent", childCwd = @"C:\private\child";
+            string date = "2026-10-12T10:00:00Z";
+            string parent = s.CodexLog;
+            string child = Path.Combine(Path.GetDirectoryName(parent), "rollout-2026-10-12T11-00-00-child.jsonl");
+            string parentMeta = Meta(date, "parent-chat", "root-chat", null).Replace("\"/work\"", Json.Write(parentCwd));
+            string childMeta = Meta(date, "child-chat", "root-chat", "parent-chat").Replace("\"/work\"", Json.Write(childCwd));
+            string turn = CodexTurn(date, 100, 50).Replace("\"cached_input_tokens\":0", "\"cached_input_tokens\":20")
+                .Replace("\"reasoning_output_tokens\":0", "\"reasoning_output_tokens\":17");
+            string context = Context(date, "gpt-5.3-codex");
+            File.WriteAllText(parent, parentMeta + "\n" + context + "\n" + turn + "\n");
+
+            var totals = new UsageStore();
+            var detail = new UsageDetailStore();
+            bool changed;
+            UsageScanner.Scan(totals, detail, new List<LogFile> { new LogFile { Path = parent, Codex = true } }, Now, UsageScanner.BudgetBytes, out changed);
+            detail = UsageDetailStore.FromJson(Json.Write(detail.ToJson()));
+            UsageDetailRow first = detail.Rows.Single();
+            TestRunner.Check(first.ProjectName == "parent" && first.Input == 80 && first.CacheRead == 20 && first.Output == 50,
+                "Codex puts cached input and output in their exact buckets and prices reasoning once");
+            TestRunner.Eq(130L, totals.Get(CodexDay, "gpt-5.3-codex")[0], "legacy Codex total is unchanged");
+            File.AppendAllText(parent, CodexTurn(date, 200, 60) + "\n");
+            File.WriteAllText(child, childMeta + "\n" + parentMeta + "\n" + context + "\n" + turn + "\n" + CodexTurn(date, 300, 70) + "\n");
+            UsageScanner.Scan(totals, detail, new List<LogFile> { new LogFile { Path = parent, Codex = true },
+                new LogFile { Path = child, Codex = true } }, Now + 60000, UsageScanner.BudgetBytes, out changed);
+            TestRunner.Eq(390L, detail.Rows.Single(r => r.ProjectName == "parent").Tokens, "an appended turn keeps the persisted project");
+            TestRunner.Eq(370L, detail.Rows.Single(r => r.ProjectName == "child").Tokens, "the fork ignores its copied turn and metadata");
+        }
+
+        static void SharesTheBudgetAndResumeGrace()
+        {
+            Setup s = Make();
+            var totals = new UsageStore();
+            var detail = new UsageDetailStore();
+            bool changed;
+            List<LogFile> logs = new List<LogFile> { new LogFile { Path = s.ClaudeLog }, new LogFile { Path = s.CodexLog, Codex = true } };
+            UsageScanner.Scan(totals, detail, logs, Now, 1, out changed);
+            TestRunner.Check(!totals.BackfillDone && !detail.BackfillDone && detail.Rows.All(r => r.Model.StartsWith("claude")),
+                "one small allowance does not buy each store a separate read");
+            TestRunner.Check(totals.Files.Values.Sum(m => m.Offset) == detail.Files.Values.Sum(m => m.Offset),
+                "overlapping bytes advance both cursors in one pass");
+            UsageScanner.Scan(totals, detail, logs, Now + 1000, UsageScanner.BudgetBytes, out changed);
+            File.AppendAllText(s.ClaudeLog, ProjectReply("resumed-old", "2026-10-07T09:00:00Z", @"C:\work\old-only", 0, 0, false, 999) + "\n");
+            UsageScanner.Scan(totals, detail, logs, Now + 60000, UsageScanner.BudgetBytes, out changed);
+            TestRunner.Check(totals.BackfillDone && detail.BackfillDone && !detail.Rows.Exists(r => r.ProjectName == "old-only"),
+                "detail applies the existing resume grace after its separate backfill");
         }
 
         static void PrunesSeenReplies()

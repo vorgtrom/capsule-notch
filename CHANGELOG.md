@@ -5,6 +5,11 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Usage by project.** See which projects use the most tokens. The Usage page also estimates their value at
+  listed API prices.
+- **Know when a long turn ends.** Turn on the menu option to get a notification when Claude Code finishes a turn
+  that took at least five minutes.
+
 - **Limit reset alerts.** Capsule tells you when a usage limit it warned you about has reset.
 
 - **See whether hooks reach Capsule.** The tray menu shows the last Claude event and Codex request.

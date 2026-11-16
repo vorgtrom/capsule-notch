@@ -133,7 +133,7 @@ namespace Capsule
             calendar.ClientIdChosen += OnGoogleClientIdChosen;
             weather = new WeatherModule(config.WeatherPlace, config.WeatherUnits, TaskScheduler.FromCurrentSynchronizationContext());
             weather.Changed += delegate { if (!disposed && panel.IsOpen) panel.Refresh(PanelNow()); };
-            history = new UsageHistory(Paths.UsageHistoryFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
+            history = new UsageHistory(Paths.UsageHistoryFile, Paths.UsageDetailFile, () => UsageScanner.Discover(Paths.ClaudeDir, Paths.CodexHome));
             history.Changed += delegate { Guard("usage", ShowUsageIfOpen); };
             samples = SampleStore.Load(Paths.UsageSamplesFile);
             music = new MusicModule(new WindowsMusicSource(), TaskScheduler.FromCurrentSynchronizationContext());
