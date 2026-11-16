@@ -252,7 +252,40 @@ namespace Capsule
             return messages;
         }
 
-        static string Owner(string provider) { return provider == "claude" ? "Claude's" : "Codex's"; }
+        internal static List<string> Resets(SampleStore store, Func<string, Reading> current, bool enabled,
+            Func<string, bool> ringOn, long now)
+        {
+            var messages = new List<string>();
+            if (!enabled) return messages;
+            var marked = new HashSet<string>();
+            foreach (string key in store.Sent)
+            {
+                if (!key.EndsWith("|80", StringComparison.Ordinal) && !key.EndsWith("|95", StringComparison.Ordinal)) continue;
+                string[] parts = key.Split('|');
+                long minute;
+                if (parts.Length != 4 || (parts[0] != "claude" && parts[0] != "codex") || parts[1] == "" ||
+                    !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out minute) ||
+                    minute <= 0 || minute > now / 60000 || !ringOn(parts[0])) continue;
+
+                string resetKey = key.Substring(0, key.Length - 3) + "|reset";
+                if (store.Sent.Contains(resetKey) || !marked.Add(resetKey)) continue;
+                if (now - minute * 60000 > Pace.Hour) continue;
+
+                Reading reading = current(parts[0]);
+                LimitWindow window = reading == null ? null : reading.Windows.Find(w => w.Id == parts[1]);
+                // The saved minute identifies the window even when the reading includes seconds.
+                if (window != null && SampleStore.IsFresh(reading, now) && window.Used >= 80 &&
+                    window.ResetsAtMs > now && window.ResetsAtMs / 60000 != minute) continue;
+
+                if (window == null || (parts[0] == "codex" && string.IsNullOrWhiteSpace(window.Label)))
+                    window = new LimitWindow { Id = parts[1], Label = "limit" };
+                messages.Add(Owner(parts[0]) + " " + Name(parts[0], window) + " has reset.");
+            }
+            store.Sent.UnionWith(marked);
+            return messages;
+        }
+
+        internal static string Owner(string provider) { return provider == "claude" ? "Claude's" : "Codex's"; }
 
         // "5-hour limit", "weekly limit", "weekly Opus limit".
         public static string Name(string provider, LimitWindow w)

@@ -206,6 +206,7 @@ stays blank for an unused limit and in the first 5% of a window.
 - "capsule is waiting on you, and its prompt cache goes cold in about 5 min." (for a session waiting on your answer
   or permission, with an hour-long cache: once per reply. An answer after that re-reads the whole conversation.)
 
+Capsule also tells you when a limit it warned you about has reset.
 To turn them off, untick **Limit alerts** in Capsule's menu. While you focus, they wait for your break.
 
 **Sounds.** A short chime when a Claude Code session starts waiting on you or a Codex request arrives, and a softer

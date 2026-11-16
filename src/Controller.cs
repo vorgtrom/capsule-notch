@@ -542,6 +542,7 @@ namespace Capsule
             PlayCue(cues.Next(ClaudeSessionsForCues()));
             tally.Subscription = claude.Current == null || claude.Current.Plan != "" || claude.Current.Status != "signin";   // signed in to a plan, or not known yet
             UpdateTally();
+            Guard("limit resets", delegate { CheckLimitResets(now); });
             Guard("session alerts", delegate { CheckSessionAlerts(now); });
             Render();
         }
@@ -1275,6 +1276,25 @@ namespace Capsule
             }
             if (changed) samples.Save(Paths.UsageSamplesFile);
             ShowUsageIfOpen();
+        }
+
+        void CheckLimitResets(long now)
+        {
+            int sent = samples.Sent.Count;
+            List<string> messages = LimitAlerts.Resets(samples, provider => provider == "claude" ? claude.Current : codex.Current,
+                config.LimitAlerts, config.RingOn, now);
+            if (samples.Sent.Count != sent) samples.Save(Paths.UsageSamplesFile);
+            foreach (string text in messages)
+            {
+                if (Quiet)
+                {
+                    Log.Info("limits: reset alert held for the break");
+                    heldAlerts.Add(text);
+                    continue;
+                }
+                Log.Info("limits: reset alert shown");
+                tray.Balloon("Capsule", text, OpenAlertPanel);
+            }
         }
 
         // Recheck session warnings at the break so the balloon describes the current context and cache.
