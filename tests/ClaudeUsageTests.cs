@@ -361,9 +361,12 @@ namespace Capsule
                     "a completed renewal reports its exit code");
             TestRunner.Eq(0, kills, "a completed renewal does not trigger cleanup");
 
-            psi.Arguments = "/d /c set /p reply=";
-            psi.RedirectStandardInput = true;
-            using (Process process = Process.Start(psi))
+            var slow = new ProcessStartInfo(typeof(TestRunner).Assembly.Location, "--renewal-timeout-fixture")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using (Process process = Process.Start(slow))
             {
                 try
                 {
