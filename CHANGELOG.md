@@ -5,49 +5,49 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
-- **Usage says which days its breakdown covers.** When your logs start later than the page, the API value and the
-  project legend say where they start, such as "since Oct 17".
-
-- **Usage by project.** See which projects use the most tokens. The Usage page also estimates their value at
-  listed API prices.
-- **Know when a long turn ends.** Turn on the menu option to get a notification when Claude Code finishes a turn
-  that took at least five minutes.
-
-- **Limit reset alerts.** Capsule tells you when a usage limit it warned you about has reset.
-
-- **See whether hooks reach Capsule.** The tray menu shows the last Claude event and Codex request.
-  The panel shows a hint when Claude has been quiet for a day or Codex still needs hook trust.
-- **Answer requests with the keyboard.** The panel shortcut opens a waiting request. Press Tab to select a button,
-  Enter to activate it, or Esc to close the card.
-- **Choose how Claude renews its sign-in.** Settings can turn off background renewal. Capsule stops a renewal
-  process tree if it runs longer than a minute.
-
-- **Sessions update when you answer.** The ring shows Claude working as soon as you answer from Capsule.
-  A session stays waiting until Claude sends another event or its status expires.
-- **Click an alert to open Capsule.** Usage and session alerts open the panel.
-  Attention sounds stay quiet while you are looking at the app that asked.
-- **Clipboard history starts off.** New installs record copies after you enable history in Settings.
-
-- **Hooks stay connected when you move Capsule.** Claude Code and Codex use a fixed hook folder under your user
-  profile. Start Capsule from its new folder to update the connection. Codex asks you to trust the new hook path once.
-- **Scoop updates.** The tray update notice copies `scoop update capsule` for Scoop installs.
-- **Shelf cleanup.** On startup, Capsule removes temporary Shelf captures older than 24 hours that a crash left behind.
-
-- **Clearer panel feedback.** Usage shows how much you used and flags higher levels in words. Clipboard history confirms
-  when a copy succeeds, Shelf highlights where to drop files, and approval cards say **Allow once**.
-
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.
 
-## v1.10.1
+## v1.11.0
 
-- **Weather works.** Finding a place and the forecast both failed with "The weather service sent something
-  Capsule couldn't read": the weather service compresses its replies in a way Capsule couldn't unpack.
-- **GitHub checks take a link.** Paste the repository's GitHub link, such as `https://github.com/owner/repo`, as well
-  as `owner/repo`.
-- **Turn off** in the Weather and GitHub settings no longer shows as a blank white button when there's nothing to
-  turn off; it's hidden instead.
+**Usage**
+- **Usage by project.** On the Usage page, switch the legend between models and projects to see which projects use
+  the most tokens.
+- **API value.** The Usage page estimates what your tokens would cost at listed API prices. Hover it for the split.
+  When your logs start later than the page, it says where they start, such as "since Oct 17".
+- **Limit reset alerts.** Capsule tells you when a usage limit it warned you about has reset.
+- **Clearer usage.** Tiles say "73% used", and flag higher levels in words: "high" from 50%, "near limit" from 70%.
+
+**Claude Code and Codex**
+- **Sessions turn to working when you answer.** Approve from the capsule and the ring shows Claude working at once.
+- **Long waits stay waiting.** A session waiting on you no longer turns idle after 30 minutes, so the prompt cache
+  warning reaches you.
+- **Answer with the keyboard.** The panel shortcut opens a waiting request. Tab moves between the buttons, Enter
+  presses one, and Esc closes the card.
+- **See whether hooks reach Capsule.** The tray menu shows the last Claude event and Codex request, or what to do
+  if nothing has arrived.
+- **Hooks stay connected when you move Capsule.** The hook now runs from a fixed folder under your user profile.
+  Codex asks you to trust the new hook path once.
+- **Know when a long turn ends.** Turn on **Notify when long turns finish** in the menu for a notification when a
+  Claude Code turn of five minutes or more finishes.
+- **Allow once.** Approval cards say **Allow once**, so it's clear the approval is for that one request.
+- **Choose how Claude renews its sign-in.** Settings can turn off background renewal. A renewal that runs over a
+  minute is stopped.
+
+**Everywhere else**
+- **Click an alert to open Capsule.** Usage and session alerts open the panel. Attention chimes stay quiet while
+  you're looking at the app that asked.
+- **Weather works.** Finding a place and the forecast failed with "The weather service sent something Capsule
+  couldn't read". Fixed.
+- **GitHub checks take a link.** Paste the repository's GitHub link as well as `owner/repo`.
+- **Clipboard history starts off** on new installs. Turn it on in Settings. Rows say "Copied" when you click them.
+- **The Shelf lights up** with "Drop to add" while you drag files over it. Captures a crash left behind are cleaned
+  up after a day.
+- **Scoop updates.** For Scoop installs, the update notice copies `scoop update capsule`.
+- **Fixes:** a module that fails no longer stops the rest of the panel from updating, and the log names where an
+  error happened. **Turn off** in the Weather and GitHub settings is hidden when there's nothing to turn off.
+- **A new README**, organised around how you use Capsule.
 
 ## v1.10.0
 
