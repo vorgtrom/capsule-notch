@@ -2,235 +2,194 @@
 
 [![Build and test](https://github.com/vorgtrom/capsule-notch/actions/workflows/build.yml/badge.svg)](https://github.com/vorgtrom/capsule-notch/actions/workflows/build.yml)
 
-A little glass capsule that sits on the edge of your Windows screen.
+A little glass capsule on the edge of your Windows screen that keeps an eye on **Claude Code** and **Codex** for you.
 
 https://github.com/user-attachments/assets/c8bfb80a-3e77-457a-8dc6-a3cf5f4c52c9
 
-It shows how much of your **Claude Code** and **Codex** usage limits you've used, and whether a Claude Code
-session is **working** or **waiting on you**. It keeps a **history of your tokens** by day and model, forecasts
-when each limit will run out at your current **pace**, and **warns you** before it does. With **Google Calendar** connected, it also shows when your next
-event starts. Click it, or press **Ctrl+Alt+N** anywhere, for the full panel: your usage, your sessions, today's
-and tomorrow's events and tasks, a month calendar where you add, edit and delete them, and a box to jot down an
-idea that lands in **Notion**. And when Claude asks for
-permission, asks you a question, wants to **edit a file** or has a **plan** ready, you can **review it and answer
-right on the capsule**, with the change shown line by line, without switching to the Claude app. Each session shows
-your last prompt and what Claude did last, and a short **sound** tells you when one needs you or finishes. You can
-also connect Codex and local ChatGPT Work for command approvals and answers. And it shows what's playing in
-**Spotify** or **YouTube Music**, with pause, skip, a player switch and a **volume** slider, runs a **focus timer**,
-shows the **weather** for a place you pick, and keeps a short **clipboard history** sorted into links, images, code
-and text. It takes **screenshots** of an area or a whole scrolling webpage, keeps files on a
-**shelf** to drag into other apps, and gathers everything that **needs you** in one tile: Claude and Codex requests,
-and failing checks on a GitHub repository. Each ring can be switched off in Settings.
+- **Your usage limits at a glance.** One ring per tool, and when each limit resets. Capsule forecasts when you'll
+  run out at your current pace, and warns you before you do.
+- **Your sessions.** Whether each Claude Code session is working, waiting on you or done, with your last prompt,
+  what Claude did last, and how full its context is.
+- **Answer without switching apps.** Approve a command, review a file edit line by line, approve a plan or answer a
+  question right on the capsule. Codex and local ChatGPT Work command approvals and questions too.
+- **Your token history.** A heatmap of tokens per day and model, like Claude Code's `/stats`.
+- **The rest of your day**, in one panel: Google Calendar and Tasks, weather, Spotify or YouTube Music with a volume
+  slider, a focus timer, clipboard history, screenshots of an area or a whole scrolling webpage, a shelf for files,
+  failing GitHub checks, and an Ideas box that saves to Notion.
 
-Install it with [Scoop](#get-it) (`scoop install capsule/capsule` after adding the bucket), or download it from the
+Every ring and tile can be switched off. Install it with [Scoop](#get-it) or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
 | <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73%, a Codex ring at 21%, and the calendar ring filling during a meeting, marked now"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel: Claude and Codex tiles, the sessions, the Calendar tile with today's and tomorrow's events and tasks, and the Ideas box with recent ideas from Notion"> |
 
-*The pictures here and below show the solid look. On Windows 11 the glass is clear, with the windows behind it blurred live.*
+*The pictures show the solid look. On Windows 11 the capsule, its cards and the panel are clear glass, with the
+windows behind them blurred live. They follow Windows' light or dark mode, and turn solid with **Transparency
+effects** off or on Windows 10.*
 
-## What it shows
+**Contents:**
+[Get it](#get-it) ·
+[Use](#use) ·
+[Claude and Codex](#claude-and-codex) ·
+[Usage history and alerts](#usage-history-and-limit-alerts) ·
+[The panel's tiles](#the-panels-tiles) ·
+[Privacy](#what-it-reads-and-where-it-connects) ·
+[Update](#update) ·
+[Uninstall](#uninstall) ·
+[Build](#build)
 
-- **One ring per tool.** It shows the limit window with the highest percentage used: green under 50%, yellow from
-  50%, red from 70%.
-- **Hover a ring** for every limit, when each resets, and your live Claude Code sessions: each with the start of your
-  last prompt, what Claude did last ("“fix the auth bug…” · Edited middleware.ts"), and its model and tokens so far,
-  how full its context window is, and how long its prompt cache stays warm ("Opus 4.8 · 1.2M tokens · ctx 64% ·
-  cache 41m"). The context is measured against the model's window (200K, or 1M for models that have it) and turns
-  amber from 80%. The cache time is an estimate, counted from the latest reply: an hour
-  on a Claude plan, 5 minutes with an API key; Claude doesn't publish the exact expiry. Under each limit, its pace:
-  "At this pace: full at 4:10 PM · locked 41 min" (amber, before the reset) or "about 64% at reset". Until there's a
-  pace to go on, how your use compares with an even spread: "81% of the window gone · 1.1× even pace".
-- **Hover the Codex ring** for your latest Codex chat and its model. Once the chat records a token count, the
-  card shows how full its context window is ("GPT-5 Codex · ctx 34%"). The percentage turns amber at 80%.
+## Get it
+
+You need Windows 10 or 11 (64-bit) with .NET Framework 4.8 or later. Windows 11 and an up-to-date Windows 10
+already have it.
+
+**With Scoop** ([scoop.sh](https://scoop.sh)), in PowerShell:
+
+```pwsh
+scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule
+scoop install capsule/capsule
+```
+
+Then start **Capsule** from the Start menu (Scoop Apps → Capsule).
+
+**With winget** (once Microsoft has accepted the package):
+
+```pwsh
+winget install vorgtrom.Capsule
+```
+
+Then start it with `capsule-notch` in a terminal.
+
+**Or download it:**
+1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
+2. Unzip it into a folder that stays, such as `Documents\Capsule`.
+3. Start `Capsule.exe`.
+   - Capsule isn't code-signed, so Windows may say **Windows protected your PC**. Click **More info**, then **Run
+     anyway**. GitHub builds and tests each release from the code in this repo; the zip's SHA-256 is next to it.
+   - If your antivirus objects, see [Antivirus](#antivirus).
+
+**Or build it yourself**, with the C# compiler that ships with Windows, so nothing is downloaded and nothing
+unsigned from the internet runs:
+
+```powershell
+git clone https://github.com/vorgtrom/capsule-notch.git
+cd capsule-notch
+.\build.cmd
+.\bin\Capsule.exe
+```
+
+No Git? Click **Code → Download ZIP** on this page, unzip it somewhere that stays, and run `build.cmd` in that
+folder. It should end with `Build OK`; then start `bin\Capsule.exe`.
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and on each release's page.
+
+### Antivirus
+
+Behaviour-based antivirus may freeze or remove Capsule. It's a new, unsigned program that reads the Claude and
+Codex sign-in files, keeps an encrypted Notion secret and Google sign-in, and goes online, which is also what
+token-stealing malware does. Norton did this on the first run.
+
+If it happens to you:
+1. Restore `Capsule.exe` from the antivirus's history.
+2. Exclude the folder Capsule runs from: the one you unzipped it into, or `bin` if you built it. In Norton:
+   **Settings → Antivirus → Scans and Risks → Items to Exclude from Auto-Protect, Script Control, SONAR and Download
+   Intelligence Detection**.
+
+Only exclusions survive updates and rebuilds. All the source is in this repo, so you can check what it does first.
+
+## Use
+
+On first run, Capsule asks whether to start with Windows. **No** is the default; change it in the menu any time.
+
+- **Hover** a ring for its details.
+- **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile has a
+  **Sign in** button, which runs `claude auth login`.
+- **Ctrl+Alt+N** from any app opens the panel with the cursor in the Ideas box. Type, press Enter, and it's saved.
+  When Claude or Codex is waiting on you, the same shortcut opens the request instead (see
+  [the keyboard](#answer-with-the-keyboard)). Change the shortcut in the panel's Settings (⚙). It isn't
+  Ctrl+Alt+Space, because the Claude desktop app uses that.
+- **Esc** closes the panel, and so does switching apps. Settings and open calendar forms stay open, so you can copy
+  values from another app. **Back** leaves Settings and clears unsaved secret fields.
+- **Drag** the capsule to move it. It snaps to the left or right edge of the screen you drop it on.
+- **Right-click** the capsule or the tray icon for the menu. **Left-click** the tray icon to hide or show the capsule.
+- It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
+- **Click a usage or session alert** to open the panel.
+
+**Settings (⚙ in the panel):**
+- **Your rings.** A switch each for Claude, Codex, Calendar, Music and Focus. A ring that's off leaves the capsule and
+  the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that ring would hold goes
+  straight to the Claude or Codex app. One ring always stays on.
+- **Open panel with** puts Calendar, Weather, Clipboard or Needs you first. A waiting request puts Needs you first
+  whatever you chose.
+- The panel scrolls when it's taller than the screen; its header stays put.
+
+**The menu** has **Refresh now**, **Capture...**, **Show notch**, Connect / Disconnect for Claude Code and Codex,
+**Start with Windows**, **Open data folder**, **Limit alerts**, **Sounds**, **Start focus**, **Check for updates**
+(downloaded copies) and **Quit Capsule**.
+
+## Claude and Codex
+
+### Connect
+
+- **Claude Code:** choose **Connect to Claude Code** in the menu. Capsule copies its hook to
+  `%USERPROFILE%\.capsule\bin`, saves a backup of `~/.claude/settings.json`, and registers the hook there. New
+  sessions report in from then on; in the desktop app, running ones do too. If you connected with an older Capsule,
+  the menu says **Reconnect to Claude Code**: choose it once.
+- **Codex and local ChatGPT Work:** see [below](#codex-and-local-chatgpt-work).
+- **Is it working?** Under each Connect item, the menu says when the last event arrived ("Last event 3 min ago"), or
+  what to do if none has ("No events yet: start a new chat").
+- **Moved Capsule?** Start it from its new folder and the connection updates itself.
+- From a terminal: `Capsule.exe --connect` / `--disconnect` (Claude Code) and `--connect-codex` /
+  `--disconnect-codex`. They print nothing; the result goes to the log.
+
+### The rings
+
+- **One ring per tool**, showing the limit window you've used most: green under 50%, yellow from 50%, red from 70%.
+  The tiles and cards say it in words too: "high" from 50%, "near limit" from 70%.
 - **While Claude works**, a small white arc spins inside its ring. Codex's ring spins too while a Codex turn runs.
-  When Capsule holds a Codex / Work request, the Codex ring pulses amber.
-- **While Claude waits on you**, for example with a question or a permission prompt, the whole ring pulses
-  amber.
-- **Approve or answer Claude from the capsule**: see [below](#approve-and-answer-claude-from-the-capsule).
-- **Approve or answer Codex / Work**: see [setup and limits](#codex-and-local-chatgpt-work).
-- **Your calendar**, once you [connect Google Calendar](#google-calendar) (a one-minute paste): a third cell under Claude and Codex.
-  - It shows when your next event today starts ("2:30", or "14:30" with a 24-hour clock).
-  - During an event it shows **now**, and its ring fills as the event runs.
-  - It shows **—** when nothing is left today.
-  - Hover it for the rest of today and tomorrow's first three events, and, signed in, the Google Tasks due on those
-    days that aren't done.
-  - All-day events, cancelled ones and ones you declined don't count for the cell.
-- **Click the capsule** for the panel: a tile each for Claude and Codex, your sessions, your calendar, the
-  [weather](#weather), your music, your clipboard, the [shelf](#shelf), your ideas, and [what needs you](#needs-you).
-  Usage tiles name the displayed window and show the data source and age. Old log snapshots and cached numbers
-  after a failed check dim once they are over ten minutes old.
-  Signed in with your own client, the Calendar tile also lists today's and tomorrow's Google Tasks that aren't done.
-- **Your token use**: click the Claude or Codex tile for the [Usage page](#usage-history-and-limit-alerts): a heatmap of tokens per
-  day by model, for a week, a month or a year.
-- **Limit alerts**: a notification at 80% and 95% of a limit, and when you're on pace to run out before it resets.
-  Also when a session's context passes 90%, and when a session waiting on you is about to lose its prompt cache.
-- **A month at a glance**: the Calendar tile's calendar button opens the [month page](#the-month-page). Click a day for
-  its events and tasks, and add, edit or delete one.
-- **A focus timer and your clipboard**: see [below](#focus-timer-clipboard-and-your-rings).
-- **Only the rings you want**: switch any ring off in Settings.
-
-| Hover the calendar | The month page |
-|:---:|:---:|
-| <img src="docs/images/calendar-card.png" width="328" alt="The calendar card: the rest of today, with the meeting under way highlighted and a task, then tomorrow's first events and a task"> | <img src="docs/images/month.png" width="340" alt="The month page: the month's days with coloured dots, today picked, and today's events and tasks with a pencil and a bin on each"> |
+- **While Claude waits on you**, with a question or a permission prompt, the whole ring pulses amber. The Codex ring
+  pulses amber while Capsule holds a Codex / Work request.
+- **Sounds:** a short chime when a session starts waiting on you or a Codex request arrives, and a softer one when a
+  Claude session or a Codex turn finishes. No chime while the app that asked is in front. Untick **Sounds** in the
+  menu to silence them.
 
 | Working | Waiting on you |
 |:---:|:---:|
 | <img src="docs/images/notch-working.png" width="116" alt="A white arc spinning inside the Claude ring and another inside the Codex ring, above the calendar ring"> | <img src="docs/images/notch-waiting.png" width="116" alt="The whole Claude ring pulsing amber, above the Codex and calendar rings"> |
 
-## Spotify and YouTube Music
+### Hover a ring
 
-The **Music** cell shows your local playback. Start a song in Spotify or YouTube Music, then hover the cell for
-the artwork, title, artist, playback progress, and **Previous**, **Play / Pause**, and **Next**. The full panel has
-the same music controls. No extra sign-in or API key is needed.
+- **Claude:** every limit and when it resets, with its pace (see [Pace](#pace)), then your live Claude Code sessions.
+  Each shows:
+  - the start of your last prompt and what Claude did last ("“fix the auth bug…” · Edited middleware.ts");
+  - its model and tokens so far, how full its context window is, and how long its prompt cache stays warm ("Opus 4.8
+    · 1.2M tokens · ctx 64% · cache 41m").
+  - The context is measured against the model's window (200K, or 1M for models that have it) and reads "high" in
+    amber from 80%.
+  - The cache time is an estimate, counted from the latest reply: an hour on a Claude plan, 5 minutes with an API key.
+    Claude doesn't publish the exact expiry.
+- **Codex:** every limit, then your latest Codex chat and its model. Once the chat records a token count, how full its
+  context window is ("GPT-5 Codex · ctx 34%"), amber from 80%.
+- **The panel's Claude and Codex tiles** show the same limit as "73% used", the window's name, when it resets, where
+  the numbers came from and how old they are. Old Codex log snapshots, and cached numbers after a failed check, dim
+  once they're over ten minutes old.
 
-| The Music cell | Hover it |
-|:---:|:---:|
-| <img src="docs/images/notch-music.png" width="116" alt="The capsule with a Claude ring, a Codex ring and a Music cell showing the album art, its ring filling in Spotify green, marked Playing"> | <img src="docs/images/card-music.png" width="328" alt="The music card: Spotify, the artwork, the track and artist, progress 1:24 of 3:48, Source: Spotify, and Previous, Pause and Next"> |
+### Approve and answer Claude from the capsule
 
-- The Music cell appears while something plays and stays for 2 minutes after you pause, so Play is still in
-  reach; then the capsule goes back to its other cells. The panel's music tile is always there.
-- The Music tile's speaker button mutes or unmutes the default Windows playback device. Drag the slider to set
-  its volume from 0 to 100%. The mouse wheel and arrow keys change it by 2 points. Page Up and Page Down change
-  it by 10 points. The slider follows changes made in Windows and hides when there is no playback device.
-- Spotify's desktop app and players that expose Windows media controls are detected automatically.
-- YouTube Music in Chrome, Edge, Firefox, and other supported browsers appears under the **browser's name**.
-  Windows supplies the player and track metadata, not the tab URL, so other media tabs can appear too.
-- When several players or tabs are available, click **Source** to cycle through them. The tooltip names the next
-  source and track. Your selection stays chosen while it is paused, until that session closes or Capsule restarts.
-- Keep the music app or browser tab open. Play a song once if the player has not appeared yet. A player that does
-  not publish Windows media information cannot be shown; controls the player does not support are disabled.
-- This controls playback **on this PC**. It does not browse your library, control Spotify on another device, or
-  seek within a track. YouTube Music desktop wrappers work when they publish Windows media sessions.
-- Music needs Windows 10 version 1809 or later. Track metadata and artwork stay in memory; Capsule does not save
-  listening history or contact Spotify or YouTube itself.
+When Claude Code needs you while you're in another app, Claude's ring pulses amber. **Hover it**, and the card shows
+what Claude is asking:
 
-## Screenshots and scrolling webpages
-
-Click the camera in the panel, choose **Capture...** in Capsule's menu, or press **Ctrl+Alt+S**. You can change the
-shortcut under **Capture shortcut** in ⚙.
-
-1. Choose **Screenshot** for an area of the screen, or **Scrolling webpage** for a whole page in Chrome or Edge.
-2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
-3. For a webpage, keep the pointer over the page while it scrolls. Moving it away pauses. **Stop** keeps what's
-   captured so far; **Esc** or **Cancel** throws it away.
-4. Check the image in the preview. To crop it, click **Crop**, drag over the area, then press Enter.
-5. Choose **Copy**, **Save PNG** or **Keep on shelf**. **Retake** starts again.
-
-- A scrolling capture goes to the top of the page first, then scrolls down to the end, joining the screenshots where
-  they overlap. A fixed header or footer appears once. If the page is too far down to reach the top in time, the
-  image starts where the page was, and the preview says so.
-- The preview says how the capture ended. Capsule can't tell the real end of a page from one that stopped
-  scrolling, and it stops early at content that changes while it scrolls (a video or an animation), or that repeats
-  so exactly it can't tell where two screenshots overlap. Check the joins at **100%**.
-- Switching to another window, or moving, resizing or closing the browser, cancels a scrolling capture.
-- Limits: one capture at a time, up to 32,000 rows and 32 million pixels, 120 screenshots and 90 seconds. The area
-  stays on one monitor, and the page scrolls at its current width and zoom.
-- Capsule keeps capture pixels in memory until you close the preview. **Save PNG** writes to your chosen location.
-  **Keep on shelf** writes a temporary PNG. **Copy** changes the clipboard. With clipboard history on, a copied
-  capture joins it like any other image if it is under 16 million pixels. The history keeps up to 5 images, 32 MiB in all.
-
-## Shelf
-
-1. Drag files from File Explorer over the capsule to open the panel.
-2. Move the pointer to the **Shelf** tile and drop the files there. Capsule keeps references to the original files.
-3. Drag a file row or **Drag all files** to another app. The shelf offers a copy. Windows can block drops into apps
-   running as administrator. A canceled or rejected drop shows this as a possible cause.
-
-The shelf holds up to 12 entries and clears when Capsule exits. **Keep on shelf** in Capture Preview adds a PNG
-of the current image, including any crop. Capsule stages up to 12 captures and 64 MiB of generated PNGs per session.
-**Remove** clears a row. Staged PNGs still count toward those limits and remain available until Capsule exits.
-Capsule deletes the PNGs it staged on normal exit. A crash or a file still open in another app can leave PNGs in
-the Windows temporary folder.
-
-## Focus timer, clipboard and your rings
-
-| The Focus ring | Focus and Clipboard tiles | Choose your rings |
-|:---:|:---:|:---:|
-| <img src="docs/images/notch-focus.png" width="116" alt="Capsule with Claude and Codex rings and a red Focus ring counting down, 18:42 left"> | <img src="docs/images/panel-focus.png" width="340" alt="The panel with each session's model and tokens, the Focus tile with Pause, Skip and Stop, and the Clipboard tile listing a command, a link, two colours and a note"> | <img src="docs/images/settings-rings.png" width="340" alt="Settings: a switch for each ring and for clipboard history, and the focus lengths"> |
-
-- **Focus timer.** Click **Start** on the panel's Focus tile: 25 minutes of focus, then a 5-minute break, and a
-  15-minute break after every four. Each part starts the next by itself. While it runs, a Focus ring counts down
-  in the capsule, red while you focus and green on a break, and dimmed while paused. A sound (unless Sounds is off)
-  and a notification mark the end of each part. **Pause**, **Skip** and **Stop** are on the tile; the lengths are in
-  Settings. Hover the Focus ring for a card with the same buttons, or choose **Start focus** in Capsule's menu. The
-  timer is saved in `%USERPROFILE%\.capsule\focus.json`, so it picks up where it was when Capsule starts again.
-- **Quiet while focusing.** During focus, Capsule's own chimes and limit alerts wait for the break, then come as one
-  note, such as "While you focused: 2 requests needed you, 1 session finished." The rings still glow and spin, so you
-  can look up any time. Turn it off in Settings, under Focus lengths.
-- **Clipboard history.** New installs start with history off. Turn it on in the panel's Settings (⚙), under
-  **Clipboard history**. The Clipboard tile lists your last 25 copies, newest first. Filter with **All**, **Links**,
-  **Images**, **Code**, or **Text**. Colours such as `#30D158` keep their swatches under **Text** and **All**.
-  Code shows its first non-empty line in monospace. Links show the host and path without the query. Up to 5
-  images have thumbnails. Click a row to copy the full item again, or choose **Clear** to empty the list.
-- **Your rings.** Settings (⚙ in the panel) has a switch for Claude, Codex, Calendar, Music and Focus. A ring that's
-  off leaves the capsule and the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that
-  ring would hold goes straight to the Claude or Codex app. One ring always stays on.
-
-## Usage history and limit alerts
-
-Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
-
-<img src="docs/images/usage.png" width="340" alt="The Usage page: two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 48M tokens, a heatmap of the last 26 weeks in shades of orange with today ringed, the figures under it (per active day, active days, current and longest streak, most active day, favourite model), and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
-
-- **A heatmap** of the last 26 weeks, like Claude Code's `/stats`: a square a day, a column a week, in four shades
-  of orange by how busy the day was against the others shown. Today is ringed. Hover a day for its tokens and
-  its biggest models; ‹ › looks back another 26 weeks.
-- **The figures** under it: tokens per active day, active days, your current and longest streak (every day on
-  record counts), your most active day and your favourite model.
-- **Tokens without cache reads**: input, output and cache writes. Claude re-reads its cached context on every turn,
-  which would bury everything else; **Details** shows the cache reads apart, with the busiest day and the daily
-  average.
-- **The legend** totals each model over the weeks shown, biggest first. Claude and Codex count together.
-- **Pace lines** at the top: how each ring's limit is going, for example "Claude · 5-hour · 73% · full at 4:10 PM".
-- **Where the numbers come from**: the logs Claude Code and Codex already write on this PC, archived Codex chats
-  included. A turn copied into a forked chat counts once; separate chats always count separately. Capsule reads only the
-  token counts, the model and the time, and keeps daily totals in `%USERPROFILE%\.capsule\usage-history.json`.
-  Claude Code deletes its logs after 30 days, so the first launch counts the last 30 days or so; from then on Capsule
-  keeps its own history. Claude Code running inside the Claude desktop app keeps its logs where Capsule can't see
-  them, so those sessions aren't counted.
-
-**Pace.** Capsule remembers each usage check (`usage-samples.json`) and works out how fast each limit is rising:
-over the last hour for 5-hour limits, the last day for weekly ones. It needs 15 minutes (2 hours for weekly limits)
-and a visible rise before it forecasts anything. Until then, the hover card shows the even-pace comparison instead:
-percent used divided by percent of the window gone, so 1.0× uses the limit exactly as fast as the window runs out. It
-stays blank for an unused limit and in the first 5% of a window.
-
-**Alerts** come as Windows notifications from Capsule's tray icon, each once per limit window:
-- "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)
-- "At this pace you'll hit Claude's 5-hour limit at 4:10 PM, 41 min before it resets." (from 30% used, once two
-  checks in a row agree)
-- "capsule is at 91% of its context. Claude Code will compact it soon." (once; again only after it drops under 80%)
-- "capsule is waiting on you, and its prompt cache goes cold in about 5 min." (for a session waiting on your answer
-  or permission, with an hour-long cache: once per reply. An answer after that re-reads the whole conversation.)
-
-Capsule also tells you when a limit it warned you about has reset.
-To turn them off, untick **Limit alerts** in Capsule's menu. While you focus, they wait for your break.
-
-**Sounds.** A short chime when a Claude Code session starts waiting on you or a Codex request arrives, and a softer
-one when a Claude session or a Codex turn finishes. Capsule makes them itself; they play at Windows' volume, at most one
-every 1.5 s. Untick **Sounds** in Capsule's menu to silence them.
-
-## Approve and answer Claude from the capsule
-
-When Claude Code needs you while you're in another app, you don't have to switch back to the Claude app.
-Claude's ring pulses amber; **hover it**, and the card shows what Claude is asking:
-
-- **A command permission prompt** ("Claude wants to run a command"): what it wants to run, and
-  **Allow**, **Always allow**, **Deny** or **Answer in Claude**. **Always allow** only appears when Claude
-  Code itself suggests a rule that Capsule can show completely. Hover the command or **Always allow** to read
-  its full text in a scrollable tooltip. The command tooltip preserves spaces and line breaks.
-- **A question**: Claude's options as buttons (checkboxes when you can pick several), one question at a
-  time, with **Other…** to type your own answer, then **Next** or **Send**.
-- **A file edit** ("Claude wants to edit a file"): the file, and the change itself, line by line: what's taken out on
-  red, what's put in on green. A new file shows all of its lines, and says whether it's new or replaces a whole file.
-  **Allow**, **Allow all edits** (when Claude Code offers it), **Deny** or **Answer in Claude**.
-- **A plan** ("Claude's plan is ready"): the plan itself, with its headings, lists and code. **Approve plan**, or
-  **Give feedback…** to type what to change, then **Keep planning** (Enter works too) to send it to Claude.
-- **Everything is shown whole, or not at all.** An edit, file or plan over 20,000 characters, a command over 4,000,
-  or anything with hidden control characters stays in Claude's own prompt, as do notebook edits and other tools.
+- **A command** ("Claude wants to run a command"): what it wants to run, and **Allow once**, **Always allow**, **Deny**
+  or **Answer in Claude**. **Always allow** only appears when Claude Code itself suggests a rule that Capsule can show
+  completely. Hover the command or **Always allow** to read its full text.
+- **A question:** Claude's options as buttons (checkboxes when you can pick several), one question at a time, with
+  **Other…** to type your own answer, then **Next** or **Send**.
+- **A file edit** ("Claude wants to edit a file"): the file and the change line by line, what's taken out on red and
+  what's put in on green. A new file shows all its lines. **Allow once**, **Allow all edits** (when Claude Code offers
+  it), **Deny** or **Answer in Claude**.
+- **A plan** ("Claude's plan is ready"): the plan with its headings, lists and code. **Approve plan**, or **Give
+  feedback…** to type what to change, then **Keep planning** (or Enter) to send it to Claude.
 
 | Approve a command | Answer a question |
 |:---:|:---:|
@@ -240,516 +199,443 @@ Claude's ring pulses amber; **hover it**, and the card shows what Claude is aski
 |:---:|:---:|
 | <img src="docs/images/card-edit.png" width="328" alt="The card: Claude wants to edit a file, Edit: src\auth\middleware.ts, two lines taken out on red and four put in on green, with Allow, Allow all edits, Deny and Answer in Claude"> | <img src="docs/images/card-plan.png" width="328" alt="The card: Claude's plan is ready, the plan with its heading Fix the auth bug, a paragraph, Steps with three bullets and a line of code, then Give feedback…, Approve plan, Keep planning and Answer in Claude"> |
 
-- **Nothing gets stuck.** Untouched, a request goes to the Claude app after 60 s, as if Capsule weren't there.
-  Using the card restarts that, but never past 80 s after the request arrived, because Claude Code's hook
-  only waits 90 s.
-- **It stays out of your way.** While the Claude app's window is in front, or the capsule is hidden, the app
-  asks as usual. Capsule also lets go as soon as the app's own prompt is answered.
+- **Everything is shown whole, or not at all.** An edit, file or plan over 20,000 characters, a command over 4,000,
+  or anything with hidden control characters stays in Claude's own prompt, as do notebook edits and other tools.
+- **Nothing gets stuck.** Untouched, a request goes to the Claude app after 60 s, as if Capsule weren't there. Using
+  the card restarts that, but never past 80 s after the request arrived, because Claude Code's hook waits only 90 s.
+- **It stays out of your way.** While the Claude app is in front, or the capsule is hidden, the app asks as usual.
+  Capsule lets go as soon as the app's own prompt is answered.
 - **Several requests** wait their turn, oldest first ("1 of 3").
-- It needs **Connect to Claude Code** (see [Use](#use)); if you connected with an older Capsule, choose
-  **Reconnect to Claude Code** once.
+- **The session turns to working** as soon as you answer.
+
+#### Answer with the keyboard
+
+Press **Ctrl+Alt+N** (the panel shortcut) while a request waits, and its card opens. **Tab** and **Shift+Tab** move
+between the buttons, **Enter** presses the one with the focus ring, and **Esc** closes the card without answering.
+Nothing is selected when the card opens, so Enter alone does nothing until you choose a button.
 
 ### Codex and local ChatGPT Work
 
-1. Right-click Capsule and choose **Connect to Codex / Work**. Capsule copies the hook to `%USERPROFILE%\.capsule\bin`.
-   If your Windows user folder contains `` % $ ` " & < > ( ) @ ^ | ``, Windows' `cmd` can't launch the hook from it.
-2. Review and trust Capsule's two hooks in your host. The Codex CLI provides `/hooks`. Trust the new hook path
-   once after upgrading from an older install.
+1. Right-click Capsule and choose **Connect to Codex / Work**. Capsule copies the hook to
+   `%USERPROFILE%\.capsule\bin` and adds it to `%USERPROFILE%\.codex\hooks.json` (or under `CODEX_HOME`), after a
+   backup, keeping your other hooks.
+2. Trust Capsule's two hooks in your host: the Codex CLI has `/hooks`. Trust the new path once after upgrading from an
+   older Capsule. Until a request arrives, the menu reminds you: "No events yet: trust the hook in Codex (/hooks),
+   then start a new chat".
 3. Start a new local chat. While another app is in front, hover the amber Codex ring to respond.
 
+If your Windows user folder contains `` % $ ` " & < > ( ) @ ^ | ``, Windows' `cmd` can't launch the hook from it.
+
 Codex only asks when its permission mode lets it. On **Full access** it runs commands without asking, so nothing
-reaches the capsule; choose **Auto** (or another mode that asks) next to the message box if you want approvals.
-
-The command card shows the full command, working folder and reason. Choose **Allow**, **Deny**, or
-**Answer in Codex / Work**. There is no persistent **Always allow** for this connection. Questions support
-options and typed answers, including free-text-only questions. Claude and Codex have separate queues.
-The same 60-second fallback and 80-second interaction limit apply. A hidden Capsule, disconnected hook or
-foreground Codex / Work window leaves the request with the host.
-
-Connect writes `%USERPROFILE%\.codex\hooks.json`, or `hooks.json` under `CODEX_HOME` when set. It backs up
-the existing file and preserves other hooks. **Disconnect from Codex / Work** removes only Capsule's entries.
-The command-line equivalents are `Capsule.exe --connect-codex` and `Capsule.exe --disconnect-codex`.
+reaches the capsule; choose **Auto** (or another mode that asks) next to the message box.
 
 | Approve a Codex / Work command | Type a question answer |
 |:---:|:---:|
 | <img src="docs/images/card-codex-approval.png" width="328" alt="Codex command card with the command, reason, working folder, Allow, Deny and native fallback"> | <img src="docs/images/card-codex-question.png" width="328" alt="Local Work question card with a typed answer, Send and native fallback"> |
 
-This needs a host with command hooks. It covers local orchestration and local execution. Cloud Work,
-ordinary ChatGPT web chats, file edits, plans, wider permission grants, secret questions, and requests that
-cannot fit a complete preview stay in the host. See [OpenAI's hook documentation](https://learn.chatgpt.com/docs/hooks).
+- The command card shows the full command, working folder and reason: **Allow once**, **Deny** or **Answer in Codex /
+  Work**. There's no **Always allow** for Codex.
+- Questions support options and typed answers, including free-text-only questions.
+- Claude and Codex have separate queues, with the same 60-second fallback and 80-second limit. A hidden Capsule, a
+  disconnected hook or a Codex / Work window in front leaves the request with the host.
+- It needs a host with command hooks, and covers local chats only. Cloud Work, ordinary ChatGPT web chats, file
+  edits, plans, wider permission grants, secret questions, and requests too big to preview stay in the host. See
+  [OpenAI's hook documentation](https://learn.chatgpt.com/docs/hooks).
+- **How it works:** command decisions use `PermissionRequest`, before the host's own approval reviewer. Question
+  answers use `PreToolUse` feedback: Capsule skips the original question and sends your answers to the model, which
+  continues from them. This doesn't create the host's own structured answer record; use **Answer in Codex / Work**
+  when that matters.
+- **Disconnect from Codex / Work** removes only Capsule's entries.
 
-Command decisions use `PermissionRequest`. These decisions run before the host's normal approval reviewer.
-Question answers use `PreToolUse` feedback: Capsule skips the original question and sends your answers to
-the model. This does not create the host's native structured answer record. The model must continue from
-that feedback. Use **Answer in Codex / Work** when that distinction matters.
+## Usage history and limit alerts
 
-On Windows 11 the capsule, its cards and the panel are clear glass, with the windows behind them blurred
-live. They follow Windows' light or dark mode. With **Transparency effects** off in Windows' settings, or on
-Windows 10, they're solid glass instead.
+Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or Esc goes back.
 
-[Download a release](#get-it), or build it yourself: `build.cmd` compiles it with the C# compiler that ships with
-Windows, so nothing is downloaded and nothing unsigned from the internet runs.
+<img src="docs/images/usage.png" width="340" alt="The Usage page: two pace lines (Claude's 5-hour limit full at 4:10 PM in amber, Codex about 40% at reset), 48M tokens, a heatmap of the last 26 weeks in shades of orange with today ringed, the figures under it (per active day, active days, current and longest streak, most active day, favourite model), and a legend: Opus 4.1, Sonnet 4.5, GPT-5 Codex, Haiku 4.5">
 
-## Get it
+- **Pace lines** at the top: how each ring's limit is going, such as "Claude · 5-hour · 73% · full at 4:10 PM".
+- **A heatmap** of the last 26 weeks: a square a day, a column a week, in four shades of orange by how busy the day
+  was. Today is ringed. Hover a day for its tokens and biggest models; ‹ › looks back another 26 weeks. Week, Month
+  and Year views show bars by model.
+- **The figures** under it: tokens per active day, active days, your current and longest streak, your most active day
+  and your favourite model.
+- **Tokens without cache reads:** input, output and cache writes. Claude re-reads its cached context every turn,
+  which would bury everything else, so **Details** shows cache reads apart, with the busiest day and the daily average.
+- **The legend** totals each model over the period shown, biggest first. Claude and Codex count together.
+- **Where the numbers come from:** the logs Claude Code and Codex already write on this PC, archived Codex chats
+  included. A turn copied into a forked chat counts once. Claude Code deletes its logs after 30 days, so the first
+  launch counts the last 30 days or so; from then on Capsule keeps its own history. Claude Code inside the Claude
+  desktop app keeps its logs where Capsule can't see them, so those sessions aren't counted.
 
-You need Windows 10 or 11 (64-bit) with .NET Framework 4.8 or later, which Windows 11 and an up-to-date Windows 10
-have already.
+### Pace
 
-**With Scoop** ([scoop.sh](https://scoop.sh)), in PowerShell:
+Capsule remembers each usage check and works out how fast each limit is rising: over the last hour for 5-hour limits,
+the last day for weekly ones. After 15 minutes (2 hours for weekly limits) and a visible rise, the hover card says
+"At this pace: full at 4:10 PM · locked 41 min" (amber, when you'd run out before the reset) or "about 64% at reset".
+Until then it compares your use with an even spread: "81% of the window gone · 1.1× even pace", where 1.0× uses the
+limit exactly as fast as the window runs out.
 
-```pwsh
-scoop bucket add capsule https://github.com/vorgtrom/scoop-capsule
-scoop install capsule/capsule
-```
+### Alerts
 
-Then start **Capsule** from the Start menu (Scoop Apps → Capsule). When Capsule shows an update in its tray menu,
-select the notice to copy `scoop update capsule`. Run the command in a terminal. The bucket gets each new release
-within a few hours.
+Windows notifications from Capsule's tray icon, each once per limit window. Click one to open the panel.
+- "Claude's 5-hour limit is at 80%. It resets at 4:51 PM." (and again at 95%)
+- "At this pace you'll hit Claude's 5-hour limit at 4:10 PM, 41 min before it resets." (from 30% used, once two checks
+  in a row agree)
+- "Claude's 5-hour limit has reset." (for a limit Capsule warned you about)
+- "capsule is at 91% of its context. Claude Code will compact it soon." (once; again only after it drops under 80%)
+- "capsule is waiting on you, and its prompt cache goes cold in about 5 min." (for a session waiting on you with an
+  hour-long cache, once per reply. An answer after that re-reads the whole conversation.)
 
-**With winget** (once Microsoft has accepted the package):
+Untick **Limit alerts** in the menu to turn them off. While you focus, they wait for your break.
 
-```pwsh
-winget install vorgtrom.Capsule
-```
-
-Then start it with `capsule-notch` in a terminal. `winget upgrade vorgtrom.Capsule` updates it.
-
-If you installed with winget, use that command when Capsule shows an update notice.
-
-**Download it (no building):**
-1. On the [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest), download `Capsule-<version>.zip`.
-2. Unzip it into a folder such as `Documents\Capsule`. If you enable **Start with Windows**, keep Capsule in that folder.
-3. Start `Capsule.exe`.
-   - Capsule isn't code-signed, so Windows may say **Windows protected your PC**. Click **More info**, then **Run
-     anyway**. Each release is built and tested by GitHub from the code in this repo; the zip's SHA-256 is next to it.
-   - If your antivirus objects, see [Antivirus](#antivirus).
-
-What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and on each release's page.
-
-**Or build it yourself.** In PowerShell:
-
-```powershell
-git clone https://github.com/vorgtrom/capsule-notch.git
-cd capsule-notch
-.\build.cmd
-.\bin\Capsule.exe
-```
-
-No Git? Click **Code → Download ZIP** on this page, unzip it somewhere that stays (your Desktop or Documents, say),
-and run `build.cmd` in that folder. `build.cmd` should end with `Build OK`; then start `bin\Capsule.exe`.
-
-## Build
-
-Run `build.cmd`.
-- It compiles `bin\Capsule.exe`, `bin\capsule-hook.exe` and `bin\Tests.exe` with
-  `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`, then runs the tests.
-- It stops a running copy first.
-- Run it again after any change.
-
-GitHub builds and tests every pull request and every change to `main` the same way, on Windows, so a change that
-breaks the build or a test shows a red ✗ there before it's merged.
-
-To see how many checks each group of tests ran, run `bin\Tests.exe --groups` after a build.
-
-To try a change while Capsule is running, run `build.cmd dev` instead. It builds into `bin-dev\`, runs the
-tests there, and leaves a running Capsule alone.
-
-### Publish a release
-
-1. In [CHANGELOG.md](CHANGELOG.md), rename **Unreleased** to the new version (such as `## v1.4.0`), say what changed
-   in plain words, and add a fresh **Unreleased** above it. Merge that to `main`.
-2. On GitHub, open **Actions → Release → Run workflow** and enter the same version.
-
-GitHub builds Capsule, runs every test, and publishes `Capsule-<version>.zip` with its SHA-256, under that version's
-notes from the changelog. If the changelog has no section for it, the notes list the merged pull requests instead.
-Downloaded copies hear about it within a day.
-
-### Update to the latest version
-
-**If you downloaded a release:** once a day it checks whether a newer one is out. When one is, a balloon says so and
-the menu's first item reads **Capsule v1.4.0 is available…** (with the new version's number); choose it for the
-release's page, which says what's new. Then quit Capsule
-(right-click it → **Quit Capsule**), download the new zip, unzip it over the same folder, and start `Capsule.exe`
-again. Your settings carry over, as below. To stop the daily check, untick **Check for updates** in the menu.
-
-**If you built it:**
-
-1. Get the latest code in this folder:
-   - **The released version:** `git checkout main`, then `git pull`.
-   - **A change that isn't merged yet,** to try it first: `git fetch origin`, then `git checkout <its branch>`. Go back
-     with `git checkout main`.
-   - **If you downloaded a ZIP** instead of cloning, download the new one and copy its files over this folder's. Keep
-     the folder where it is.
-2. Optionally, run `build.cmd dev` first. It builds into `bin-dev\` and runs the tests while your Capsule keeps
-   running. It should end with `Build OK`. If it says `BUILD FAILED`, stop here: your Capsule is untouched.
-3. Run `build.cmd`. It quits the running Capsule, builds into `bin\` and runs the tests. It should end with `Build OK`.
-   If it says `BUILD FAILED` instead, go back with `git checkout main` and run `build.cmd` again.
-4. Start `bin\Capsule.exe`.
-
-What carries over:
-- **Your settings, sign-ins and ideas** are in `%USERPROFILE%\.capsule\`, which a build never touches.
-- **Start with Windows** points at `bin\`. Capsule refreshes its staged hooks when it starts.
-
-Only one Capsule runs at a time. `bin-dev\Capsule.exe` quits at once while `bin\Capsule.exe` runs, so `build.cmd dev` is
-for running the tests (and `--preview`) without stopping the running copy, not for running a second one.
-
-### Antivirus
-
-Behaviour-based antivirus may freeze or remove Capsule. It's a brand-new unsigned program that reads the
-Claude and Codex sign-in files, keeps an encrypted Notion secret and Google sign-in, and goes online, which is also what
-token-stealing malware does. Norton did this on the first run.
-
-If it happens to you:
-1. Restore `Capsule.exe` from the antivirus's history.
-2. Exclude the folder Capsule runs from: the one you unzipped it into, or `bin` if you built it. In Norton: **Settings → Antivirus → Scans and Risks → Items to Exclude from
-   Auto-Protect, Script Control, SONAR and Download Intelligence Detection**.
-
-Only exclusions survive updates and rebuilds. All the source is in this repo, so you can check what it does first.
-
-## Use
-
-Start `Capsule.exe`: in the folder you unzipped it into, or `bin\Capsule.exe` if you built it. On first run, Capsule
-asks whether to start with Windows. **No** is the default. You can change the choice in the tray menu.
-
-- **Hover** a ring to see the details.
-- **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile
-  has a **Sign in** button, which runs `claude auth login`.
-- **Ctrl+Alt+N** from any app opens the panel with the cursor in the Ideas box. Type, press Enter, and it's
-  saved and the panel closes. Opened by a click, the panel stays open after you save.
-- **Esc** closes the panel. Switching apps also closes the normal board. Settings and open calendar forms stay open
-  so you can copy values from another app. **Back** leaves settings and clears unsaved secret fields.
-- The panel scrolls when its contents exceed the monitor's available height. Its header stays visible.
-- In Settings, **Open panel with** puts Calendar, Weather, Clipboard, or Needs you first. A pending agent request puts
-  Needs you first with any opening preference. If the selected section is hidden, Capsule uses the default order.
-  The Ideas shortcut still goes straight to the Ideas box.
-- **Drag** the capsule to move it. It snaps to the left or right edge of whichever screen you drop it on.
-- **Right-click** the capsule or the tray icon for the menu.
-- **Left-click** the tray icon to hide or show the capsule.
-- It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
-
-The shortcut can be changed in the panel's settings (⚙). By default it isn't Ctrl+Alt+Space, because the
-Claude desktop app uses that for its own quick entry.
-
-To see when Claude is working or waiting on you, choose **Connect to Claude Code** in the menu.
-- Capsule copies the hook to `%USERPROFILE%\.capsule\bin`, then registers it in `~/.claude/settings.json` after
-  saving a backup. If you move Capsule, start it from its new folder to refresh the connection.
-- New sessions report in from then on. In the desktop app, running ones do too.
-- `Capsule.exe --connect` and `--disconnect` do the same from a terminal. They print nothing; the
-  result goes to the log.
-- If you connected with an earlier Capsule, the menu says **Reconnect to Claude Code**. Choose it once to
-  answer Claude from the capsule: it gives the permission hook the time it needs to wait for you.
+## The panel's tiles
 
 ### Google Calendar
 
-There are three ways to connect. The one-click sign-in isn't in a release yet, so use the link or your own client
-for now.
+With a calendar connected, the capsule gets a third cell:
+- when your next event today starts ("2:30", or "14:30" with a 24-hour clock);
+- **now** during an event, with its ring filling as it runs;
+- **—** when nothing is left today. All-day, cancelled and declined events don't count.
 
-**Sign in with Google (one click, coming in a later release)**
+Hover it for the rest of today and tomorrow's first three events, plus Google Tasks due those days when you're signed
+in. The panel's Calendar tile shows the same.
 
-In Capsule, open the panel, click ⚙, and under **Google Calendar** click **Sign in with Google**. Your browser opens at
-Google's sign-in. Pick your account and allow access to your events, your list of calendars and your tasks. That's all:
-all your calendars show, changes come within 5 minutes, and you can add, edit and delete events and tasks from the
-[month page](#the-month-page).
-- Until Google finishes reviewing Capsule's sign-in, Google shows a warning that it hasn't verified the app. Click
-  **Advanced**, then **Go to Capsule**. Google also limits an app under review to 100 users; if you hit that, use one of
-  the ways below.
+| Hover the calendar | The month page |
+|:---:|:---:|
+| <img src="docs/images/calendar-card.png" width="328" alt="The calendar card: the rest of today, with the meeting under way highlighted and a task, then tomorrow's first events and a task"> | <img src="docs/images/month.png" width="340" alt="The month page: the month's days with coloured dots, today picked, and today's events and tasks with a pencil and a bin on each"> |
+
+There are three ways to connect. The one-click sign-in isn't in a release yet, so use the link or your own client for
+now.
+
+**Sign in with Google (one click, coming in a later release).** In Settings, under **Google Calendar**, click **Sign in
+with Google**, pick your account and allow access to your events, calendars and tasks. All your calendars show,
+changes come within 5 minutes, and you can add, edit and delete from the [month page](#the-month-page).
+- Until Google finishes reviewing Capsule, it warns that the app isn't verified: click **Advanced**, then **Go to
+  Capsule**. Google also limits an app under review to 100 users; if you hit that, use one of the ways below.
 - A build from source never has this button.
 
-**The quick way: your calendar's secret link (read-only)**
-
-1. In Capsule, open the panel, click ⚙, and under **Google Calendar** click **Get link**. Google Calendar's settings
-   open in your browser.
+**The quick way: your calendar's secret link (read-only).**
+1. In Settings, under **Google Calendar**, click **Get link**. Google Calendar's settings open in your browser.
 2. Under **Settings for my calendars**, click your calendar, then **Integrate calendar**.
-3. Copy **Secret address in iCal format**. Not the public address: that one only works for a public calendar.
-   Capsule saves it the moment you copy it, and says so in a balloon.
-   - For 5 minutes after **Get link**, Capsule looks at what you copy for that one kind of address, and nothing else.
-     The address never goes into the clipboard history.
-   - Or paste it under **Calendar link** yourself and click **Save link**.
+3. Copy **Secret address in iCal format** (not the public address). Capsule saves it the moment you copy it, and says
+   so. For 5 minutes after **Get link**, it looks at what you copy for that one kind of address only, and the address
+   never goes into clipboard history. Or paste it under **Calendar link** and click **Save link**.
 
-The capsule then gets a third cell, and the panel a Calendar tile.
-- The link shows one calendar, your main one. Its events and the ones you're invited to are in it.
-- The link is read-only. It does not show Google Tasks or let Capsule add, edit, or delete events.
-- Capsule reads it every 15 minutes, because Google itself only refreshes the link's file every so often. A change
-  you make in Google Calendar can take a while to show.
-- Some work and school accounts have the secret address turned off by their admin. Use your own client (below) then.
-- The link is a secret: anyone who has it can read that calendar. Capsule keeps it encrypted and never shows it again.
-  If it ever leaks, **Reset** it on the same page in Google Calendar and paste the new one.
+- The link shows one calendar, your main one, with the events you're invited to. It's read-only: no tasks, and no
+  adding, editing or deleting.
+- Capsule reads it every 15 minutes; Google only refreshes the link's file every so often, so changes can take a while.
+- Some work and school accounts have the secret address turned off. Use your own client then.
+- Anyone with the link can read that calendar. Capsule keeps it encrypted and never shows it again. If it ever leaks,
+  **Reset** it on the same page in Google Calendar and paste the new one.
 
-**Your own Google client (sign in; several calendars)**
-
-Use this until one-click sign-in is in a release, with a build from source, or to use your own Google Cloud app. It takes about ten minutes, once.
-In return you sign in instead of pasting a link, choose which of your calendars
-show, get changes within 5 minutes, and can add, edit and delete events and tasks from the
-[month page](#the-month-page). Once you're signed in, it is used instead of the link.
+**Your own Google client (sign in; several calendars).** About ten minutes, once. You sign in instead of pasting a
+link, choose which calendars show, get changes within 5 minutes, and can add, edit and delete from the month page.
 
 1. **A project.** In the [Google Cloud console](https://console.cloud.google.com/), create a project (call it Capsule).
-2. **The APIs.** Go to **APIs & Services → Library**, find **Google Calendar API** and click **Enable**. Then find
-   **Google Tasks API** and enable it too.
-3. **The consent screen.** Open **Google Auth Platform** (it was called **OAuth consent screen**) and click **Get started**.
+2. **The APIs.** In **APIs & Services → Library**, enable **Google Calendar API** and **Google Tasks API**.
+3. **The consent screen.** Open **Google Auth Platform** (formerly **OAuth consent screen**) and click **Get started**.
    Name the app Capsule, give your email, and choose the audience:
-   - **Internal** if your account is a Google Workspace one (work or school). No review, and the sign-in doesn't
-     expire on a schedule.
-   - **External** for a personal Gmail account. Then, under **Audience**, click **Publish app** so its status is
-     **In production**. While it stays in **Testing**, Google ends the sign-in every 7 days.
-   - **Publish app greyed out?** Google first wants, on the **Branding** page, an app name, a support email, a developer
-     contact, and an **Application home page** and **privacy policy link** on an **Authorized domain**. Any page of
-     your own works, for example a free GitHub Pages site: this repo's `docs` folder has a home page and a privacy
+   - **Internal** for a Google Workspace (work or school) account. No review, and the sign-in doesn't expire on a
+     schedule.
+   - **External** for a personal Gmail account. Then, under **Audience**, click **Publish app** so it's **In
+     production**. While it stays in **Testing**, Google ends the sign-in every 7 days.
+   - **Publish app greyed out?** Google first wants, on the **Branding** page, an app name, a support email, a
+     developer contact, and an **Application home page** and **privacy policy link** on an **Authorized domain**. Any
+     page of your own works, such as a free GitHub Pages site: this repo's `docs` folder has a home page and a privacy
      policy you can copy. Don't upload a logo: that makes Google require a review first.
-   - **"Access blocked: Capsule can only be used within its organization" (Error 403: org_internal)** means the audience
-     is Internal but you signed in with an account outside that organization, such as a Gmail one. Under **Audience**,
-     click **Make external**, then **Publish app**, and sign in again. If **Make external** isn't offered, the project
-     belongs to a Workspace organization: create the project again while signed in with your Gmail account.
-4. **The permissions.** Under **Data Access**, click **Add or remove scopes**. Add these three:
+   - **"Access blocked: Capsule can only be used within its organization" (Error 403: org_internal)** means the
+     audience is Internal but you signed in with an outside account, such as Gmail. Under **Audience**, click **Make
+     external**, then **Publish app**, and sign in again. If **Make external** isn't offered, the project belongs to a
+     Workspace organization: create it again signed in with your Gmail account.
+4. **The permissions.** Under **Data Access**, click **Add or remove scopes** and add these three, then **Save**:
    - `.../auth/calendar.events` (see and add events)
    - `.../auth/calendar.calendarlist.readonly` (your list of calendars, read-only)
    - `.../auth/tasks` (see, add and tick your tasks)
 
-   If the list doesn't show one, paste its full name, such as `https://www.googleapis.com/auth/tasks`, into
-   **Manually add scopes**.
-   Then **Save**.
+   If one isn't listed, paste its full name, such as `https://www.googleapis.com/auth/tasks`, into **Manually add
+   scopes**.
 5. **The client.** Under **Clients**, click **Create client**, choose **Desktop app**, name it Capsule, and click
-   **Create**. Google shows the **Client secret** only now, in the dialog that opens: click **Download JSON** there,
-   open the file in Notepad, and copy all of it. Or copy the **Client ID** and the **Client secret** one at a time.
-   - Lost the secret? Open the client, click **Add secret**, and copy the new one straight away. Once Capsule is
-     signed in with it, disable and delete the old one.
-6. **In Capsule:**
-   1. Open the panel, click ⚙, then **Use your own Google client instead** under **Google Calendar**.
-   2. Paste the whole JSON into **Client ID**: it fills in both. Or paste the ID and the secret into their boxes.
-      Clicking away to copy the other one closes the panel, but what you pasted is kept: open ⚙ again and carry on.
-   3. Click **Sign in with Google**. Your browser opens at Google's sign-in.
-   4. Pick your account and allow the permissions: your events, your list of calendars, and your tasks.
-      - With an External app, Google first warns that it hasn't verified the app. That's expected: it's your own
-        app. Click **Advanced**, then **Go to Capsule**.
-   5. The page then says Capsule is signed in, and you can close the tab.
+   **Create**. Google shows the **Client secret** only now: click **Download JSON**, open the file in Notepad, and copy
+   all of it. Lost the secret? Open the client, click **Add secret**, and copy the new one straight away. Once Capsule
+   is signed in with it, disable and delete the old one.
+6. **In Capsule:** open Settings, click **Use your own Google client instead** under **Google Calendar**, paste the
+   whole JSON into **Client ID** (it fills in both boxes), and click **Sign in with Google**. Allow the permissions in
+   your browser. With an External app, Google first warns that it hasn't verified the app; it's your own app, so click
+   **Advanced**, then **Go to Capsule**. The page then says Capsule is signed in. If clicking away closed the panel,
+   what you pasted is kept: open ⚙ again and carry on.
 
-The panel closes while you're in the browser. Open it and ⚙ again to see your account and a box for each of your
-calendars.
-- At first, the calendars you show in Google Calendar are ticked.
-- Untick one to leave it off the capsule; tick one to add it.
-- **Change client** lets you sign in with another client.
-- **Sign out** forgets the sign-in and asks Google to revoke it. A saved link takes over again.
-- **Signed in before adding existed?** Your sign-in still reads, but may not add. Add the new permissions in step 4
-  (and enable the Google Tasks API, step 2), then click **Sign in again** under **Google Calendar** in ⚙.
+Then Settings shows your account and a box for each calendar: the ones you show in Google Calendar start ticked.
+**Change client** signs in with another client; **Sign out** forgets the sign-in, asks Google to revoke it, and a saved
+link takes over again. Signed in before adding existed? Add the permissions in step 4 (and the Tasks API, step 2), then
+click **Sign in again**.
 
-**Either way:**
-- Capsule reads your calendar every 5 minutes signed in, or every 15 with the link. It also reads it when the panel
-  opens, after the PC wakes, and when the network comes back.
-- If Google can't be reached, the cell and the tile keep the last list, dimmed once it is over 15 minutes old.
-- If Google ends the sign-in (you revoked it, or a Testing app's 7 days ran out), Capsule says so in a balloon and
-  shows **Sign in with Google** again.
+**Either way,** Capsule reads your calendar every 5 minutes signed in, or every 15 with the link, and also when the
+panel opens, after the PC wakes and when the network comes back. If Google can't be reached, it keeps the last list,
+dimmed after 15 minutes. If Google ends the sign-in, a balloon says so and **Sign in with Google** comes back.
 
 #### The month page
 
-Click the calendar button at the top right of the panel's Calendar tile.
+Click the calendar button at the top right of the Calendar tile.
 
 | + Add event | Delete, asked first |
 |:---:|:---:|
 | <img src="docs/images/month-add.png" width="340" alt="The month page with the add form open: a title, All day, a start and end time, and Add or Cancel"> | <img src="docs/images/month-delete.png" width="340" alt="The month page with one event's row asking Delete this?, with Delete and Cancel"> |
 
-- **The month:** six weeks of days, with a dot for each event in its calendar's colour, and a grey one for a task.
-  A small **+** means there are more than three. ‹ and › change the month, **Today** comes back, and ← returns to
-  the tiles.
-- **A day:** click it for its events, all-day ones first, then its tasks. Tick a task to mark it done in Google
-  Tasks; untick it to undo.
-- **+ Add event:** a title, then **All day** or a start and end time on that day ("2:30 PM", "14:30" and "2pm" all
-  work), and the calendar when you have more than one you can add to. It goes into Google Calendar.
-- **+ Add task:** a title, and the list when you have more than one. It goes into Google Tasks, due that day.
-- **Edit or delete:** hover one of your own events or tasks for a pencil and a bin at the right of its row.
-  - The pencil opens the form filled in: change the title, and an event's times, then click **Save**. An event that
-    spans several days can only be deleted from here.
-  - The bin asks **Delete this?** on the row first. Nothing is deleted until you click **Delete**.
-  - For a repeating event, both change only that day's one.
-  - If the event has guests, Google emails them about the change, as Google Calendar does.
-  - Events you were invited to, and ones in calendars you can only read (such as holidays), have no buttons.
-- Adding, ticking, editing and deleting need your own client and a sign-in. With the calendar link, the page shows
-  your events only.
-- **Keys:**
-  - **← →** move a day and **↑ ↓** a week.
-  - **Page Up** and **Page Down** change the month.
-  - In the form, **Enter** adds or saves and **Esc** cancels.
-  - **Esc** also cancels a **Delete this?**.
-  - With nothing to cancel, **Esc** closes the panel as usual.
-- If the page says to turn on the Google Tasks API, your Cloud project doesn't have it on yet: enable **Google Tasks
-  API** under **APIs & Services → Library** (step 2 of [your own client](#google-calendar)). Tasks show up at the next
-  read.
+- **The month:** six weeks, with a dot per event in its calendar's colour and a grey one per task; **+** means more
+  than three. ‹ and › change the month, **Today** comes back, ← returns to the tiles.
+- **A day:** click it for its events, all-day first, then its tasks. Tick a task to mark it done in Google Tasks.
+- **+ Add event:** a title, then **All day** or a start and end time ("2:30 PM", "14:30" and "2pm" all work), and the
+  calendar if you can add to more than one.
+- **+ Add task:** a title, and the list if you have more than one. It's due that day.
+- **Edit or delete:** hover one of your own events or tasks for a pencil and a bin.
+  - The pencil opens the form filled in; change it and click **Save**. A multi-day event can only be deleted here.
+  - The bin asks **Delete this?** first. Nothing is deleted until you click **Delete**.
+  - For a repeating event, both change only that day's one. If the event has guests, Google emails them.
+  - Events you were invited to, and read-only calendars such as holidays, have no buttons.
+- Adding, ticking, editing and deleting need a sign-in; with the link, the page only shows events.
+- **Keys:** ← → move a day, ↑ ↓ a week, Page Up / Page Down a month. In the form, Enter saves and Esc cancels. Esc
+  also cancels **Delete this?**, and otherwise closes the panel.
+- If the page asks you to turn on the Google Tasks API, enable it in your Cloud project (step 2 above). Tasks show up
+  at the next read.
 
 ### Weather
 
-Weather starts off. Open Settings, enter a place under **Weather**, then click **Find** and select a match.
-The tile shows current conditions, the next six hours, and the next four days. Choose **Automatic**, **°C**, or **°F**.
-Automatic uses your Windows region. Forecast times use the selected place's time zone and your Windows clock format.
+Weather starts off. In Settings, enter a place under **Weather**, click **Find** and select a match. The tile shows
+current conditions, the next six hours and the next four days, in **Automatic** (your Windows region), **°C** or
+**°F**. Times use the place's time zone and your Windows clock format.
 
-Capsule refreshes every 30 minutes. It also refreshes after the PC wakes or reconnects, and when you open the panel
-with a forecast older than 15 minutes. If an update fails, Capsule keeps the last forecast and shows when it last
-updated. Data older than 90 minutes appears dimmed. Choose **Turn off** to clear the saved place and stop requests.
+Capsule refreshes every 30 minutes, after the PC wakes or reconnects, and when you open the panel with a forecast
+older than 15 minutes. A failed update keeps the last forecast, dimmed after 90 minutes. **Turn off** clears the place
+and stops requests.
 
 [Weather data by Open-Meteo.com](https://open-meteo.com/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
+### Spotify and YouTube Music
+
+Start a song in Spotify or YouTube Music, and a **Music** cell appears on the capsule. Hover it for the artwork,
+title, artist, progress, and **Previous**, **Play / Pause** and **Next**. The panel's Music tile has the same, plus a
+volume slider. No sign-in or API key is needed.
+
+| The Music cell | Hover it |
+|:---:|:---:|
+| <img src="docs/images/notch-music.png" width="116" alt="The capsule with a Claude ring, a Codex ring and a Music cell showing the album art, its ring filling in Spotify green, marked Playing"> | <img src="docs/images/card-music.png" width="328" alt="The music card: Spotify, the artwork, the track and artist, progress 1:24 of 3:48, Source: Spotify, and Previous, Pause and Next"> |
+
+- The cell stays for 2 minutes after you pause, so Play is still in reach. The panel's tile is always there.
+- **Volume:** the speaker button mutes the default Windows playback device, and the slider sets its volume. The mouse
+  wheel and arrow keys move it by 2, Page Up / Page Down by 10. It follows changes made in Windows.
+- Spotify's desktop app and anything that uses Windows media controls is found automatically. YouTube Music in Chrome,
+  Edge, Firefox and other browsers shows under the **browser's name**; Windows doesn't give the tab's address, so other
+  media tabs can appear too. With several players, click **Source** to switch.
+- It controls playback **on this PC** only: no library browsing, other devices or seeking. A player that doesn't
+  publish Windows media information can't be shown.
+- Needs Windows 10 version 1809 or later.
+
+### Focus timer
+
+| The Focus ring | Focus and Clipboard tiles | Choose your rings |
+|:---:|:---:|:---:|
+| <img src="docs/images/notch-focus.png" width="116" alt="Capsule with Claude and Codex rings and a red Focus ring counting down, 18:42 left"> | <img src="docs/images/panel-focus.png" width="340" alt="The panel with each session's model and tokens, the Focus tile with Pause, Skip and Stop, and the Clipboard tile listing a command, a link, two colours and a note"> | <img src="docs/images/settings-rings.png" width="340" alt="Settings: a switch for each ring and for clipboard history, and the focus lengths"> |
+
+Click **Start** on the Focus tile, or **Start focus** in the menu: 25 minutes of focus, a 5-minute break, and a
+15-minute break after every four. A Focus ring counts down on the capsule, red while you focus, green on a break and
+dimmed while paused. A sound and a notification mark the end of each part. **Pause**, **Skip** and **Stop** are on the
+tile and on the ring's hover card; the lengths are in Settings. The timer picks up where it was when Capsule restarts.
+
+**Quiet while focusing:** Capsule's own chimes and alerts wait for the break, then come as one note, such as "While you
+focused: 2 requests needed you, 1 session finished." The rings still glow and spin. Turn it off in Settings, under the
+focus lengths.
+
+### Clipboard history
+
+Off until you turn it on in Settings, under **Clipboard history**. The Clipboard tile then lists your last 25 copies,
+newest first, filtered by **All**, **Links**, **Images**, **Code** or **Text**. Colours such as `#30D158` show a
+swatch, code shows its first line in monospace, links show the host and path without the query, and up to 5 images
+have thumbnails. Click a row to copy it again ("Copied" confirms it), or **Clear** to empty the list.
+
+### Screenshots and scrolling webpages
+
+Click the camera in the panel, choose **Capture...** in the menu, or press **Ctrl+Alt+S** (change it under **Capture
+shortcut** in Settings).
+
+1. Choose **Screenshot** for an area, or **Scrolling webpage** for a whole page in Chrome or Edge.
+2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
+3. For a webpage, keep the pointer over the page while it scrolls; moving it away pauses. **Stop** keeps what's
+   captured so far; **Esc** or **Cancel** throws it away.
+4. Check the preview. To crop, click **Crop**, drag over the area and press Enter.
+5. Choose **Copy**, **Save PNG** or **Keep on shelf**. **Retake** starts again.
+
+- A scrolling capture goes to the top of the page first, then scrolls to the end, joining the screenshots where they
+  overlap. A fixed header or footer appears once. If the top is too far to reach in time, the image starts where the
+  page was, and the preview says so.
+- Capsule can't tell the real end of a page from one that stopped scrolling, and stops early at content that changes
+  as it scrolls (a video, an animation) or repeats too exactly to match. The preview says how it ended; check the
+  joins at **100%**.
+- Switching windows, or moving, resizing or closing the browser, cancels it.
+- Limits: one capture at a time, 32,000 rows, 32 million pixels, 120 screenshots and 90 seconds, on one monitor, at the
+  page's current width and zoom.
+
+### Shelf
+
+1. Drag files from File Explorer over the capsule to open the panel.
+2. Drop them on the **Shelf** tile, which lights up with "Drop to add". Capsule keeps references to the originals.
+3. Drag a row, or **Drag all files**, into another app, which gets a copy. Windows can block drops into apps running as
+   administrator.
+
+The shelf holds up to 12 entries and clears when Capsule exits. **Keep on shelf** in a capture's preview adds a PNG
+(up to 12 captures and 64 MiB per session), which Capsule deletes on exit. One left behind by a crash is cleaned up
+after a day.
+
 ### Needs you
 
-The **Needs you** tile lists the oldest request from each enabled agent, with the project, request type and wait time.
-It also shows how many other requests each agent has queued. With monitoring off, the tile shows only agent status.
-Capsule hides the empty tile when both agent rings and GitHub checks are off, unless Needs you is your opening section.
-With GitHub checks enabled and no pending agent requests, it shows **No pending requests** above the GitHub section.
-Click **Review** to open the existing request card. If the request has expired or moved on, the tile updates.
+The **Needs you** tile lists the oldest request from each agent, with the project, kind and wait time, and how many
+more are queued. Click **Review** to open its card.
 
-In Settings, enter one public GitHub repository as `owner/repo`, or paste its GitHub link, and click **Save repository**. GitHub checks start off.
-Capsule checks GitHub without signing in, so private repositories aren't supported.
-Capsule checks up to 30 open pull requests and 30 recent pull request workflow runs per scan. Scans are at least
-three minutes apart for the same repository. Changing repositories starts a new scan as soon as any active scan and
-server-requested wait finish.
-It shows failures for the current PR head, including timeouts and runs that failed to start. Cancelled runs
-and runs with the `action_required` conclusion are not shown as failures. The tile explains incomplete results
-and shows when the last check succeeded.
-Click **Open run** to view a failure on GitHub. Choose **Turn off** in Settings to stop the checks.
+It can also watch one public GitHub repository for failing checks. In Settings, enter it as `owner/repo` or paste its
+link, and click **Save repository** (checks start off).
+- Capsule checks without signing in, so private repositories aren't supported.
+- Up to 30 open pull requests and 30 recent workflow runs per scan, at least three minutes apart.
+- It shows failures for each PR's latest commit, including timeouts and runs that failed to start. Cancelled runs and
+  ones awaiting approval aren't failures. Click **Open run** to see one on GitHub.
+- The tile says when results are incomplete and when the last check succeeded. **Turn off** stops the checks.
 
 ### Ideas → Notion
 
-Ideas go into a Notion database of your choice, one page per idea, with the idea as the page's title.
-Any database works.
+Ideas go into a Notion database of your choice, one page per idea, with the idea as its title.
 
 1. In Notion's developer portal, [app.notion.com/developers/connections](https://app.notion.com/developers/connections),
-   click **New connection** (you need to be the workspace's owner). Name it Capsule, keep **API token**, and
-   click **Create connection**.
-   - On its **Configuration** tab, Capsule needs only **Read content** and **Insert content**: untick
-     **Update content** and choose **No user information**.
-   - The **API token** on that tab is the secret Capsule asks for. Copy it.
-2. In Capsule, open the panel, click ⚙, paste the token as the secret and click **Save and test**. Capsule
-   keeps the secret and asks for the database's link.
-3. Open the database you want the ideas in (or make one), then **••• → Connections** and add Capsule.
-   Notion shows what Capsule may do there: read and insert content. Copy the database's link with
+   click **New connection** (you need to own the workspace). Name it Capsule, keep **API token**, and click **Create
+   connection**. On its **Configuration** tab, Capsule needs only **Read content** and **Insert content**: untick
+   **Update content** and choose **No user information**. Copy the **API token**: it's the secret Capsule asks for.
+2. In Capsule's Settings, paste the token as the secret and click **Save and test**.
+3. Open your database in Notion (or make one), then **••• → Connections** and add Capsule. Copy its link with
    **••• → Copy link**.
-4. Open the panel and ⚙ again, paste the link, and click **Save and test**. It shows the database's name
-   when both work.
+4. Open Settings again, paste the link, and click **Save and test**. It shows the database's name when both work.
 
-That is two trips on purpose: clicking away closes the panel, and a secret that was pasted but not saved
-is gone when it does. Once saved, the secret stays, so the second **Save and test** needs only the link.
+It's two trips on purpose: clicking away closes the panel, and a secret pasted but not saved is gone. Once saved, the
+secret stays.
 
-Until the setup is done, and whenever Notion can't be reached, your ideas wait in Capsule and go to Notion
-as soon as they can, in the order you typed them. Click an idea in the panel to open it in Notion.
-
-Capsule keeps every idea until Notion confirms it. An idea that can't be written to disk yet (another
-program has the file open, say) stays in memory and is tried again every few seconds, and the Ideas tile
-says so meanwhile; quitting before it is written would lose it. A queue file Capsule can't read is kept beside it as `ideas-queue.json.unreadable-<time>`, and its ideas aren't sent until it's restored. Very rarely an idea reaches Notion twice,
-for example when Notion made the page but its reply was lost, or Capsule quit while sending.
+Until setup is done, and whenever Notion can't be reached, your ideas wait in Capsule and go in the order you typed
+them. Click an idea in the panel to open it in Notion. Capsule keeps every idea until Notion confirms it; one that
+can't be written to disk yet stays in memory and is retried, and the tile says so. A queue file Capsule can't read is
+kept as `ideas-queue.json.unreadable-<time>`. Very rarely an idea reaches Notion twice, for example when Notion's reply
+was lost.
 
 ## What it reads, and where it connects
 
 | Tool | Reads | Connects to |
 |---|---|---|
 | Claude | the Claude CLI's sign-in, `~/.claude/.credentials.json` | `api.anthropic.com/api/oauth/usage` |
-| Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%` if you set it), or the usage Codex writes to its session logs; and, to see whether a turn is running, the end of Codex's recent session logs | `chatgpt.com/backend-api/wham/usage` |
-| Ideas | the Notion secret you saved in Capsule | `api.notion.com`, once you set it up |
-| GitHub checks | public PR and Actions metadata, with no sign-in | `api.github.com`, when you save a repository |
-| Music | local Windows media sessions from Spotify, YouTube Music desktop apps, and supported browsers: track metadata, artwork, playback state, available controls and timeline | no internet connection; playback commands go only to the selected local Windows media session |
-| Output volume | volume and mute state of the default Windows playback device while the Music tile is visible | no internet connection; the slider and speaker button change the device's volume or mute state locally |
-| Updates (a downloaded Capsule only) | nothing | `api.github.com` (the latest release's version number, once a day) |
-| Google Calendar | the calendar link, or the sign-in and client secret, you saved in Capsule | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
-| Weather | the place name you search for and the saved place label, coordinates rounded to two decimals, and units | `geocoding-api.open-meteo.com` (your query and UI language when you click Find), `api.open-meteo.com` (rounded latitude and longitude and temperature unit, only once you select a place) |
+| Codex | Codex's sign-in, `~/.codex/auth.json` (or under `%CODEX_HOME%`), or the usage Codex writes to its session logs; and the end of recent session logs, to see whether a turn is running | `chatgpt.com/backend-api/wham/usage` |
+| Ideas | the Notion secret you saved | `api.notion.com`, once set up |
+| GitHub checks | public pull request and Actions data, no sign-in | `api.github.com`, once you save a repository |
+| Music | local Windows media sessions: track, artwork, playback state, controls and timeline | nothing; commands go only to the local player |
+| Volume | the default playback device's volume and mute | nothing |
+| Updates (downloaded copies only) | nothing | `api.github.com`: the latest release's version number, once a day |
+| Google Calendar | the link, or the sign-in and client secret, you saved | link: `calendar.google.com`; signed in: `oauth2.googleapis.com` (sign-in), `www.googleapis.com` (calendars and events) and `tasks.googleapis.com` (tasks) |
+| Weather | the place you search for, and the saved place rounded to two decimals | `geocoding-api.open-meteo.com` (your search, when you click Find), `api.open-meteo.com` (the rounded place, once selected) |
 
-Your browser handles Google's sign-in page,
-`accounts.google.com`: Capsule only opens it there. Capsule doesn't follow redirects, so a request can't end up
-anywhere else.
-- Sign-in tokens stay in memory. They are never logged, shown or saved.
-- The update check asks GitHub only for the newest release's version number, without any sign-in, and sends nothing
-  about you. A Capsule you built yourself never checks; you update it with `git pull`.
-- The Notion secret is stored encrypted for your Windows account (DPAPI), and only ever sent to Notion. It
-  is never logged or shown, not even in the settings once saved.
-- Notion is asked for only three things: the database's name and title column, adding an idea, and your
-  five newest ideas.
-- **Google Calendar.** With the secret link, Capsule only reads your calendar. Signed in, it reads your events, your
-  list of calendars and your tasks due in the days shown. It changes something only when you ask on the month page:
-  it adds the event or task you typed, ticks the task you clicked, or changes or deletes the event or task whose pencil
-  or bin you clicked. It never touches events you were invited to.
-  - **The secret link** is encrypted for your Windows account (DPAPI). It's only ever sent to `calendar.google.com`,
-    and is never logged or shown, not even in the settings once saved.
-  - **Kept encrypted:** the sign-in (a refresh token) and the client secret are encrypted for your Windows account
-    (DPAPI). They're only ever sent to `oauth2.googleapis.com`, and are never logged or shown.
-  - **Memory only:** the short-lived access tokens.
-  - **Shown only, never logged or saved:** your events' and tasks' titles, and your calendars' and task lists' names.
-    The events and tasks stay in memory. What you type into the month page's forms goes only to Google.
-  - **The log:** counts and statuses only, such as "calendar: 7 events from 2 calendars".
-  - **`config.json`:** your client's ID, and the ids of the calendars whose box you changed.
-  - **The sign-in's return:** to come back from the browser, Capsule listens on `127.0.0.1` (this PC only) at a
-    free port. It listens for one sign-in at a time, takes only the reply meant for that sign-in, and stops
-    listening once it has it, or after 5 minutes.
-- Ideas' text is never written to the log; only counts and statuses are. It is kept in `ideas-queue.json`
-  while an idea waits, in `ideas-discarded.json` if you discard one, and in Notion.
-- It reads the end of Codex's recent session logs every couple of seconds, only to find where a turn starts
-  and ends, and scans Codex's day folders every 15 seconds for logs written recently. Nothing from those
-  files is kept, shown or logged.
-- **Usage history** reads Claude Code's logs (`~/.claude/projects`) and Codex's session logs every 5 minutes, only
-  what's new since last time. From each reply it keeps the model, the time and the token counts. Prompts, replies,
-  file paths and project names are never kept, shown or logged; `usage-history.json` names each log only by a hash.
-- **Each session's model and tokens** come from that session's own log in `~/.claude/projects`, read when the
-  session has news (at most every 10 seconds while it works), only what's new. Only the model and the token counts
-  are kept, in memory.
-- **Clipboard history** is kept in memory only: never written to disk, never logged, and gone when Capsule quits.
-  Windows tells Capsule when the clipboard changes; nothing is polled. A copy that its app marks as private (password
-  managers do) is skipped, and files are never kept. Turn it off in Settings and the list is cleared at once.
-- **Capture** reads only the area you select. **Copy** changes the clipboard, **Save PNG** writes to the location
-  you choose, and **Keep on shelf** stages a PNG in the Windows temporary folder. Capsule does not log or upload
-  capture content.
-- **Shelf** keeps file paths in memory. Capsule gives the selected paths to the local app where you drop them.
-  Capsule leaves your original files in place and removes its own staged PNGs on normal exit.
-- It reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected. It changes that
-  file only when you choose Connect, Reconnect or Disconnect.
-- When Claude Code asks for a permission, the hook hands the request to Capsule over a local pipe that only
-  your Windows account can open, and waits up to 90 s for your answer.
-  - Complete supported commands, file edits (their old and new text, or a new file's content) and plans, and
-    its questions and your answers, are shown on the card only. They are held in memory, and never logged or
-    saved. Your plan feedback goes only to Claude.
-  - **Always allow** applies exactly the rule Claude Code suggested, as the app's own button does. Capsule
-    writes no permission rules itself.
-- Connected to Codex / Work, Capsule changes `~/.codex/hooks.json` only when you choose Connect or Disconnect.
-  Codex's command approvals and questions reach Capsule over the same local pipe and are treated the same way:
-  shown on the card only, held in memory, never logged or saved. Capsule never sends Codex an **Always allow**.
-- For each session, the hook records:
-  - its id and state, and when that state began;
-  - the name of the last event, and when it happened;
-  - the project folder's name;
-  - while Claude waits on you, a short reason, such as "needs permission: Bash" or up to 80 characters of
-    Claude Code's own notification;
-  - for the session row, the start of your last prompt (up to 120 characters, on one line) and what Claude did
-    last, named by a file's name only or a command's own short description ("Edited middleware.ts", "Run the
-    tests").
+Your browser handles Google's sign-in page, `accounts.google.com`; Capsule only opens it. Capsule doesn't follow
+redirects, so a request can't end up anywhere else.
 
-  The file is deleted when the session ends. It never records a file's folder or contents, a command's text, or
-  anything Claude reads or writes, and nothing from it goes into Capsule's log.
-- Capsule can run `claude -p` with no input to renew an expiring sign-in. Claude Code can start its configured
-  hooks, plugins and MCP servers during renewal. Turn off **Renew Claude sign-in in the background** in Settings
-  to stop these launches. If your sign-in expires, open Claude Code to refresh it.
-- Capsule's own files are in `%USERPROFILE%\.capsule\`:
-  - its settings (`config.json`);
-  - the last readings, and session status files;
-  - the encrypted Notion secret (`notion-secret.bin`);
-  - the encrypted Google calendar link, sign-in and client secret (`google-calendar-link.bin`, `google-token.bin`,
-    `google-client-secret.bin`);
-  - ideas waiting for Notion (`ideas-queue.json`), and ideas you discarded after Notion refused them
-    (`ideas-discarded.json`);
-  - a log.
-- They're deliberately not under AppData. The Claude desktop app runs Claude Code, and so the hook, inside
-  a Windows app package, and Windows redirects AppData writes from inside a package to a private copy that
-  Capsule couldn't see.
+**Secrets.**
+- Claude and Codex sign-in tokens and Google's short-lived access tokens stay in memory. They're never logged, shown
+  or saved.
+- The Notion secret, the calendar link, the Google sign-in (a refresh token) and your client secret are encrypted for
+  your Windows account (DPAPI), sent only to their own service, and never logged or shown, not even in Settings once
+  saved.
+
+**Claude Code and Codex.**
+- When Claude Code or Codex asks for a permission, the hook hands the request to Capsule over a local pipe only your
+  Windows account can open, and waits up to 90 s. Commands, file edits, plans, questions and your answers are shown on
+  the card only, held in memory, and never logged or saved. Your plan feedback goes only to Claude.
+- **Always allow** applies exactly the rule Claude Code suggested, as the app's own button does. Capsule writes no
+  permission rules itself and never sends Codex an Always allow.
+- Capsule reads `~/.claude/settings.json` every 5 seconds to see whether its hook is connected, and changes it, or
+  `~/.codex/hooks.json`, only when you choose Connect, Reconnect or Disconnect.
+- For each Claude Code session, the hook records its id and state and when that began; the last event's name and
+  time; the project folder's name; while it waits on you, a short reason ("needs permission: Bash", or up to 80
+  characters of Claude Code's own notification); and for the row, the start of your last prompt (up to 120 characters)
+  and what Claude did last, by a file's name or a command's own short description ("Edited middleware.ts"). It never
+  records a folder path, file contents, a command's text, or anything Claude reads or writes. The file is deleted when
+  the session ends, and nothing in it goes into Capsule's log.
+- Each session's model and tokens come from its own log in `~/.claude/projects`, read only when it has news, and kept
+  in memory.
+- Capsule reads the end of Codex's recent session logs every couple of seconds to see when a turn starts and ends.
+  Nothing from them is kept, shown or logged.
+- **Usage history** reads only what's new in Claude Code's and Codex's logs every 5 minutes, and keeps the model, the
+  time and the token counts per day in `usage-history.json`. Prompts, replies, file paths and project names are never
+  kept, shown or logged; each log is known only by a hash.
+- To renew an expiring sign-in, Capsule can run `claude -p` with no input, which may start your Claude Code hooks,
+  plugins and MCP servers. Turn off **Renew Claude sign-in in the background** in Settings to stop it; then open Claude
+  Code when your sign-in expires.
+
+**Everything else.**
+- **Google Calendar:** with the link, Capsule only reads. Signed in, it reads your events, calendars and tasks due in
+  the days shown, and changes something only when you ask on the month page. It never touches events you were invited
+  to. Titles and names are shown only, held in memory, and never logged; the log has counts only, such as "calendar: 7
+  events from 2 calendars". To come back from the browser, Capsule listens on `127.0.0.1` for that one sign-in, for up
+  to 5 minutes.
+- **Ideas'** text is never logged. It's kept in `ideas-queue.json` while it waits, in `ideas-discarded.json` if Notion
+  refused it and you discarded it, and in Notion. Notion is asked only for the database's name and title column, to add
+  an idea, and for your five newest ideas.
+- **Clipboard history** is in memory only: never saved or logged, and gone when Capsule quits. Windows tells Capsule
+  when the clipboard changes; nothing is polled. Copies an app marks as private (password managers do) are skipped,
+  files are never kept, and turning it off clears the list.
+- **Captures** read only the area you select and stay in memory until you close the preview. Capsule never logs or
+  uploads them.
+- **Shelf** keeps file paths in memory and gives them only to the app you drop them on.
+- **Music** metadata stays in memory. Capsule saves no listening history and never contacts Spotify or YouTube.
+- The **update check** sends nothing about you. A Capsule you built yourself never checks.
+
+**Capsule's own files** are in `%USERPROFILE%\.capsule\`: settings (`config.json`), the last readings, session status
+files, usage history and samples, the encrypted secrets, the ideas queue, the focus timer, the staged hook in `bin`,
+and a log. They're deliberately not under AppData: the Claude desktop app runs Claude Code, and so the hook, inside a
+Windows app package, and Windows would redirect AppData writes from there to a private copy Capsule can't see.
+
+## Update
+
+- **Scoop:** when Capsule shows an update, select the notice to copy `scoop update capsule`, and run it in a terminal.
+  The bucket gets each release within a few hours.
+- **winget:** `winget upgrade vorgtrom.Capsule`.
+- **Downloaded:** once a day Capsule checks for a newer release. When there is one, a balloon says so and the menu's
+  first item reads **Capsule v1.11.0 is available…**; choose it for the release page. Quit Capsule, unzip the new zip
+  over the same folder, and start `Capsule.exe`. To stop the check, untick **Check for updates**.
+- **Built from source:** `git pull`, then `build.cmd`, then start `bin\Capsule.exe`. To check a change first, run
+  `build.cmd dev`: it builds into `bin-dev\` and runs the tests while your Capsule keeps running. If either says
+  `BUILD FAILED`, your Capsule is untouched; go back with `git checkout main`.
+
+Your settings, sign-ins and ideas live in `%USERPROFILE%\.capsule\` and carry over. Capsule refreshes its staged hook
+when it starts.
 
 ## Uninstall
 
-1. Disconnect Claude Code and Codex / Work from the menu if you connected them. Disconnect leaves the staged
-   hook in `%USERPROFILE%\.capsule\bin` for future connections.
-2. Menu → untick **Start with Windows**, then **Quit Capsule**.
-3. Delete Capsule's folder (where you unzipped it, or this repo's folder if you built it), or run
-   `scoop uninstall capsule` or `winget uninstall vorgtrom.Capsule` if you installed it that way. Then delete
+1. Disconnect Claude Code and Codex / Work in the menu if you connected them.
+2. Untick **Start with Windows**, then **Quit Capsule**.
+3. Delete Capsule's folder, or run `scoop uninstall capsule` or `winget uninstall vorgtrom.Capsule`. Then delete
    `%USERPROFILE%\.capsule\`, including its `bin` folder.
-4. Optionally, delete the backups Connect and Disconnect left next to Claude Code's settings,
-   `~/.claude/settings.json.capsule-bak-*` (older ones may be named `usage-notch-bak-*`), and next to Codex's,
-   `~/.codex/hooks.json.capsule-bak-*`.
+4. Optionally, delete the backups Connect left: `~/.claude/settings.json.capsule-bak-*` (older ones are
+   `usage-notch-bak-*`) and `~/.codex/hooks.json.capsule-bak-*`.
 5. If you set up Ideas, delete the Capsule connection in Notion's developer portal.
-6. If you connected Google Calendar:
-   - With the link: **Remove link** in the settings. Optionally, **Reset** the secret address in Google Calendar's
-     **Integrate calendar**, so the old link stops working.
-   - Signed in: choose **Sign out** in the settings first, which revokes Capsule's access.
-   - Optionally, delete the Capsule project in the Google Cloud console.
-   - While Capsule has access, your Google Account lists it under **Security → Your connections to third-party apps & services**.
+6. If you connected Google Calendar: **Sign out** (or **Remove link**) in Settings first. Optionally **Reset** the
+   secret address in Google Calendar, and delete your Capsule project in the Google Cloud console. While Capsule has
+   access, your Google Account lists it under **Security → Your connections to third-party apps & services**.
+
+## Build
+
+`build.cmd` compiles `bin\Capsule.exe`, `bin\capsule-hook.exe` and `bin\Tests.exe` with
+`%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`, stops a running copy, and runs the tests. `build.cmd dev`
+builds into `bin-dev\` instead and leaves a running Capsule alone; only one Capsule runs at a time, so it's for tests
+and `--preview`, not a second copy. `bin\Tests.exe --groups` shows how many checks each group ran.
+
+GitHub builds and tests every pull request and every change to `main` the same way, on Windows.
+
+**Publish a release:**
+1. In [CHANGELOG.md](CHANGELOG.md), rename **Unreleased** to the new version (such as `## v1.11.0`), and add a fresh
+   **Unreleased** above it. Merge that to `main`.
+2. On GitHub, open **Actions → Release → Run workflow** and enter the same version.
+
+GitHub builds Capsule, runs every test, and publishes `Capsule-<version>.zip` with its SHA-256 and that version's
+notes. Downloaded copies hear about it within a day.
 
 ## License
 
@@ -757,7 +643,7 @@ MIT: see [LICENSE](LICENSE). You may use, change and share Capsule, keeping the 
 
 ## Credits
 
-The provider marks are from [@lobehub/icons](https://github.com/lobehub/lobe-icons) (MIT). They are
-trademarks of Anthropic and OpenAI.
+The provider marks are from [@lobehub/icons](https://github.com/lobehub/lobe-icons) (MIT). They are trademarks of
+Anthropic and OpenAI.
 
 Capsule was called UsageNotch until 2026-10-01.
