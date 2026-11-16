@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/c8bfb80a-3e77-457a-8dc6-a3cf5f4c52c9
   slider, a focus timer, clipboard history, screenshots of an area or a whole scrolling webpage, a shelf for files,
   failing GitHub checks, and an Ideas box that saves to Notion.
 
-Every ring and tile can be switched off. Install it with [Scoop](#get-it) or download it from the
+Every ring can be switched off. Install it with [Scoop](#get-it) or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
 
 | On the screen edge | Hover a ring | Click it |
@@ -137,8 +137,8 @@ On first run, Capsule asks whether to start with Windows. **No** is the default;
   sessions report in from then on; in the desktop app, running ones do too. If you connected with an older Capsule,
   the menu says **Reconnect to Claude Code**: choose it once.
 - **Codex and local ChatGPT Work:** see [below](#codex-and-local-chatgpt-work).
-- **Is it working?** Under each Connect item, the menu says when the last event arrived ("Last event 3 min ago"), or
-  what to do if none has ("No events yet: start a new chat").
+- **Is it working?** Under each Connect item, the menu says when Capsule last heard from it: "Last event 3 min ago"
+  for Claude Code, "Last request 2 h ago" for Codex, or what to do if nothing has arrived yet.
 - **Moved Capsule?** Start it from its new folder and the connection updates itself.
 - From a terminal: `Capsule.exe --connect` / `--disconnect` (Claude Code) and `--connect-codex` /
   `--disconnect-codex`. They print nothing; the result goes to the log.
@@ -255,8 +255,7 @@ Click the **Claude** or **Codex** tile in the panel for the Usage page. ← or E
 
 - **Pace lines** at the top: how each ring's limit is going, such as "Claude · 5-hour · 73% · full at 4:10 PM".
 - **A heatmap** of the last 26 weeks: a square a day, a column a week, in four shades of orange by how busy the day
-  was. Today is ringed. Hover a day for its tokens and biggest models; ‹ › looks back another 26 weeks. Week, Month
-  and Year views show bars by model.
+  was. Today is ringed. Hover a day for its tokens and biggest models; ‹ › looks back another 26 weeks.
 - **The figures** under it: tokens per active day, active days, your current and longest streak, your most active day
   and your favourite model.
 - **Tokens without cache reads:** input, output and cache writes. Claude re-reads its cached context every turn,
@@ -531,8 +530,8 @@ was lost.
 | Music | local Windows media sessions: track, artwork, playback state, controls and timeline | nothing; commands go only to the local player |
 | Volume | the default playback device's volume and mute | nothing |
 | Updates (downloaded copies only) | nothing | `api.github.com`: the latest release's version number, once a day |
-| Google Calendar | the link, or the sign-in and client secret, you saved | link: `calendar.google.com`; signed in: `oauth2.googleapis.com` (sign-in), `www.googleapis.com` (calendars and events) and `tasks.googleapis.com` (tasks) |
-| Weather | the place you search for, and the saved place rounded to two decimals | `geocoding-api.open-meteo.com` (your search, when you click Find), `api.open-meteo.com` (the rounded place, once selected) |
+| Google Calendar | the link, or the sign-in and client secret, you saved | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
+| Weather | the place name you search for and the saved place label, coordinates rounded to two decimals, and units | `geocoding-api.open-meteo.com` (your query and UI language when you click Find), `api.open-meteo.com` (rounded latitude and longitude and temperature unit, only once you select a place) |
 
 Your browser handles Google's sign-in page, `accounts.google.com`; Capsule only opens it. Capsule doesn't follow
 redirects, so a request can't end up anywhere else.
@@ -560,8 +559,8 @@ redirects, so a request can't end up anywhere else.
   the session ends, and nothing in it goes into Capsule's log.
 - Each session's model and tokens come from its own log in `~/.claude/projects`, read only when it has news, and kept
   in memory.
-- Capsule reads the end of Codex's recent session logs every couple of seconds to see when a turn starts and ends.
-  Nothing from them is kept, shown or logged.
+- Capsule reads the end of Codex's recent session logs every couple of seconds to see when a turn starts and ends,
+  and scans Codex's day folders every 15 seconds for logs written recently. Nothing from them is kept, shown or logged.
 - **Usage history** reads only what's new in Claude Code's and Codex's logs every 5 minutes, and keeps the model, the
   time and the token counts per day in `usage-history.json`. Prompts, replies, file paths and project names are never
   kept, shown or logged; each log is known only by a hash.
@@ -572,8 +571,9 @@ redirects, so a request can't end up anywhere else.
 **Everything else.**
 - **Google Calendar:** with the link, Capsule only reads. Signed in, it reads your events, calendars and tasks due in
   the days shown, and changes something only when you ask on the month page. It never touches events you were invited
-  to. Titles and names are shown only, held in memory, and never logged; the log has counts only, such as "calendar: 7
-  events from 2 calendars". To come back from the browser, Capsule listens on `127.0.0.1` for that one sign-in, for up
+  to. Titles and names are shown only, held in memory, and never logged; what you type into the month page's forms goes
+  only to Google; the log has counts only, such as "calendar: 7 events from 2 calendars"; `config.json` keeps your
+  client's ID and the ids of the calendars whose box you changed. To come back from the browser, Capsule listens on `127.0.0.1` for that one sign-in, for up
   to 5 minutes.
 - **Ideas'** text is never logged. It's kept in `ideas-queue.json` while it waits, in `ideas-discarded.json` if Notion
   refused it and you discarded it, and in Notion. Notion is asked only for the database's name and title column, to add
@@ -581,9 +581,11 @@ redirects, so a request can't end up anywhere else.
 - **Clipboard history** is in memory only: never saved or logged, and gone when Capsule quits. Windows tells Capsule
   when the clipboard changes; nothing is polled. Copies an app marks as private (password managers do) are skipped,
   files are never kept, and turning it off clears the list.
-- **Captures** read only the area you select and stay in memory until you close the preview. Capsule never logs or
-  uploads them.
-- **Shelf** keeps file paths in memory and gives them only to the app you drop them on.
+- **Captures** read only the area you select and stay in memory until you close the preview. **Copy** changes the
+  clipboard, **Save PNG** writes where you choose, and **Keep on shelf** stages a PNG in the Windows temporary folder.
+  Capsule never logs or uploads them.
+- **Shelf** keeps file paths in memory and gives them only to the app you drop them on. It leaves your original files
+  in place and removes its own staged PNGs on exit.
 - **Music** metadata stays in memory. Capsule saves no listening history and never contacts Spotify or YouTube.
 - The **update check** sends nothing about you. A Capsule you built yourself never checks.
 
@@ -600,9 +602,14 @@ Windows app package, and Windows would redirect AppData writes from there to a p
 - **Downloaded:** once a day Capsule checks for a newer release. When there is one, a balloon says so and the menu's
   first item reads **Capsule v1.11.0 is available…**; choose it for the release page. Quit Capsule, unzip the new zip
   over the same folder, and start `Capsule.exe`. To stop the check, untick **Check for updates**.
-- **Built from source:** `git pull`, then `build.cmd`, then start `bin\Capsule.exe`. To check a change first, run
-  `build.cmd dev`: it builds into `bin-dev\` and runs the tests while your Capsule keeps running. If either says
-  `BUILD FAILED`, your Capsule is untouched; go back with `git checkout main`.
+- **Built from source:**
+  1. `git checkout main`, then `git pull`. (To try a change that isn't merged yet: `git fetch origin`, then
+     `git checkout <its branch>`.)
+  2. Optionally, run `build.cmd dev` first. It builds into `bin-dev\` and runs the tests while your Capsule keeps
+     running. If it says `BUILD FAILED`, stop here: your Capsule is untouched.
+  3. Run `build.cmd`. It quits the running Capsule, builds into `bin\` and runs the tests. If it says `BUILD FAILED`,
+     go back with `git checkout main` and run `build.cmd` again.
+  4. Start `bin\Capsule.exe`.
 
 Your settings, sign-ins and ideas live in `%USERPROFILE%\.capsule\` and carry over. Capsule refreshes its staged hook
 when it starts.
