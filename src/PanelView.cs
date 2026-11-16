@@ -122,6 +122,7 @@ namespace Capsule
         public event Action ClipClearRequested;
         public event Action<string, bool> RingToggled;     // a ring's name, and whether it is now on
         public event Action<bool> ClipboardToggled;
+        public event Action<bool> ClaudeRenewalToggled;
         public event Action<string, int> FocusLengthChanged;   // "focus", "short" or "long", and its new minutes
         public event Action<bool> FocusQuietToggled;
 
@@ -1345,6 +1346,7 @@ namespace Capsule
             var box = new StackPanel();
             box.Children.Add(TileHeader("Sessions"));
             if (t.Hint != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Hint, 12, Palette.Secondary, FontWeights.Normal)));
+            if (t.CodexHint != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.CodexHint, 12, Palette.Secondary, FontWeights.Normal)));
             foreach (SessionRow s in t.Rows) box.Children.Add(CardView.SessionLine(s));
             if (t.More > 0) box.Children.Add(CardView.MakeText("+" + t.More + " more", 12, Palette.Secondary, FontWeights.Normal));
             return box;
@@ -1572,6 +1574,9 @@ namespace Capsule
                 bool can = !on || c.CanTurnOff(name);
                 ringsBox.Children.Add(SwitchRow(labels[i], on, can, can ? null : "One ring stays on", delegate { if (RingToggled != null) RingToggled(name, !on); }));
             }
+            bool renew = c.RenewClaudeSignIn;
+            ringsBox.Children.Insert(2, SwitchRow("Renew Claude sign-in in the background", renew, true, null,
+                delegate { if (ClaudeRenewalToggled != null) ClaudeRenewalToggled(!renew); }));
             bool clip = c.ClipboardHistory;
             ringsBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
             if (c.RingOn("focus"))

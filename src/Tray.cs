@@ -16,6 +16,7 @@ namespace Capsule
         public string Text = "";
         public bool Checked;
         public bool Separator;
+        public bool Disabled;
     }
 
     // An invisible window that owns popup menus, so a menu closes when you click anywhere else.
@@ -42,7 +43,7 @@ namespace Capsule
     // A native popup menu at the mouse. Returns the chosen item's Id, or 0 when dismissed.
     public static class NativeMenu
     {
-        const uint MF_STRING = 0, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
+        const uint MF_STRING = 0, MF_GRAYED = 1, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
         const uint TPM_RIGHTBUTTON = 0x2, TPM_NONOTIFY = 0x80, TPM_RETURNCMD = 0x100;
 
         [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
@@ -60,7 +61,8 @@ namespace Capsule
                 foreach (MenuItemSpec item in items)
                 {
                     if (item.Separator) AppendMenu(menu, MF_SEPARATOR, UIntPtr.Zero, null);
-                    else AppendMenu(menu, MF_STRING | (item.Checked ? MF_CHECKED : 0), new UIntPtr((uint)item.Id), item.Text);
+                    else AppendMenu(menu, MF_STRING | (item.Checked ? MF_CHECKED : 0) | (item.Disabled ? MF_GRAYED : 0),
+                        new UIntPtr((uint)item.Id), item.Text);
                 }
                 POINT at;
                 Native.GetCursorPos(out at);

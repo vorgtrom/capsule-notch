@@ -48,6 +48,14 @@ namespace Capsule
             view.VerticalAlignment = VerticalAlignment.Top;
             view.RenderTransform = CardMotion.ContentTransform(zoom, shift);
             Content = view;
+            PreviewKeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e)
+            {
+                if (view.ShowingPrompt && ClosesPrompt(e.Key))
+                {
+                    e.Handled = true;
+                    HideNow();
+                }
+            };
             hideLater = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(CardMotion.CloseMs) };
             hideLater.Tick += delegate
             {
@@ -77,6 +85,9 @@ namespace Capsule
 
         public IntPtr Handle { get { return hwnd; } }
         public CardView View { get { return view; } }
+        bool promptKeyboard;
+        internal bool HasPromptKeyboard { get { return promptKeyboard && IsKeyboardFocusWithin; } }
+
         public bool RequestsHeld;   // Capsule is holding requests: the request view keeps its text only while there are any
         public bool IsTyping { get { return view.Prompt.OtherBox.IsKeyboardFocused; } }   // in the Other… box
         public bool IsOpen { get { return IsVisible && !closing; } }      // showing, and not folding away
@@ -152,9 +163,19 @@ namespace Capsule
         public void ShowPromptBeside(PromptCardModel model, RECT cell, bool leftEdge, MonitorInfo monitor)
         {
             bool typing = IsTyping;
-            if (!model.OtherOpen) GiveUpFocus();
+            if (!model.OtherOpen && !promptKeyboard) GiveUpFocus();
             Present(delegate(bool pointRight) { view.ShowPrompt(model, pointRight); }, cell, leftEdge, monitor);
             if (model.OtherOpen && typing) view.Prompt.FocusOther();
+            else if (promptKeyboard && IsActive && !view.Prompt.IsKeyboardFocusWithin) view.Prompt.Focus();
+        }
+
+        internal static bool ClosesPrompt(System.Windows.Input.Key key) { return key == System.Windows.Input.Key.Escape; }
+
+        internal void TakePromptKeyboard()
+        {
+            if (!ActivatePrompt()) return;
+            promptKeyboard = true;
+            view.Prompt.Focus();
         }
 
         // The Other… box was opened: the card takes the keyboard. A card that never activates can't, so it may now, until
@@ -162,7 +183,12 @@ namespace Capsule
         // Windows bring the card to the front.
         public void TakeFocus()
         {
-            if (hwnd == IntPtr.Zero || !IsVisible || !view.ShowingPrompt) return;
+            if (ActivatePrompt()) view.Prompt.FocusOther();
+        }
+
+        bool ActivatePrompt()
+        {
+            if (hwnd == IntPtr.Zero || !IsVisible || !view.ShowingPrompt) return false;
             if (!focusable)
             {
                 Native.RemoveExStyle(hwnd, Native.WS_EX_NOACTIVATE);
@@ -172,13 +198,14 @@ namespace Capsule
             IntPtr before = Native.Foreground();
             if (before != hwnd && before != IntPtr.Zero) cameFrom = before;
             Activate();
-            view.Prompt.FocusOther();
+            return true;
         }
 
         // Back to a card that never takes the keyboard or the front. If the card still has the keyboard, it goes back to
         // the window that had it before the box opened: without that the card would keep it, with nothing to type in.
         void GiveUpFocus()
         {
+            promptKeyboard = false;
             if (!focusable) return;
             focusable = false;
             IntPtr back = cameFrom;

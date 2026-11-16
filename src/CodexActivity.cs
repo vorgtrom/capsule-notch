@@ -50,7 +50,15 @@ namespace Capsule
         readonly HashSet<string> candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // what scans found, until silent
         long nextScanMs;   // 0: the first call scans
 
-        public CodexActivity(string codexHome) { home = codexHome; }
+        readonly TimingCounter folderTime;
+
+        public CodexActivity(string codexHome) : this(codexHome, null) { }
+
+        internal CodexActivity(string codexHome, TimingCounter folderTime)
+        {
+            home = codexHome;
+            this.folderTime = folderTime;
+        }
 
         // True while a Codex turn runs: some log written in the last 30 minutes has a start as its latest turn event.
         // Where it looks: today's and yesterday's day folders (local dates, as Codex names them) on every call, so a turn
@@ -64,12 +72,17 @@ namespace Capsule
         public bool Check(long now)
         {
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string path in Logs(now)) paths.Add(path);
-            if (now >= nextScanMs || now < nextScanMs - ScanEveryMs)   // due; or the clock went back
+            long started = TimingCounter.Start();
+            try
             {
-                foreach (string path in Scan(now)) candidates.Add(path);
-                nextScanMs = now + ScanEveryMs;
+                foreach (string path in Logs(now)) paths.Add(path);
+                if (now >= nextScanMs || now < nextScanMs - ScanEveryMs)   // due; or the clock went back
+                {
+                    foreach (string path in Scan(now)) candidates.Add(path);
+                    nextScanMs = now + ScanEveryMs;
+                }
             }
+            finally { if (folderTime != null) folderTime.Stop(started); }
             paths.UnionWith(candidates);
             var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool working = false;

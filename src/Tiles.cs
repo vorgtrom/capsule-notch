@@ -104,6 +104,7 @@ namespace Capsule
         public List<SessionRow> Rows = new List<SessionRow>();
         public int More;
         public string Hint = "";   // instead of rows: hooks not connected, or nothing to show
+        public string CodexHint = "";
 
         public static SessionsTile From(IList<SessionStatus> sessions, bool hooksConnected, long now, System.Func<string, SessionUse> use = null)
         {

@@ -16,6 +16,11 @@ namespace Capsule
             // A copy of this exe renamed Capsule.exe, started by the hook tests as a stand-in Capsule (see PromptHookTests).
             if (args.Length == 3 && args[0] == "--fake-capsule") return PromptHookTests.FakeCapsule(args[1], args[2]);
             if (args.Length == 1 && args[0] == "--music-smoke") return MusicTests.Smoke();
+            if (args.Length == 1 && args[0] == "--renewal-timeout-fixture")
+            {
+                System.Threading.Thread.Sleep(30000);
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--capture-view")
             {
                 Run("CaptureView", CaptureViewTests.Run);
@@ -44,6 +49,7 @@ namespace Capsule
             Run("HookEvents", HookEventsTests.Run);
             Run("HookSetup", HookSetupTests.Run);
             Run("HookInstall", HookInstallTests.Run);
+            Run("HookHealth", HookHealthTests.Run);
             Run("Readings", ReadingsTests.Run);
             Run("ClaudeUsage", ClaudeUsageTests.Run);
             Run("CodexUsage", CodexUsageTests.Run);

@@ -5,6 +5,13 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **See whether hooks reach Capsule.** The tray menu shows the last Claude event and Codex request.
+  The panel shows a hint when Claude has been quiet for a day or Codex still needs hook trust.
+- **Answer requests with the keyboard.** The panel shortcut opens a waiting request. Press Tab to select a button,
+  Enter to activate it, or Esc to close the card.
+- **Choose how Claude renews its sign-in.** Settings can turn off background renewal. Capsule stops a renewal
+  process tree if it runs longer than a minute.
+
 - **Sessions update when you answer.** The ring shows Claude working as soon as you answer from Capsule.
   A session stays waiting until Claude sends another event or its status expires.
 - **Click an alert to open Capsule.** Usage and session alerts open the panel.
