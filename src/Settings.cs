@@ -25,6 +25,7 @@ namespace Capsule
         public bool LimitAlerts = true;      // notifications as a limit nears, or is on pace to run out before it resets
         public bool FinishedAlerts;
         public bool RenewClaudeSignIn = true;
+        public bool SlimCapsule;   // a thin line on the screen edge until the pointer comes to it
         public bool CodexTrustPending;
         public long LastCodexRequestMs;
         public bool Sounds = true;           // a short sound when a session needs you or finishes
@@ -85,6 +86,7 @@ namespace Capsule
             c.FinishedAlerts = Json.Get(o, "finished_alerts") as bool? ?? false;
             c.Sounds = Json.Get(o, "sounds") as bool? ?? true;
             c.RenewClaudeSignIn = Json.Get(o, "renew_claude_sign_in") as bool? ?? true;
+            c.SlimCapsule = Json.Get(o, "slim_capsule") as bool? ?? false;
             c.CodexTrustPending = Json.Get(o, "codex_trust_pending") as bool? ?? false;
             double? lastCodexRequest = Json.Num(Json.Get(o, "last_codex_request_ms"));
             if (lastCodexRequest > 0 && lastCodexRequest < long.MaxValue)
@@ -135,6 +137,7 @@ namespace Capsule
             d["finished_alerts"] = FinishedAlerts;
             d["sounds"] = Sounds;
             d["renew_claude_sign_in"] = RenewClaudeSignIn;
+            d["slim_capsule"] = SlimCapsule;
             d["codex_trust_pending"] = CodexTrustPending;
             d["last_codex_request_ms"] = LastCodexRequestMs;
             d["google_client_id"] = GoogleClientId;

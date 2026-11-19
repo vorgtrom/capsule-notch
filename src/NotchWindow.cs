@@ -23,6 +23,12 @@ namespace Capsule
         RECT pressRect;
         bool pressed, dragging;
         int hoverCell = -1;
+        readonly System.Windows.Threading.DispatcherTimer slimLater = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+
+        // The slim capsule (off by default): a thin line on the screen edge until the pointer comes to it. KeepWide says
+        // when it must stay full anyway: something waits on you, the mic is muted, or its card or the panel is open.
+        public bool SlimWhenIdle;
+        public Func<bool> KeepWide = () => false;
 
         public event Action Clicked;                         // a click, not a drag, anywhere on the notch
         public event Action<int> HoverChanged;               // a cell index, or -1 when the mouse leaves the cells
@@ -73,7 +79,14 @@ namespace Capsule
                 e.Handled = true;
                 if (RightClicked != null) RightClicked();
             };
-            MouseLeave += delegate { if (!pressed) SetHover(-1); };
+            MouseLeave += delegate
+            {
+                if (!pressed) SetHover(-1);
+                slimLater.Stop();
+                slimLater.Start();
+            };
+            MouseEnter += delegate { slimLater.Stop(); UpdateSlim(); };
+            slimLater.Tick += delegate { slimLater.Stop(); UpdateSlim(); };
             IsVisibleChanged += delegate { ShowGlass(); };
         }
 
@@ -133,6 +146,19 @@ namespace Capsule
             Native.KeepPairOnTop(hwnd, glass.Handle);
         }
 
+        // Slim or full, as things stand now. The Controller calls it on each redraw, so a closed card or a request answered
+        // lets it go slim again.
+        public void UpdateSlim()
+        {
+            bool slim = SlimWhenIdle && !IsMouseOver && !pressed && !KeepWide();
+            if (view.SetSlim(slim) && glass != null && monitor != null)
+            {
+                RECT r;
+                Native.GetWindowRect(hwnd, out r);
+                glass.SetShape(view.Shape, monitor.Scale, r.Width, r.Height);
+            }
+        }
+
         // Every 2 s from the Controller: stay above other topmost windows, the glass right below.
         public void KeepOnTop() { Native.KeepPairOnTop(hwnd, GlassHandle); }
 
@@ -173,7 +199,7 @@ namespace Capsule
             int height = (int)Math.Round(size.Height * monitor.Scale);
             RECT r = Layout.NotchRect(monitor.Work, LeftEdge, position, width, height);
             Native.MovePair(hwnd, GlassHandle, r.Left, r.Top, r.Width, r.Height);
-            if (glass != null) glass.SetShape(NotchView.PillGeometry(models.Count, LeftEdge), monitor.Scale, r.Width, r.Height);
+            if (glass != null) glass.SetShape(view.Shape, monitor.Scale, r.Width, r.Height);
         }
 
         // A cell's ring in physical screen pixels, for placing the card beside it.

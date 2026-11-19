@@ -12,6 +12,9 @@ download for each one. A release takes its notes from its section here.
   song plays, and larger controls.
 - **Cleaner tiles.** Ask Claude is a plain search bar with its keys at the end, and "high" or "near limit" is an amber
   chip under the limit's name instead of wrapping beside the number.
+- **News beside the capsule.** A song that starts, text copied from the screen, or the mic going on or off appears for
+  a moment in a pill that grows out of its ring, instead of a Windows notification.
+- **Slim capsule.** An option in Settings turns the capsule into a thin line on the screen edge until you point at it.
 - **Ask Claude from the panel.** Type a prompt in the new box and press Enter for a Claude chat, or Ctrl+Enter for a
   Claude Code session. The Claude app opens with the prompt filled in, ready for you to send.
 - **Copy text from the screen.** Capture has a **Copy text** mode: drag over an area and its text is copied, read by

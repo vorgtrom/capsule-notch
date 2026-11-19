@@ -31,6 +31,18 @@ namespace Capsule
             var signin = new Reading { Provider = "claude", Status = "signin" };
             Theme.Use(Theme.For(false, false));
             SaveNotch(dir, "notch-normal.png", WithCalendar(Cells(now, null, claude, codex), now, en), false);
+            SaveNotch(dir, "notch-slim.png", WithCalendar(Cells(now, null, claude, codex), now, en), false, true);
+            {
+                // News beside the capsule: the pill that unfolds from a ring for a moment.
+                var pill = new NewsPill();
+                FrameworkElement face = pill.Fill("\uE8D6", "Evening Light", "The Paper Kites");
+                pill.Content = null;
+                face.Opacity = 1;   // the window fades it in when shown
+                var host = new Grid { Background = NotchView.Brush(Wallpaper) };
+                host.Children.Add(face);
+                SavePng(host, Path.Combine(dir, "news-pill.png"));
+                pill.Close();
+            }
             SaveNotch(dir, "notch-working.png", WithCalendar(Cells(now, States.Working, claude, codex), now, en), false);
             SaveNotch(dir, "notch-waiting.png", WithCalendar(Cells(now, States.Waiting, claude, codex), now, en), false);
             SaveNotch(dir, "notch-dimmed.png", Cells(now, null, dimmed, codex), false);
@@ -464,11 +476,12 @@ namespace Capsule
             };
         }
 
-        static void SaveNotch(string dir, string name, List<CellModel> cells, bool left)
+        static void SaveNotch(string dir, string name, List<CellModel> cells, bool left, bool slim = false)
         {
             var view = new NotchView();
             view.Animate = false;
             view.Update(cells, left);
+            view.SetSlim(slim);
             view.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             view.VerticalAlignment = VerticalAlignment.Center;
             // a strip of "desktop" beside the notch, so the shoulders against the screen edge are visible

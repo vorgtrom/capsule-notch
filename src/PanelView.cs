@@ -146,6 +146,7 @@ namespace Capsule
         public event Action<string, bool> RingToggled;     // a ring's name, and whether it is now on
         public event Action<bool> ClipboardToggled;
         public event Action<bool> ClaudeRenewalToggled;
+        public event Action<bool> SlimToggled;
         public event Action<string, int> FocusLengthChanged;   // "focus", "short" or "long", and its new minutes
         public event Action<bool> FocusQuietToggled;
 
@@ -1790,6 +1791,8 @@ namespace Capsule
             bool renew = c.RenewClaudeSignIn;
             ringsBox.Children.Insert(2, SwitchRow("Renew Claude sign-in in the background", renew, true, null,
                 delegate { if (ClaudeRenewalToggled != null) ClaudeRenewalToggled(!renew); }));
+            bool slimOn = c.SlimCapsule;
+            ringsBox.Children.Add(SwitchRow("Slim capsule", slimOn, true, "A thin line on the screen edge until you point at it", delegate { if (SlimToggled != null) SlimToggled(!slimOn); }));
             bool clip = c.ClipboardHistory;
             ringsBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
             if (c.RingOn("focus"))

@@ -120,6 +120,11 @@ On first run, Capsule asks whether to start with Windows. **No** is the default;
 - **Drag** the capsule to move it. It snaps to the left or right edge of the screen you drop it on.
 - **Right-click** the capsule or the tray icon for the menu. **Left-click** the tray icon to hide or show the capsule.
 - It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
+- **News beside the capsule.** A song that starts, text copied from the screen, or the mic muted shows for a moment in
+  a small pill that grows out of its ring, instead of a Windows notification. Limit and session alerts stay Windows
+  notifications. Nothing shows over a request card or the open panel, nor while you focus quietly.
+- **Slim capsule** (Settings, off by default) turns the capsule into a thin line on the screen edge until you point at
+  it. It stays full while something waits on you, the mic is muted, or its card or the panel is open.
 - **Click a usage or session alert** to open the panel.
 
 **Settings (⚙ in the panel):**

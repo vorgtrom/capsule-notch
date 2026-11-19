@@ -45,6 +45,9 @@ namespace Capsule
         PanelWindow panel;
         GlobalHotkey shortcut;
         GlobalHotkey micKey;     // mutes and unmutes the microphone in every app
+        readonly NewsPill news = new NewsPill();   // news from the capsule itself, instead of a Windows notification
+        bool attention;          // something waits on you or the mic is muted: the slim capsule stays full
+        string newsTrack = "";   // the song last announced
         bool micRegistered;
         CaptureCoordinator capture;
         bool captureHidden;
@@ -318,7 +321,20 @@ namespace Capsule
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
             capture.KeepOnShelf = shelf.Keep;
-            capture.TextCopied = lines => tray.Balloon("Capsule", "Copied " + lines + (lines == 1 ? " line" : " lines") + " of text.");
+            capture.TextCopied = lines =>
+            {
+                string copied = "Copied " + lines + (lines == 1 ? " line" : " lines") + " of text";
+                if (!ShowNews(CopyGlyph, copied, "From the screen", 0)) tray.Balloon("Capsule", copied + ".");
+            };
+            notch.SlimWhenIdle = config.SlimCapsule;
+            notch.KeepWide = () => attention || card.IsVisible || panel.IsOpen;
+            panel.View.SlimToggled += on => Guard("slim capsule", delegate
+            {
+                config.SlimCapsule = notch.SlimWhenIdle = on;
+                config.Save(Paths.ConfigFile);
+                panel.View.ShowRings(config);
+                notch.UpdateSlim();
+            });
             if (!capture.RegisterShortcut(config.CaptureHotkey))
             {
                 Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
@@ -728,6 +744,8 @@ namespace Capsule
             bool micMuted;
             if (SystemVolume.TryReadMic(out micMuted) && micMuted)   // read every time: Windows or another app may have changed it
                 cells.Add(new CellModel { Provider = "mic", Glyph = MicOffGlyph, Text = "Muted", ShowArc = true, Used = 100, ArcColor = Palette.Red });
+            else micMuted = false;
+            attention = micMuted || activity == States.Waiting || codexPrompts.Count > 0 || prompts.Current != null;
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
             notchCells = cells;
             notch.SetCells(cells);
@@ -736,6 +754,7 @@ namespace Capsule
             // Not while it folds: that would turn it round. Nor while it shows a request: OnPromptsChanged redraws that.
             if (card.IsOpen && cardCell >= 0 && !card.View.ShowingPrompt) ShowCard(cardCell);
             if (panel.IsOpen) panel.Refresh(PanelNow());
+            notch.UpdateSlim();
         }
 
         // The one-second music update changes only its faces; the rest of the board keeps its controls and focus.
@@ -746,9 +765,33 @@ namespace Capsule
             if (MusicShown(Clock.NowMs()) != (musicCell >= 0)) { Render(); return; }
             if (panel.IsOpen && config.RingOn("music")) panel.RefreshMusic(music.Current);
             if (musicCell < 0 || musicCell >= notchCells.Count) return;
+            AnnounceTrack();
             notchCells[musicCell] = music.Current.Cell();
             notch.SetCells(notchCells);
             if (card.IsOpen && cardCell == musicCell) ShowCard(musicCell);
+        }
+
+        // A song that starts playing gets a moment beside its ring: its title and artist. Not while focusing quietly.
+        void AnnounceTrack()
+        {
+            MusicTrack t = music.Current.Selected;
+            if (t == null || !t.Playing || t.Title == "") return;
+            string key = t.Source + "\n" + t.Title + "\n" + t.Artist;
+            if (key == newsTrack) return;
+            newsTrack = key;
+            if (!Quiet) ShowNews(MusicGlyph, t.Title, t.Artist, musicCell);
+        }
+
+        const string CopyGlyph = "\uE8C8", MusicGlyph = "\uE8D6", MicGlyph = "\uE720";   // Copy, Audio, Microphone in the icon fonts
+
+        // News beside a ring, unfolding from it. False, and nothing shown, while the capsule is hidden or its card or the
+        // panel is open: a request or the panel always comes first.
+        bool ShowNews(string glyph, string title, string detail, int cell)
+        {
+            if (disposed || captureHidden || !notch.IsVisible || card.IsVisible || panel.IsOpen || notchCells == null || notchCells.Count == 0) return false;
+            if (cell < 0 || cell >= notchCells.Count) cell = 0;
+            news.Show(glyph, title, detail, notch.CellScreenRect(cell), notch.LeftEdge, notch.Monitor);
+            return true;
         }
 
         bool MusicShown(long now)
@@ -1038,6 +1081,7 @@ namespace Capsule
         {
             if (captureHidden) return;
             HideCard();
+            news.Dismiss();
             panel.View.ClearReviewResult();
             RECT capsule;
             Native.GetWindowRect(notch.Handle, out capsule);
@@ -1568,6 +1612,8 @@ namespace Capsule
             if (!known || !SystemVolume.TrySetMic(!muted)) { tray.Balloon("Capsule", "No microphone to mute."); return; }
             Log.Info("mic: " + (muted ? "unmuted" : "muted"));
             Render();
+            int micCell = notchCells != null ? notchCells.FindIndex(c => c.Provider == "mic") : -1;
+            ShowNews(muted ? MicGlyph : MicOffGlyph, muted ? "Mic on" : "Mic muted", "In every app", micCell);
         }
 
         bool RegisterMicShortcut(string text)
@@ -1678,6 +1724,7 @@ namespace Capsule
 
         void ShowCard(int cell)
         {
+            news.Dismiss();
             if (!notch.IsVisible) return;
             long now = Clock.NowMs();
             if (cell >= 0 && cell == focusCell)
@@ -2098,6 +2145,7 @@ namespace Capsule
                 if (sessions != null) sessions.Dispose();
                 if (shortcut != null) shortcut.Dispose();
                 if (micKey != null) micKey.Dispose();
+                news.Close();
                 if (tray != null) tray.Dispose();
                 if (menuOwner != null) menuOwner.Dispose();
             }
