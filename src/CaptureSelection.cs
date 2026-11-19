@@ -87,6 +87,7 @@ namespace Capsule
         public CaptureChooser()
         {
             CaptureControls.Window(this, "Capture", 360, 310);
+            SizeToContent = SizeToContent.Height;   // no empty band under the buttons
             CaptureControls.Forward(this, true);
             ResizeMode = ResizeMode.NoResize;
             var panel = new StackPanel { Margin = new Thickness(16) };

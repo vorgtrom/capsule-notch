@@ -566,6 +566,7 @@ namespace Capsule
             string q = chat.Substring(chat.IndexOf("?q=") + 3);
             TestRunner.Check(q.IndexOfAny(new[] { '&', '|', '"', ' ', '^', '#', '?', '=', '\r', '\n' }) < 0, "every character that means something in a link or a shell is escaped");
             TestRunner.Eq(prompt, Uri.UnescapeDataString(q), "the prompt comes back whole");
+            TestRunner.Check(Controller.AskLink(new string('中', PanelView.AskMaxChars), false).Length > Controller.AskLinkMax, "a long Chinese prompt is too long for the link, and is refused rather than cut");
             string longer = new string('x', PanelView.AskMaxChars - 1) + "😀";
             TestRunner.Eq(new string('x', PanelView.AskMaxChars - 1), Uri.UnescapeDataString(Controller.AskLink(longer, false).Substring(25)), "a prompt over the limit is cut without splitting a character");
         }

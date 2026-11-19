@@ -411,6 +411,7 @@ namespace Capsule
             // Claude and Codex share a row; either one alone takes all of it.
             bool claude = m.Claude != null, codex = m.Codex != null;
             Show(claudeTile, claude);
+            Show(askTile, claude);   // Ask Claude goes with the Claude ring
             Show(codexTile, codex);
             Grid.SetColumnSpan(claudeTile, codex ? 1 : 3);
             Grid.SetColumn(codexTile, claude ? 2 : 0);

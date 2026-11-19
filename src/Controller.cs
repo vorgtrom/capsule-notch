@@ -1530,9 +1530,15 @@ namespace Capsule
         // The prompt goes only into the link handed to Windows; it's never logged or kept.
         void OnAskClaude(string text, bool code)
         {
+            string link = AskLink(text, code);
+            if (link.Length > AskLinkMax)
+            {
+                panel.View.AskResult(false, "That's too long to hand to the Claude app. Shorten it, or paste it into Claude.");
+                return;
+            }
             try
             {
-                System.Diagnostics.Process.Start(AskLink(text, code));
+                System.Diagnostics.Process.Start(link);
                 panel.View.AskResult(true, code ? "Opened in Claude Code. Check the prompt and send it." : "Opened in Claude. Check the prompt and send it.");
             }
             catch (Exception e)
@@ -1541,6 +1547,10 @@ namespace Capsule
                 panel.View.AskResult(false, "The Claude app didn't open. Install it from claude.ai/download, then try again.");
             }
         }
+
+        // Windows starts the Claude app with the link on its command line, which holds 32,767 characters. Escaped, a
+        // character takes up to 9 (Chinese, for one), so a long prompt in some languages won't fit.
+        internal const int AskLinkMax = 32000;
 
         internal static string AskLink(string text, bool code)
         {

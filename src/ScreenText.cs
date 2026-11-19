@@ -47,12 +47,13 @@ namespace Capsule
             return text.ToString();
         }
 
-        // Windows' OCR misreads small screen text ("Custgm" for "Custom"), so a capture that fits is read at twice its size.
+        // Windows' OCR misreads small screen text ("Custgm" for "Custom"), so a capture up to about a screen's size is read
+        // at twice its size. Bigger ones (a scrolled page) are read as they are, to keep the copies small.
         static byte[] Enlarged(CaptureFrame frame, int max, out int width, out int height)
         {
             width = frame.Width;
             height = frame.Height;
-            if (width * 2 > max || height * 2 > max) return frame.Pixels;
+            if (width * 2 > max || height * 2 > max || (long)width * height > 2500000) return frame.Pixels;
             var original = System.Windows.Media.Imaging.BitmapSource.Create(width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, frame.Pixels, width * 4);
             var large = new System.Windows.Media.Imaging.TransformedBitmap(original, new System.Windows.Media.ScaleTransform(2, 2));
             width = large.PixelWidth;
