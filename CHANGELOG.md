@@ -5,6 +5,13 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
+  Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
+  While Google reviews the app, its sign-in page warns that the app isn't verified yet.
+
+## v1.12.0
+
+**The panel**
 - **Tabs in the panel.** One group of tiles at a time, from a row of icons under the header: Home (Claude, Codex,
   Needs you, Ask Claude and sessions), Calendar, Weather, Music, Focus, Clipboard, Shelf and Ideas. **Open panel
   with** now picks the tab it opens on.
@@ -12,18 +19,21 @@ download for each one. A release takes its notes from its section here.
   song plays, and larger controls.
 - **Cleaner tiles.** Ask Claude is a plain search bar with its keys at the end, and "high" or "near limit" is an amber
   chip under the limit's name instead of wrapping beside the number.
+
+**The capsule**
 - **News beside the capsule.** A song that starts, text copied from the screen, or the mic going on or off appears for
   a moment in a pill that grows out of its ring, instead of a Windows notification.
 - **Slim capsule.** An option in Settings turns the capsule into a thin line on the screen edge until you point at it.
+- **Mute your microphone from anywhere.** Ctrl+Alt+M mutes or unmutes it in every app, and the capsule shows a red
+  Muted ring while it's off.
+
+**New tools**
 - **Ask Claude from the panel.** Type a prompt in the new box and press Enter for a Claude chat, or Ctrl+Enter for a
   Claude Code session. The Claude app opens with the prompt filled in, ready for you to send.
 - **Copy text from the screen.** Capture has a **Copy text** mode: drag over an area and its text is copied, read by
   Windows' own text recognition, offline. The capture preview has **Copy text** too, for a whole scrolled page.
-- **Mute your microphone from anywhere.** Ctrl+Alt+M mutes or unmutes it in every app, and the capsule shows a red
-  Muted ring while it's off.
-- **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
-  Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
-  While Google reviews the app, its sign-in page warns that the app isn't verified yet.
+- **A new capture window.** Its three modes side by side with an icon and key each: Screenshot (S), Whole page (W)
+  and Copy text (T).
 
 ## v1.11.0
 
