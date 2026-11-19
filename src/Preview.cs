@@ -562,7 +562,7 @@ namespace Capsule
                 var preview = new CapturePreviewWindow(new CaptureResult { Image = frame, Partial = true, Notice = "Capture stopped. The image contains the verified portion." }, delegate { return false; }, delegate { return false; });
                 SaveCaptureContent(preview, dir, "capture-preview" + suffix + ".png", 920, 650);
                 var chooser = new CaptureChooser();
-                SaveCaptureContent(chooser, dir, "capture-chooser" + suffix + ".png", 340, 210);
+                SaveCaptureContent(chooser, dir, "capture-chooser" + suffix + ".png", 456, 230);
                 var progress = new CaptureProgressWindow();
                 progress.Update(new CaptureProgress { FrameCount = 7, Rows = 2400, Paused = true, Status = "Move the pointer inside the selected area." });
                 SaveCaptureContent(progress, dir, "capture-progress" + suffix + ".png", 360, 130);

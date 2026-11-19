@@ -51,6 +51,54 @@ namespace Capsule
             return button;
         }
 
+        // A capture mode in the chooser: its icon, its name and the key that picks it, on a tile that lights up under the
+        // pointer.
+        internal static Button ModeButton(string glyph, string label, string key, Action action)
+        {
+            Theme theme = Theme.Current;
+            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            content.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily(PanelView.IconFont), FontSize = 26,
+                Foreground = theme.Brush(theme.Text), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 8) });
+            content.Children.Add(new TextBlock { Text = label, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = theme.Brush(theme.Text),
+                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center });
+            content.Children.Add(new Border { Child = new TextBlock { Text = key, FontSize = 10.5, Foreground = theme.Brush(theme.Secondary) },
+                Background = theme.Brush(theme.Track), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 2) });
+            Button button = Button(label, action);
+            button.Content = content;
+            button.MinHeight = 108;
+            button.Padding = new Thickness(8, 10, 8, 10);
+            button.Margin = new Thickness(4);
+            Hover(button);
+            return button;
+        }
+
+        // A small round button showing one glyph, such as the chooser's close.
+        internal static Button IconButton(string glyph, string name, Action action)
+        {
+            Theme theme = Theme.Current;
+            Button button = Button(name, action);
+            button.Content = new TextBlock { Text = glyph, FontFamily = new FontFamily(PanelView.IconFont), FontSize = 11, Foreground = theme.Brush(theme.Secondary) };
+            button.MinHeight = 28;
+            button.Width = 28;
+            button.Height = 28;
+            button.Padding = new Thickness(0);
+            button.Margin = new Thickness(0);
+            button.Background = Brushes.Transparent;
+            button.BorderBrush = Brushes.Transparent;
+            button.ToolTip = name + " (Esc)";
+            Hover(button);
+            return button;
+        }
+
+        // The tile's rim brightens under the pointer.
+        static void Hover(Button button)
+        {
+            Brush rim = button.BorderBrush;
+            button.MouseEnter += delegate { button.BorderBrush = Theme.Current.Brush(Theme.Current.Secondary); };
+            button.MouseLeave += delegate { button.BorderBrush = rim; };
+        }
+
         internal static void Window(Window window, string title, double width, double height)
         {
             window.Title = title;
@@ -84,19 +132,48 @@ namespace Capsule
         public bool TextOnly { get; private set; }   // Copy text: an area whose text goes to the clipboard
         public event Action Cancelled;
 
+        // Icon-font glyphs (in both Segoe Fluent Icons and Segoe MDL2 Assets), kept as escapes: invisible otherwise.
+        internal const string ScreenshotGlyph = "\uF407", ScrollGlyph = "\uEC8F", TextGlyph = "\uE8D2", CloseGlyph = "\uE711";
+
+        // A glass card like the panel's: three modes side by side, each with its icon and key, and Cancel in the corner.
         public CaptureChooser()
         {
-            CaptureControls.Window(this, "Capture", 360, 310);
-            SizeToContent = SizeToContent.Height;   // no empty band under the buttons
+            CaptureControls.Window(this, "Capture", 456, 220);
             CaptureControls.Forward(this, true);
             ResizeMode = ResizeMode.NoResize;
-            var panel = new StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(CaptureControls.Text("Choose a capture mode", 18));
-            panel.Children.Add(CaptureControls.Button("_Screenshot", delegate { Choose(CaptureMode.Screenshot); }));
-            panel.Children.Add(CaptureControls.Button("Scrolling _webpage", delegate { Choose(CaptureMode.Scrolling); }));
-            panel.Children.Add(CaptureControls.Button("Copy _text", ChooseText));
-            panel.Children.Add(CaptureControls.Button("_Cancel", Cancel));
-            Content = panel;
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Background = Brushes.Transparent;
+            SizeToContent = SizeToContent.Height;   // no empty band under the modes
+            Theme theme = Theme.Current;
+            var header = new DockPanel { Margin = new Thickness(4, 0, 0, 10), Background = Brushes.Transparent };
+            Button cancel = CaptureControls.IconButton(CloseGlyph, "Cancel", Cancel);
+            DockPanel.SetDock(cancel, Dock.Right);
+            header.Children.Add(cancel);
+            TextBlock title = CaptureControls.Text("Capture", 16);
+            title.FontWeight = FontWeights.SemiBold;
+            title.VerticalAlignment = VerticalAlignment.Center;
+            title.Margin = new Thickness(0);
+            header.Children.Add(title);
+            header.MouseLeftButtonDown += delegate { try { DragMove(); } catch (InvalidOperationException) { } };
+            var modes = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3 };
+            modes.Children.Add(CaptureControls.ModeButton(ScreenshotGlyph, "Screenshot", "S", delegate { Choose(CaptureMode.Screenshot); }));
+            modes.Children.Add(CaptureControls.ModeButton(ScrollGlyph, "Whole page", "W", delegate { Choose(CaptureMode.Scrolling); }));
+            modes.Children.Add(CaptureControls.ModeButton(TextGlyph, "Copy text", "T", ChooseText));
+            var panel = new StackPanel();
+            panel.Children.Add(header);
+            panel.Children.Add(modes);
+            Content = new Border
+            {
+                Child = panel,
+                Padding = new Thickness(14),
+                Margin = new Thickness(16),   // room for the shadow
+                CornerRadius = new CornerRadius(18),
+                Background = theme.Brush(Color.FromArgb(0xFA, theme.Surface.R, theme.Surface.G, theme.Surface.B)),
+                BorderBrush = theme.Brush(theme.TileRim),
+                BorderThickness = new Thickness(1),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 24, ShadowDepth = 4, Opacity = 0.45, Color = Colors.Black },
+            };
             PreviewKeyDown += delegate(object sender, KeyEventArgs e) { if (HandleKey(e.Key)) e.Handled = true; };
             Closed += delegate { Cancel(); };
         }
