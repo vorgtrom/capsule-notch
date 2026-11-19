@@ -469,7 +469,7 @@ have thumbnails. Click a row to copy it again ("Copied" confirms it), or **Clear
 Click the camera in the panel, choose **Capture...** in the menu, or press **Ctrl+Alt+S** (change it under **Capture
 shortcut** in Settings).
 
-1. Choose **Screenshot** for an area, **Scrolling webpage** for a whole page in Chrome or Edge, or **Copy text** to
+1. Choose **Screenshot** for an area, **Whole page** for a whole scrolling webpage in Chrome or Edge, or **Copy text** to
    copy the words in an area.
 2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
 3. For a webpage, keep the pointer over the page while it scrolls; moving it away pauses. **Stop** keeps what's
