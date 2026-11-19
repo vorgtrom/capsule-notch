@@ -4,7 +4,7 @@
 
 A little glass capsule on the edge of your Windows screen that keeps an eye on **Claude Code** and **Codex** for you.
 
-https://github.com/user-attachments/assets/c8bfb80a-3e77-457a-8dc6-a3cf5f4c52c9
+https://github.com/user-attachments/assets/390b5032-8688-4078-9ba8-860c0a3ff868
 
 - **Your usage limits at a glance.** One ring per tool, and when each limit resets. Capsule forecasts when you'll
   run out at your current pace, and warns you before you do.
