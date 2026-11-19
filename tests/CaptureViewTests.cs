@@ -78,6 +78,8 @@ namespace Capsule
                 else TestRunner.Check(!chooser.TextOnly, "only Copy text reads text");
                 chooser.Close();
             }
+            foreach (string glyph in new[] { CaptureChooser.ScreenshotGlyph, CaptureChooser.ScrollGlyph, CaptureChooser.TextGlyph, CaptureChooser.CloseGlyph })
+                TestRunner.Check(glyph.Length == 1 && glyph[0] >= (char)0xE700 && glyph[0] <= (char)0xF8FF, "each chooser icon is one icon-font character, not lost in an edit");
         }
 
         static void Selection()

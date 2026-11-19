@@ -36,8 +36,25 @@ namespace Capsule
         readonly Grid tiles = new Grid();
         readonly Dictionary<Border, int> tileRows = new Dictionary<Border, int>();
         string panelHome = "default";
-        Border promotedTile;
-        int promotedIndex;
+        // Tabs: the panel shows one group of tiles at a time, picked from the row of icons under its header.
+        public const string HomeTab = "home";
+        internal static readonly string[][] Tabs =
+        {
+            // key, icon glyph (in both icon fonts, kept as an escape), name
+            new[] { HomeTab, "\uE80F", "Home" },
+            new[] { "calendar", "\uE163", "Calendar" },   // not E787: that is the tile's month button
+            new[] { "weather", "\uE753", "Weather" },
+            new[] { "music", "\uE8D6", "Music" },
+            new[] { "focus", "\uE916", "Focus" },
+            new[] { "clipboard", "\uE77F", "Clipboard" },
+            new[] { "shelf", "\uE8B7", "Shelf" },
+            new[] { "ideas", "\uEA80", "Ideas" },
+        };
+        readonly Dictionary<UIElement, string> tileTab = new Dictionary<UIElement, string>();
+        readonly Dictionary<UIElement, bool> wanted = new Dictionary<UIElement, bool>();   // shown by its model, whatever the tab
+        readonly StackPanel tabBar = new StackPanel { Orientation = Orientation.Horizontal };
+        readonly Dictionary<string, Border> tabButtons = new Dictionary<string, Border>();
+        string tab = HomeTab;
         readonly ComboBox panelHomeChoice = new ComboBox();
         readonly TextBlock panelHomeResult = new TextBlock();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
@@ -45,7 +62,7 @@ namespace Capsule
         // Ask Claude: a prompt for a new Claude chat (Enter) or Claude Code session (Ctrl+Enter) in the Claude app.
         readonly Border askTile = new Border(), askField = new Border();
         readonly TextBox askBox = new TextBox();
-        readonly TextBlock askHint = new TextBlock(), askNote = new TextBlock();
+        readonly TextBlock askHint = new TextBlock(), askKeys = new TextBlock(), askNote = new TextBlock();
         public const int AskMaxChars = 14000;   // the Claude app cuts a longer prompt there
         readonly StackPanel needsYou = new StackPanel(), reviewRows = new StackPanel(), githubRows = new StackPanel();
         readonly TextBlock reviewResult = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
@@ -145,6 +162,8 @@ namespace Capsule
 
             header.Margin = new Thickness(Pad + 4, Pad, Pad, 8);
             board.Children.Add(header);
+            tabBar.Margin = new Thickness(Pad, 0, Pad, 8);
+            board.Children.Add(tabBar);
 
             tiles.Margin = new Thickness(Pad, 0, Pad, Pad);
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -153,22 +172,33 @@ namespace Capsule
             for (int i = 0; i < 21; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
-            Place(askTile, 2, 0, 3);
+            Place(needsYouTile, 2, 0, 3);
+            Place(askTile, 4, 0, 3);
             BuildAsk();
-            Place(sessionsTile, 4, 0, 3);
-            Place(calendarTile, 6, 0, 3);
-            Place(weatherTile, 8, 0, 3);
-            Place(musicTile, 10, 0, 3);
-            Place(focusTile, 12, 0, 3);
-            Place(clipTile, 14, 0, 3);
-            Place(shelfTile, 16, 0, 3);
+            Place(sessionsTile, 6, 0, 3);
+            Place(calendarTile, 8, 0, 3);
+            Place(weatherTile, 10, 0, 3);
+            Place(musicTile, 12, 0, 3);
+            Place(focusTile, 14, 0, 3);
+            Place(clipTile, 16, 0, 3);
+            Place(shelfTile, 18, 0, 3);
             shelfTile.Resized += delegate { FixGaps(); RaiseResized(); };
             musicTile.Child = music;
-            Place(ideasTile, 18, 0, 3);
-            Place(needsYouTile, 20, 0, 3);
+            Place(ideasTile, 20, 0, 3);
             needsYouTile.Child = needsYou;
             needsYouTile.Visibility = Visibility.Collapsed;
             foreach (Border tile in new[] { calendarTile, weatherTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
+            foreach (Border tile in new[] { claudeTile, codexTile, needsYouTile, askTile, sessionsTile }) tileTab[tile] = HomeTab;
+            tileTab[calendarTile] = "calendar";
+            tileTab[weatherTile] = "weather";
+            tileTab[musicTile] = "music";
+            tileTab[focusTile] = "focus";
+            tileTab[clipTile] = "clipboard";
+            tileTab[shelfTile] = "shelf";
+            tileTab[ideasTile] = "ideas";
+            wanted[shelfTile] = true;   // the shelf and Ideas are always there
+            wanted[ideasTile] = true;
+            RefreshTabBar();
             FixGaps();
             boardScroll.Content = tiles;
             board.Children.Add(boardScroll);
@@ -224,7 +254,7 @@ namespace Capsule
 
         void BuildAsk()
         {
-            askHint.Text = "Ask Claude…   Enter: chat · Ctrl+Enter: Code";
+            askHint.Text = "Ask Claude…";
             askHint.IsHitTestVisible = false;
             askHint.VerticalAlignment = VerticalAlignment.Center;
             askHint.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -234,7 +264,15 @@ namespace Capsule
             askBox.MaxHeight = 120;
             askBox.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
             System.Windows.Automation.AutomationProperties.SetName(askBox, "Ask Claude");
-            askBox.TextChanged += delegate { askHint.Visibility = askBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; askNote.Visibility = Visibility.Collapsed; };
+            askKeys.Text = "Enter: chat · Ctrl+Enter: Code";   // the keys, small, at the bar's end while it's empty
+            askKeys.IsHitTestVisible = false;
+            askKeys.VerticalAlignment = VerticalAlignment.Center;
+            askKeys.HorizontalAlignment = HorizontalAlignment.Right;
+            askBox.TextChanged += delegate
+            {
+                askHint.Visibility = askKeys.Visibility = askBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+                askNote.Visibility = Visibility.Collapsed;
+            };
             askBox.PreviewKeyDown += delegate(object sender, KeyEventArgs e)
             {
                 if (e.Key != Key.Enter) return;
@@ -244,6 +282,7 @@ namespace Capsule
             };
             var field = new Grid();
             field.Children.Add(askHint);
+            field.Children.Add(askKeys);
             field.Children.Add(askBox);
             Field(askField, field);
             askNote.FontSize = 11.5;
@@ -336,6 +375,14 @@ namespace Capsule
                 tile.Background = theme.Brush(theme.Tile);
                 tile.BorderBrush = theme.Brush(theme.TileRim);
             }
+            // Ask Claude is a bare search bar, not a tile with a box inside: one less frame on Home.
+            askTile.Background = Brushes.Transparent;
+            askTile.BorderThickness = new Thickness(0);
+            askTile.Padding = new Thickness(0);
+            askField.CornerRadius = new CornerRadius(TileRadius);
+            askField.Padding = new Thickness(14, 10, 14, 10);
+            askField.BorderThickness = new Thickness(1);
+            askField.BorderBrush = theme.Brush(theme.TileRim);
             foreach (Border box in new[] { ideaField, askField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent, (Border)githubRepoBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
             foreach (Control box in new Control[] { ideaBox, askBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox, githubRepoBox }) box.Foreground = NotchView.Brush(Palette.Text);
             githubRepoBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -360,6 +407,9 @@ namespace Capsule
             askHint.Foreground = NotchView.Brush(Palette.Secondary);
             askHint.FontSize = 13;
             askHint.FontFamily = askBox.FontFamily;
+            askKeys.Foreground = NotchView.Brush(Palette.Secondary);
+            askKeys.FontSize = 11;
+            askKeys.Opacity = 0.75;
             linkBox.CaretBrush = NotchView.Brush(Palette.Text);
             secretBox.CaretBrush = NotchView.Brush(Palette.Text);
             clientIdBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -372,6 +422,10 @@ namespace Capsule
             if (MicShortcut != null) MicShortcut.Restyle();
             foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint, builtInHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
             googleAccount.Foreground = NotchView.Brush(Palette.Text);
+            TintMusic(true);
+            tabBar.Children.Clear();   // the tab icons, in the new colours
+            tabButtons.Clear();
+            RefreshTabBar();
 
             header.Children.Clear();
             Border gear = IconButton(SettingsGlyph, "Settings", delegate { if (SettingsClicked != null) SettingsClicked(); });
@@ -435,8 +489,28 @@ namespace Capsule
         {
             Show(musicTile, model != null);
             music.Update(model);
+            TintMusic(false);
             FixGaps();
             Relayout();
+        }
+
+        Color? musicTint;
+
+        // The Music tile takes the colour of the artwork, fading into the tile's own towards the bottom. Darkened in the
+        // dark theme and lightened in the light one, so the text keeps its contrast.
+        void TintMusic(bool restyled)
+        {
+            Color? tint = music.Tint;
+            if (!restyled && tint == musicTint) return;
+            musicTint = tint;
+            Theme theme = Theme.Current;
+            if (tint == null) { musicTile.Background = theme.Brush(theme.Tile); return; }
+            Color c = tint.Value, toward = theme.Light ? Colors.White : Colors.Black;
+            double keep = theme.Light ? 0.45 : 0.55;
+            var shade = Color.FromArgb(0xF0, (byte)(c.R * keep + toward.R * (1 - keep)), (byte)(c.G * keep + toward.G * (1 - keep)), (byte)(c.B * keep + toward.B * (1 - keep)));
+            var fill = new LinearGradientBrush(shade, theme.Tile, new Point(0, 0), new Point(0, 1));
+            fill.Freeze();
+            musicTile.Background = fill;
         }
 
         // The Focus tile alone, every second while the timer runs. null: the Focus ring is off.
@@ -467,8 +541,9 @@ namespace Capsule
         public void SetPanelHome(string value)
         {
             panelHome = Config.NormalizePanelHome(value);
+            string shown = panelHome == "needs_you" ? "default" : panelHome;   // Needs you lives on Home now
             foreach (ComboBoxItem choice in panelHomeChoice.Items)
-                if ((string)choice.Tag == panelHome) { panelHomeChoice.SelectedItem = choice; break; }
+                if ((string)choice.Tag == shown) { panelHomeChoice.SelectedItem = choice; break; }
             ReorderTiles();
         }
 
@@ -481,42 +556,104 @@ namespace Capsule
         void ReorderTiles()
         {
             Show(needsYouTile, needsYouHasSources || panelHome == "needs_you");
-            Border first = null;
-            if (shownReviews.Count > 0 || panelHome == "needs_you") first = needsYouTile;
-            else if (panelHome == "calendar") first = calendarTile;
-            else if (panelHome == "weather") first = weatherTile;
-            else if (panelHome == "clipboard") first = clipTile;
-            if (first != null && first.Visibility != Visibility.Visible) first = null;
-            if (first != promotedTile)
-            {
-                // UI Automation follows the child order. Move only the promoted tile to keep Ideas in place.
-                if (promotedTile != null)
-                {
-                    tiles.Children.Remove(promotedTile);
-                    tiles.Children.Insert(promotedIndex, promotedTile);
-                }
-                promotedTile = first;
-                if (first != null)
-                {
-                    promotedIndex = tiles.Children.IndexOf(first);
-                    tiles.Children.Remove(first);
-                    tiles.Children.Insert(0, first);
-                }
-            }
-            int firstRow = first != null ? tileRows[first] : 0;
-            foreach (var tile in tileRows)
-            {
-                int row = tile.Value;
-                if (row == firstRow && firstRow > 0) row = 0;
-                else if (row < firstRow) row += 2;
-                Grid.SetRow(tile.Key, row);
-            }
             FixGaps();
         }
 
         public void ScrollBoardToTop() { boardScroll.ScrollToTop(); }
 
-        static void Show(UIElement tile, bool shown) { tile.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; }
+        // A tile its model shows, or hides; it appears only while its tab is the one picked.
+        void Show(UIElement tile, bool shown)
+        {
+            if (tileTab.ContainsKey(tile))
+            {
+                wanted[tile] = shown;
+                ApplyTab();
+                return;
+            }
+            tile.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // The tab showing: the one picked, or Home while the picked one has nothing to show (its ring is off, say).
+        public string Tab { get { return TabHasTiles(tab) ? tab : HomeTab; } }
+
+        public void SelectTab(string key)
+        {
+            tab = key;
+            ApplyTab();
+            FixGaps();
+            Relayout();
+        }
+
+        void ApplyTab()
+        {
+            string showing = Tab;
+            foreach (var pair in tileTab)
+            {
+                bool want;
+                wanted.TryGetValue(pair.Key, out want);
+                pair.Key.Visibility = want && pair.Value == showing ? Visibility.Visible : Visibility.Collapsed;
+            }
+            RefreshTabBar();
+        }
+
+        // The tab the panel opens on: Home while something waits on you, otherwise the one "Open panel with" names.
+        public void SelectStartTab()
+        {
+            string start = HomeTab;
+            if (shownReviews.Count == 0 && (panelHome == "calendar" || panelHome == "weather" || panelHome == "clipboard")) start = panelHome;
+            SelectTab(start);
+        }
+
+        bool TabHasTiles(string key)
+        {
+            if (key == HomeTab) return true;
+            foreach (var pair in tileTab)
+            {
+                bool want;
+                if (pair.Value == key && wanted.TryGetValue(pair.Key, out want) && want) return true;
+            }
+            return false;
+        }
+
+        // One icon per tab that has something to show; the picked one sits on a light chip.
+        void RefreshTabBar()
+        {
+            if (tabButtons.Count == 0)
+            {
+                foreach (string[] t in Tabs)
+                {
+                    string key = t[0];
+                    var icon = new TextBlock { Text = t[1], FontFamily = new FontFamily(IconFont), FontSize = 15, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                    Border b = Button(icon, delegate { SelectTab(key); }, Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(9, 7, 9, 7));
+                    b.ToolTip = t[2];
+                    b.Margin = new Thickness(0, 0, 4, 0);
+                    b.Focusable = true;
+                    b.FocusVisualStyle = null;
+                    b.BorderThickness = new Thickness(1);
+                    System.Windows.Automation.AutomationProperties.SetName(b, t[2] + " tab");
+                    b.KeyDown += delegate(object sender, KeyEventArgs e)
+                    {
+                        if (e.Key != Key.Enter && e.Key != Key.Space) return;
+                        e.Handled = true;
+                        SelectTab(key);
+                    };
+                    b.GotKeyboardFocus += delegate { b.BorderBrush = NotchView.Brush(Palette.Text); };
+                    b.LostKeyboardFocus += delegate { b.BorderBrush = null; };
+                    tabButtons[key] = b;
+                    tabBar.Children.Add(b);
+                }
+            }
+            foreach (string[] t in Tabs)
+            {
+                Border b = tabButtons[t[0]];
+                bool picked = t[0] == Tab;
+                b.Visibility = TabHasTiles(t[0]) ? Visibility.Visible : Visibility.Collapsed;
+                ((TextBlock)b.Child).Foreground = NotchView.Brush(picked ? Palette.Text : Palette.Secondary);
+                Brush rest = picked ? NotchView.Brush(Palette.Track) : Brushes.Transparent;
+                b.Background = rest;
+                b.Tag = rest;
+            }
+        }
 
         // A gap above each shown tile that has a shown tile somewhere above it: none left behind a hidden one.
         void FixGaps()
@@ -553,7 +690,8 @@ namespace Capsule
         {
             header.Measure(new Size(PanelWidth, double.PositiveInfinity));
             settingsHeader.Measure(new Size(PanelWidth, double.PositiveInfinity));
-            boardScroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height);
+            tabBar.Measure(new Size(PanelWidth, double.PositiveInfinity));   // DesiredSize includes its margin
+            boardScroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height - tabBar.DesiredSize.Height);
             settingsScroll.MaxHeight = Math.Max(1, height - settingsHeader.DesiredSize.Height - Pad);
             month.ConstrainHeight(height);
             usage.ConstrainHeight(height);
@@ -561,6 +699,7 @@ namespace Capsule
 
         public void FocusIdeas()
         {
+            SelectTab("ideas");
             ideaBox.Focus();
             Keyboard.Focus(ideaBox);
             ideaBox.CaretIndex = ideaBox.Text.Length;
@@ -569,6 +708,7 @@ namespace Capsule
 
         internal void RevealShelf()
         {
+            SelectTab("shelf");
             UpdateLayout();
             shelfTile.BringIntoView(new Rect(0, 0, shelfTile.ActualWidth, Math.Min(64, shelfTile.ActualHeight)));
         }
@@ -608,11 +748,10 @@ namespace Capsule
             var opening = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
             opening.Children.Add(SettingsHeading("Open panel with"));
             System.Windows.Automation.AutomationProperties.SetName(panelHomeChoice, "Open panel with");
-            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Default order", Tag = "default" });
+            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Home", Tag = "default" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Calendar", Tag = "calendar" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Weather", Tag = "weather" });
             panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Clipboard", Tag = "clipboard" });
-            panelHomeChoice.Items.Add(new ComboBoxItem { Content = "Needs you", Tag = "needs_you" });
             panelHomeChoice.SelectedIndex = 0;
             panelHomeChoice.SelectionChanged += delegate
             {
@@ -1343,16 +1482,27 @@ namespace Capsule
             {
                 var usageLine = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), Opacity = t.Dimmed ? 0.45 : 1 };
                 usageLine.Children.Add(CardView.MakeText(t.Percent, 22, Palette.Text, FontWeights.SemiBold));
+                box.Children.Add(usageLine);
+                // The window's name, then "high" or "near limit" as an amber chip under it: not squeezed beside the big
+                // number, where it wrapped onto a line of its own, indented.
+                var windowLine = new StackPanel();
+                if (t.WindowLabel != "") windowLine.Children.Add(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal));
                 string warning = Palette.UsedWarning(t.Used);
                 if (warning != "")
                 {
-                    TextBlock label = CardView.MakeText(warning, 11.5, Palette.Amber, FontWeights.SemiBold);
-                    label.Margin = new Thickness(5, 0, 0, 0);
-                    label.VerticalAlignment = VerticalAlignment.Center;
-                    usageLine.Children.Add(label);
+                    Color amber = NotchView.Brush(Palette.Amber).Color;
+                    var chip = new Border
+                    {
+                        Child = CardView.MakeText(warning, 10.5, Palette.Amber, FontWeights.SemiBold),
+                        Background = Theme.Current.Brush(Color.FromArgb(0x2E, amber.R, amber.G, amber.B)),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(6, 0, 6, 1),
+                        Margin = new Thickness(0, 3, 0, 1),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                    };
+                    windowLine.Children.Add(chip);
                 }
-                box.Children.Add(usageLine);
-                if (t.WindowLabel != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.WindowLabel, 11.5, Palette.Secondary, FontWeights.Normal)));
+                if (windowLine.Children.Count > 0) box.Children.Add(windowLine);
                 if (t.ShowBar) box.Children.Add(CardView.Bar(t.Used, t.Color));
                 if (t.ResetText != "") box.Children.Add(CardView.MakeText(t.ResetText, 11.5, Palette.Secondary, FontWeights.Normal));
                 if (t.Freshness != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Freshness, 10.5, Palette.Secondary, FontWeights.Normal)));
@@ -1752,7 +1902,7 @@ namespace Capsule
         {
             var b = new Border { Child = content, CornerRadius = new CornerRadius(8), Padding = padding, Background = rest, Cursor = Cursors.Hand };
             b.MouseEnter += delegate { b.Background = hover; };
-            b.MouseLeave += delegate { b.Background = rest; };
+            b.MouseLeave += delegate { b.Background = b.Tag as Brush ?? rest; };
             b.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e)
             {
                 e.Handled = true;

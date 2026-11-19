@@ -5,6 +5,13 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Tabs in the panel.** One group of tiles at a time, from a row of icons under the header: Home (Claude, Codex,
+  Needs you, Ask Claude and sessions), Calendar, Weather, Music, Focus, Clipboard, Shelf and Ideas. **Open panel
+  with** now picks the tab it opens on.
+- **A bigger Music tab.** Large artwork, the tile tinted with the artwork's colour, a wavy progress line while the
+  song plays, and larger controls.
+- **Cleaner tiles.** Ask Claude is a plain search bar with its keys at the end, and "high" or "near limit" is an amber
+  chip under the limit's name instead of wrapping beside the number.
 - **News beside the capsule.** A song that starts, text copied from the screen, or the mic going on or off appears for
   a moment in a pill that grows out of its ring, instead of a Windows notification.
 - **Slim capsule.** An option in Settings turns the capsule into a thin line on the screen edge until you point at it.

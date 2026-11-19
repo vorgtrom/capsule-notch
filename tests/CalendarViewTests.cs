@@ -71,6 +71,7 @@ namespace Capsule
         static void TheTileOpensTheMonth()
         {
             var view = new PanelView();
+            view.SelectTab("calendar");
             view.Update(Model(TileAt(8, 0)));
             Lay(view);
             int clicks = 0;
@@ -86,6 +87,7 @@ namespace Capsule
         static void TheMonthPageShowsAMonth()
         {
             var view = new PanelView();
+            view.SelectTab("calendar");
             view.Update(Model(TileAt(8, 0)));
             int closed = 0, back = 0, previous = 0, next = 0, today = 0;
             DateTime picked = DateTime.MinValue;
@@ -413,6 +415,7 @@ namespace Capsule
         static void TileShowsTodayAndTomorrow()
         {
             var view = new PanelView();
+            view.SelectTab("calendar");
             view.Update(Model(TileAt(8, 0)));
             Lay(view);
             double with = view.DesiredSize.Height;
@@ -420,7 +423,7 @@ namespace Capsule
             TestRunner.Check(HasText(view, "Standup") && HasText(view, "9:00 AM – 9:30 AM") && HasText(view, "Offsite") && HasText(view, "All day") && HasText(view, "Tomorrow") && HasText(view, "1:1"), "today's events, then tomorrow's under its label");
             view.Update(Model(null));
             Lay(view);
-            TestRunner.Check(!HasText(view, "Standup") && !HasText(view, "Tomorrow") && view.DesiredSize.Height < with - 100, "no model, no tile: the panel is as before");
+            TestRunner.Check(!HasText(view, "Standup") && !HasText(view, "Tomorrow") && view.Tab == PanelView.HomeTab, "no model, no tile: the Calendar tab gives way to Home");
             view.Update(Model(CalendarDay.Tile(new CalendarSnapshot(), CalendarDayTests.At(10, 6, 8, 0), CalendarDayTests.Zone, En)));
             Lay(view);
             TestRunner.Check(HasText(view, "Connect Google Calendar in ⚙"), "not connected: how to connect");

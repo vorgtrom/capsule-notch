@@ -175,6 +175,7 @@ namespace Capsule
             if (appearing || wasClosing || byShortcut) view.ShowBoard();   // it always opens on the tiles: also when turned round mid-close, and by the shortcut with the settings showing
             view.Update(model);
             view.ShelfTile.Refresh();
+            if (appearing || wasClosing) view.SelectStartTab();
             if (!byShortcut && !forFileDrag) view.ScrollBoardToTop();
             Place();
             if (appearing)

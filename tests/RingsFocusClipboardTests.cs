@@ -392,7 +392,18 @@ namespace Capsule
             List<string> texts = Texts(view);
             TestRunner.Check(!texts.Contains("Sessions"), "Claude off: no Sessions tile");
             TestRunner.Check(texts.Contains("Codex"), "Codex alone");
+            view.SelectTab("focus");
+            Lay(view);
+            texts = Texts(view);
+            TestRunner.Check(!texts.Contains("Codex"), "another tab hides Home's tiles");
             TestRunner.Check(texts.Contains("Focus") && texts.Contains("25:00") && texts.Contains("Pause") && texts.Contains("Skip") && texts.Contains("Stop"), "a running Focus tile with its buttons");
+            string command = null;
+            view.FocusCommand += delegate(string what) { command = what; };
+            Click(view, "Pause");
+            TestRunner.Eq("pause", command, "Pause asks the timer to pause");
+            view.SelectTab("clipboard");
+            Lay(view);
+            texts = Texts(view);
             Border clipboard = FindTile(view, "Clipboard");
             var chips = All(clipboard).OfType<WrapPanel>().First();
             TestRunner.Eq("All,Links,Images,Code,Text", string.Join(",", chips.Children.OfType<Border>().Select(System.Windows.Automation.AutomationProperties.GetName)),
@@ -402,10 +413,6 @@ namespace Capsule
             Border codexTile = FindTile(view, "Codex");
             TestRunner.Eq(3, codexTile == null ? 0 : Grid.GetColumnSpan(codexTile), "Codex alone takes the whole row");
 
-            string command = null;
-            view.FocusCommand += delegate(string what) { command = what; };
-            Click(view, "Pause");
-            TestRunner.Eq("pause", command, "Pause asks the timer to pause");
             ClipItem copied = null;
             view.ClipCopyRequested += delegate(ClipItem item) { copied = item; };
             Click(view, "example.com/a");
