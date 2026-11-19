@@ -67,12 +67,12 @@ namespace Capsule
             var view = new NotchView { Animate = false };
             view.Update(new List<CellModel> { new CellModel { Provider = "claude", Text = "42%" } }, false);
             TextBlock text = null;
-            foreach (UIElement e in view.Children) if (e is TextBlock) text = (TextBlock)e;
+            foreach (UIElement e in view.CellParts) if (e is TextBlock) text = (TextBlock)e;
             TestRunner.Check(text != null && ((SolidColorBrush)text.Foreground).Color == light.Text, "the capsule's text is dark in light mode");
             Theme.Use(Theme.For(false, false));
             view.Restyle();
             view.Update(new List<CellModel> { new CellModel { Provider = "claude", Text = "42%" } }, false);
-            foreach (UIElement e in view.Children) if (e is TextBlock) text = (TextBlock)e;
+            foreach (UIElement e in view.CellParts) if (e is TextBlock) text = (TextBlock)e;
             TestRunner.Check(((SolidColorBrush)text.Foreground).Color == Colors.White, "and white again after restyling in dark mode");
         }
     }

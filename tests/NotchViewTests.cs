@@ -7,9 +7,36 @@ namespace Capsule
 {
     public static class NotchViewTests
     {
+        // The slim capsule: a line along the screen edge, the rings faded, the same window size; and its setting saves.
+        static void SlimCapsule()
+        {
+            foreach (bool left in new[] { false, true })
+            {
+                var view = new NotchView { Animate = false };
+                view.Update(new List<CellModel> { new CellModel { Provider = "claude" }, new CellModel { Provider = "codex" } }, left);
+                Size full = view.ViewSize;
+                TestRunner.Check(view.SetSlim(true) && !view.SetSlim(true), "slim once, and again changes nothing");
+                Rect line = view.Shape.Bounds;
+                TestRunner.Near(NotchView.SlimWidth, line.Width, "the slim capsule is a thin line");
+                TestRunner.Near(left ? 0 : NotchView.PillWidth - NotchView.SlimWidth, line.X, "on the screen edge's side (" + (left ? "left" : "right") + ")");
+                TestRunner.Check(view.ViewSize == full, "the window keeps its size, so the pointer finds the full capsule there");
+                var layer = (UIElement)VisualTreeHelper.GetParent(view.CellParts[0]);
+                TestRunner.Near(0, layer.Opacity, "its rings are hidden");
+                view.SetSlim(false);
+                TestRunner.Near(NotchView.PillWidth, view.Shape.Bounds.Width, "full again");
+                TestRunner.Near(1, layer.Opacity, "with its rings");
+            }
+            string file = System.IO.Path.Combine(TestRunner.NewTempDir(), "config.json");
+            System.IO.File.WriteAllText(file, "{}");
+            TestRunner.Check(!Config.Load(file).SlimCapsule, "the slim capsule is off unless turned on");
+            var c = new Config { SlimCapsule = true };
+            TestRunner.Check(c.Save(file) && Config.Load(file).SlimCapsule, "the slim capsule setting saves");
+        }
+
         public static void Run()
         {
             LogosParse();
+            SlimCapsule();
             SizesFollowTheCellCount();
             FindsTheCellUnderAPoint();
             PillIsMirroredForTheLeftEdge();
@@ -98,9 +125,9 @@ namespace Capsule
             var view = new NotchView { Animate = false };
             view.Update(new List<CellModel> { new CellModel { Provider = "claude", ShowArc = true, Used = 50, ArcColor = Palette.Green, Activity = States.Waiting } }, false);
             int arcAt = -1, pulseAt = -1, ellipses = 0;
-            for (int i = 0; i < view.Children.Count; i++)
+            for (int i = 0; i < view.CellParts.Count; i++)
             {
-                var shape = view.Children[i] as System.Windows.Shapes.Shape;
+                var shape = view.CellParts[i] as System.Windows.Shapes.Shape;
                 if (shape == null || shape.StrokeThickness != NotchView.RingStroke) continue;
                 if (shape is System.Windows.Shapes.Ellipse)
                 {

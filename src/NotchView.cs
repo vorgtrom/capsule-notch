@@ -39,9 +39,11 @@ namespace Capsule
         public const double Ring = 40, RingStroke = 4, LogoSize = 18, TextSize = 13, SpinnerStroke = 2;
         public const int AnimationFps = 30;   // WPF defaults to 60; the slow spin and pulse look the same at half the CPU
 
+        public const double SlimWidth = 6;   // the slim capsule: a line this wide along the screen edge
         readonly GlassSurface glass = new GlassSurface();
+        readonly Canvas cellLayer = new Canvas();   // the rings, faded out while the capsule is slim
         readonly List<CellVisual> cells = new List<CellVisual>();
-        bool leftEdge;
+        bool leftEdge, slim;
 
         // False for previews: draw a still frame instead of starting animations.
         public bool Animate = true;
@@ -49,6 +51,36 @@ namespace Capsule
         public NotchView()
         {
             Children.Add(glass);
+            Children.Add(cellLayer);
+        }
+
+        public bool Slim { get { return slim; } }
+        internal UIElementCollection CellParts { get { return cellLayer.Children; } }   // the rings' shapes and text, for tests
+
+        // The shape drawn now: the pill, or the slim line.
+        public Geometry Shape { get { return slim ? SlimGeometry(cells.Count, leftEdge) : PillGeometry(cells.Count, leftEdge); } }
+        Geometry Rim { get { return slim ? SlimGeometry(cells.Count, leftEdge) : RimGeometry(cells.Count, leftEdge); } }
+
+        // Slim or full: the rings fade, and the glass takes the other shape. The window keeps its size, so the pointer
+        // finds the full capsule where the line was. True when it changed.
+        public bool SetSlim(bool value)
+        {
+            if (value == slim) return false;
+            slim = value;
+            glass.Apply(Shape, Rim, 0);
+            int ms = CardMotion.Duration(150, Animate && SystemParameters.ClientAreaAnimation);
+            cellLayer.BeginAnimation(OpacityProperty, ms == 0 ? null : new System.Windows.Media.Animation.DoubleAnimation(slim ? 0 : 1, TimeSpan.FromMilliseconds(ms)));
+            if (ms == 0) cellLayer.Opacity = slim ? 0 : 1;
+            return true;
+        }
+
+        // The slim capsule: a rounded line along the screen edge, as tall as the pill's body.
+        public static Geometry SlimGeometry(int count, bool left)
+        {
+            double h = Math.Max(count, 1) * CellHeight + 2 * Pad;
+            var g = new RectangleGeometry(new Rect(left ? 0 : PillWidth - SlimWidth, Shoulder, SlimWidth, h), SlimWidth / 2, SlimWidth / 2);
+            g.Freeze();
+            return g;
         }
 
         public static double HeightFor(int count) { return Math.Max(count, 1) * CellHeight + 2 * Pad + 2 * Shoulder; }
@@ -91,7 +123,7 @@ namespace Capsule
                 for (int i = 0; i < models.Count; i++) cells.Add(new CellVisual(this, i));
                 Width = PillWidth;
                 Height = HeightFor(models.Count);
-                glass.Apply(PillGeometry(models.Count, left), RimGeometry(models.Count, left), 0);
+                glass.Apply(slim ? SlimGeometry(models.Count, left) : PillGeometry(models.Count, left), slim ? SlimGeometry(models.Count, left) : RimGeometry(models.Count, left), 0);
             }
             for (int i = 0; i < models.Count; i++) cells[i].Apply(models[i], Animate);
         }
@@ -230,7 +262,7 @@ namespace Capsule
                 text.FontWeight = FontWeights.SemiBold;
                 Canvas.SetLeft(text, 0);
                 Canvas.SetTop(text, CellTop(index) + 8 + Ring + 3);
-                foreach (UIElement e in Parts()) view.Children.Add(e);
+                foreach (UIElement e in Parts()) view.cellLayer.Children.Add(e);
             }
 
             IEnumerable<UIElement> Parts()
@@ -247,7 +279,7 @@ namespace Capsule
 
             public void RemoveFrom(NotchView view)
             {
-                foreach (UIElement e in Parts()) view.Children.Remove(e);
+                foreach (UIElement e in Parts()) view.cellLayer.Children.Remove(e);
             }
 
             static void Place(FrameworkElement e, Point center, double size)

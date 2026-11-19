@@ -551,7 +551,7 @@ namespace Capsule
             TestRunner.Check(HasText(view, CalendarGlyph) && HasText(view, "now"), "the calendar cell shows its glyph and its text");
             int marks = 0, textArcs = 0;
             Color ink = NotchView.Brush(Palette.Text).Color;
-            foreach (UIElement child in view.Children)
+            foreach (UIElement child in view.CellParts)
             {
                 var path = child as WPath;
                 if (path == null || path.Visibility != Visibility.Visible) continue;

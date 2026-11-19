@@ -33,7 +33,7 @@ namespace Capsule
     // The Win32 calls the windows need, and nothing more.
     public static class Native
     {
-        public const int WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
+        public const int WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000, WS_EX_TRANSPARENT = 0x20;   // TRANSPARENT: clicks go through to what is under it
         const int GWL_STYLE = -16, GWL_EXSTYLE = -20, WS_CAPTION = 0x00C00000;
         static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
