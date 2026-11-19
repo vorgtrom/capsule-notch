@@ -9,16 +9,63 @@ using System.Windows.Media;
 
 namespace Capsule
 {
+    // The track's progress: a wave up to where it has got while it plays, flat while paused, then the rest of the track as
+    // a plain line. Drawn only when the position changes (once a second), so it costs nothing in between.
+    internal sealed class WaveBar : FrameworkElement
+    {
+        double fraction;
+        bool playing;
+        Brush played = Brushes.White;
+        public Brush Rest = Brushes.Gray;
+        public double Fraction { get { return fraction; } }
+
+        public void Set(double value, bool wavy, Brush colour)
+        {
+            if (value == fraction && wavy == playing && colour == played) return;
+            fraction = value;
+            playing = wavy;
+            played = colour;
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            double w = ActualWidth, mid = ActualHeight / 2, x = Math.Max(0, Math.Min(w, w * fraction));
+            if (w <= 0) return;
+            var rest = new Pen(Rest, 3) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            dc.DrawLine(rest, new Point(x, mid), new Point(w, mid));
+            var line = new Pen(played, 3) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+            if (x > 0)
+            {
+                var g = new StreamGeometry();
+                using (StreamGeometryContext c = g.Open())
+                {
+                    c.BeginFigure(new Point(0, mid), false, false);
+                    for (double px = 2; px <= x; px += 2) c.LineTo(new Point(px, playing ? mid - 3 * Math.Sin(px * 2 * Math.PI / 16) : mid), true, true);
+                    c.LineTo(new Point(x, mid), true, true);
+                }
+                g.Freeze();
+                dc.DrawGeometry(null, line, g);
+            }
+            dc.DrawEllipse(played, null, new Point(x, mid), 5, 5);
+        }
+    }
+
     // Kept in place while polling: pressing a button or moving across the card survives a track update.
     public sealed class MusicView : StackPanel
     {
-        readonly TextBlock heading = Text("Music", 15, true), title = Text("", 15, true), artist = Text("", 12, false);
+        const double Cover = 92;
+        readonly TextBlock heading = Text("Music", 15, true), title = Text("", 18, true), artist = Text("", 13, false);
         readonly TextBlock time = Text("", 11, false), note = Text("", 11, false);
-        readonly Image artwork = new Image { Width = 58, Height = 58, Stretch = Stretch.UniformToFill };
-        readonly TextBlock placeholder = Text("\u266B", 27, false);
-        readonly Border cover = new Border { Width = 58, Height = 58, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 12, 0) };
+        readonly Image artwork = new Image { Width = Cover, Height = Cover, Stretch = Stretch.UniformToFill };
+        readonly TextBlock placeholder = Text("\u266B", 36, false);
+        readonly Border cover = new Border { Width = Cover, Height = Cover, CornerRadius = new CornerRadius(14), Margin = new Thickness(0, 0, 14, 0) };
         readonly Grid details = new Grid();
-        readonly ProgressBar progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 3, Margin = new Thickness(0, 10, 0, 5), IsHitTestVisible = false };
+        readonly WaveBar progress = new WaveBar { Height = 16, Margin = new Thickness(0, 14, 0, 4), IsHitTestVisible = false };
+        ImageSource tintedFrom;   // the artwork Tint was worked out from: once per artwork, not on every tick
+
+        // The artwork's colour, for the tile behind it; null without artwork.
+        public Color? Tint { get; private set; }
         readonly Button source, previous, toggle, next;
         readonly StackPanel controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         readonly ISystemVolume systemVolume;
@@ -45,11 +92,13 @@ namespace Capsule
             imageHost.Children.Add(placeholder);
             imageHost.Children.Add(artwork);
             cover.Child = imageHost;
-            cover.Clip = new RectangleGeometry(new Rect(0, 0, 58, 58), 10, 10);
+            cover.Clip = new RectangleGeometry(new Rect(0, 0, Cover, Cover), 14, 14);
             details.Children.Add(cover);
             var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             title.TextTrimming = artist.TextTrimming = TextTrimming.CharacterEllipsis;
-            artist.Margin = new Thickness(0, 3, 0, 0);
+            title.TextWrapping = TextWrapping.Wrap;   // a long title gets two lines beside the big cover
+            title.MaxHeight = 50;
+            artist.Margin = new Thickness(0, 4, 0, 0);
             info.Children.Add(title);
             info.Children.Add(artist);
             Grid.SetColumn(info, 1);
@@ -67,8 +116,9 @@ namespace Capsule
             foreach (Button button in new[] { previous, toggle, next })
             {
                 ((TextBlock)button.Content).FontFamily = new FontFamily(PanelView.IconFont);
-                button.Width = 50;
-                button.Height = 36;
+                button.Width = button == toggle ? 56 : 48;
+                button.Height = button == toggle ? 44 : 40;
+                ((TextBlock)button.Content).FontSize = button == toggle ? 18 : 15;
                 button.Margin = new Thickness(4, 10, 4, 0);
                 controls.Children.Add(button);
             }
@@ -113,7 +163,9 @@ namespace Capsule
         {
             foreach (TextBlock text in new[] { heading, title }) text.Foreground = NotchView.Brush(Palette.Text);
             foreach (TextBlock text in new[] { artist, time, note, placeholder }) text.Foreground = NotchView.Brush(Palette.Secondary);
-            cover.Background = progress.Background = NotchView.Brush(Palette.Track);
+            artist.Foreground = NotchView.Brush(Palette.Text);   // over the artwork's tint, grey was too faint
+            artist.Opacity = 0.75;
+            cover.Background = progress.Rest = NotchView.Brush(Palette.Track);
             foreach (Button button in new[] { source, previous, toggle, next, speaker })
             {
                 if (button == null) continue;
@@ -136,11 +188,16 @@ namespace Capsule
             title.ToolTip = title.Text;
             artist.ToolTip = artist.Text;
             artwork.Source = t == null ? null : t.Artwork;
+            if (artwork.Source != tintedFrom)
+            {
+                tintedFrom = artwork.Source;
+                Tint = AverageColour(artwork.Source);
+            }
             artwork.Visibility = artwork.Source == null ? Visibility.Collapsed : Visibility.Visible;
             bool duration = t != null && t.DurationSeconds > 0;
             progress.Visibility = time.Visibility = duration ? Visibility.Visible : Visibility.Collapsed;
-            progress.Value = duration ? Math.Max(0, Math.Min(100, 100 * t.PositionSeconds / t.DurationSeconds)) : 0;
-            progress.Foreground = NotchView.Brush(t != null && t.Source == "Spotify" ? "#1DB954" : "#FF5C67");
+            progress.Set(duration ? Math.Max(0, Math.Min(1, t.PositionSeconds / t.DurationSeconds)) : 0, t != null && t.Playing,
+                NotchView.Brush(t != null && t.Source == "Spotify" ? "#1DB954" : "#FF5C67"));
             time.Text = duration ? MusicSelection.Time(t.PositionSeconds) + " / " + MusicSelection.Time(t.DurationSeconds) : "";
             ((TextBlock)source.Content).Text = t == null ? "" : "Source: " + t.Source + (model.Tracks.Count > 1 ? "  \u21C4" : "");
             source.Visibility = model.Tracks.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -158,6 +215,30 @@ namespace Capsule
             if (note.Text == "" && t != null && t.Source != "Spotify" && t.Source != "YouTube Music")
                 note.Text = "Browser media \u00B7 YouTube Music and other tabs use the browser's name.";
             note.Visibility = note.Text == "" ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // The average colour of a picture, drawn at 12 x 12; null when there is none, or it can't be drawn.
+        internal static Color? AverageColour(ImageSource picture)
+        {
+            if (picture == null) return null;
+            try
+            {
+                var visual = new DrawingVisual();
+                using (DrawingContext dc = visual.RenderOpen()) dc.DrawImage(picture, new Rect(0, 0, 12, 12));
+                var small = new System.Windows.Media.Imaging.RenderTargetBitmap(12, 12, 96, 96, PixelFormats.Pbgra32);
+                small.Render(visual);
+                var px = new byte[12 * 12 * 4];
+                small.CopyPixels(px, 12 * 4, 0);
+                long r = 0, g = 0, b = 0, n = 0;
+                for (int i = 0; i < px.Length; i += 4)
+                {
+                    if (px[i + 3] < 128) continue;
+                    b += px[i]; g += px[i + 1]; r += px[i + 2]; n++;
+                }
+                if (n == 0) return null;
+                return Color.FromRgb((byte)(r / n), (byte)(g / n), (byte)(b / n));
+            }
+            catch (Exception) { return null; }
         }
 
         internal void RefreshVolume()

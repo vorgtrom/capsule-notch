@@ -126,9 +126,15 @@ On first run, Capsule asks whether to start with Windows. **No** is the default;
 - **Your rings.** A switch each for Claude, Codex, Calendar, Music and Focus. A ring that's off leaves the capsule and
   the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that ring would hold goes
   straight to the Claude or Codex app. One ring always stays on.
-- **Open panel with** puts Calendar, Weather, Clipboard or Needs you first. A waiting request puts Needs you first
-  whatever you chose.
-- The panel scrolls when it's taller than the screen; its header stays put.
+- **Open panel with** picks the tab the panel opens on: Home, Calendar, Weather or Clipboard. While a request waits
+  on you, it opens on Home, where Needs you is.
+- The panel scrolls when it's taller than the screen; its header and tabs stay put.
+
+**Tabs.** The panel shows one group at a time, picked from the row of icons under its header: **Home** (Claude,
+Codex, Needs you, Ask Claude and your sessions), then **Calendar**, **Weather**, **Music**, **Focus**, **Clipboard**,
+**Shelf** and **Ideas**. A tab shows only while it has something in it, such as Music while a song plays.
+Ctrl+Alt+N opens Ideas, and dragging a file onto the capsule opens Shelf. Tab to the icons and press Enter or Space
+to pick one with the keyboard.
 
 **The menu** has **Refresh now**, **Capture...**, **Show notch**, Connect / Disconnect for Claude Code and Codex,
 **Start with Windows**, **Open data folder**, **Limit alerts**, **Sounds**, **Start focus**, **Check for updates**
