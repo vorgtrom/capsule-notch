@@ -5,6 +5,12 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Ask Claude from the panel.** Type a prompt in the new box and press Enter for a Claude chat, or Ctrl+Enter for a
+  Claude Code session. The Claude app opens with the prompt filled in, ready for you to send.
+- **Copy text from the screen.** Capture has a **Copy text** mode: drag over an area and its text is copied, read by
+  Windows' own text recognition, offline. The capture preview has **Copy text** too, for a whole scrolled page.
+- **Mute your microphone from anywhere.** Ctrl+Alt+M mutes or unmutes it in every app, and the capsule shows a red
+  Muted ring while it's off.
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.

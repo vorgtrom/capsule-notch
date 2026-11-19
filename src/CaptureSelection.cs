@@ -81,17 +81,19 @@ namespace Capsule
     {
         bool finished;
         public event Action<CaptureMode> Chosen;
+        public bool TextOnly { get; private set; }   // Copy text: an area whose text goes to the clipboard
         public event Action Cancelled;
 
         public CaptureChooser()
         {
-            CaptureControls.Window(this, "Capture", 360, 260);
+            CaptureControls.Window(this, "Capture", 360, 310);
             CaptureControls.Forward(this, true);
             ResizeMode = ResizeMode.NoResize;
             var panel = new StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(CaptureControls.Text("Choose a capture mode", 18));
             panel.Children.Add(CaptureControls.Button("_Screenshot", delegate { Choose(CaptureMode.Screenshot); }));
             panel.Children.Add(CaptureControls.Button("Scrolling _webpage", delegate { Choose(CaptureMode.Scrolling); }));
+            panel.Children.Add(CaptureControls.Button("Copy _text", ChooseText));
             panel.Children.Add(CaptureControls.Button("_Cancel", Cancel));
             Content = panel;
             PreviewKeyDown += delegate(object sender, KeyEventArgs e) { if (HandleKey(e.Key)) e.Handled = true; };
@@ -106,6 +108,12 @@ namespace Capsule
             if (Chosen != null) Chosen(mode);
         }
 
+        void ChooseText()
+        {
+            TextOnly = true;
+            Choose(CaptureMode.Screenshot);
+        }
+
         void Cancel()
         {
             if (finished) return;
@@ -118,6 +126,7 @@ namespace Capsule
         {
             if (key == Key.S || key == Key.D1) Choose(CaptureMode.Screenshot);
             else if (key == Key.W || key == Key.D2) Choose(CaptureMode.Scrolling);
+            else if (key == Key.T || key == Key.D3) ChooseText();
             else if (key == Key.Escape) Cancel();
             else return false;
             return true;

@@ -46,7 +46,33 @@ namespace Capsule
         }
 
         // Resolve the current default on each operation so a device switch needs no callback or cached COM state.
-        static bool TryUseEndpoint(Func<IAudioEndpointVolume, bool> use)
+        static bool TryUseEndpoint(Func<IAudioEndpointVolume, bool> use) { return TryUseEndpoint(EDataFlow.Render, ERole.Multimedia, use); }
+
+        // The microphone: the default capture device for apps (Console) and for calls (Communications), which can be two
+        // different devices. Muted means every one of them is muted; muting sets them all, so a shared device isn't flipped
+        // twice.
+        internal static bool TryReadMic(out bool muted)
+        {
+            bool any = false, all = true;
+            foreach (ERole role in MicRoles)
+            {
+                bool m = false;
+                if (TryUseEndpoint(EDataFlow.Capture, role, e => e.GetMute(out m) >= 0)) { any = true; all &= m; }
+            }
+            muted = any && all;
+            return any;
+        }
+
+        internal static bool TrySetMic(bool muted)
+        {
+            bool any = false;
+            foreach (ERole role in MicRoles) any |= TryUseEndpoint(EDataFlow.Capture, role, e => e.SetMute(muted, IntPtr.Zero) >= 0);
+            return any;
+        }
+
+        static readonly ERole[] MicRoles = { ERole.Console, ERole.Communications };
+
+        static bool TryUseEndpoint(EDataFlow flow, ERole role, Func<IAudioEndpointVolume, bool> use)
         {
             IMMDeviceEnumerator enumerator = null;
             IMMDevice device = null;
@@ -54,7 +80,7 @@ namespace Capsule
             try
             {
                 enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-                if (enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out device) < 0) return false;
+                if (enumerator.GetDefaultAudioEndpoint(flow, role, out device) < 0) return false;
                 Guid iid = EndpointVolumeId;
                 if (device.Activate(ref iid, ClsctxInprocServer, IntPtr.Zero, out activation) < 0) return false;
                 var endpoint = activation as IAudioEndpointVolume;
@@ -69,8 +95,8 @@ namespace Capsule
             }
         }
 
-        enum EDataFlow { Render = 0 }
-        enum ERole { Multimedia = 1 }
+        enum EDataFlow { Render = 0, Capture = 1 }
+        enum ERole { Console = 0, Multimedia = 1, Communications = 2 }
 
         [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
         class MMDeviceEnumerator { }

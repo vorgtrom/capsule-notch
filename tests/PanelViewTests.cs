@@ -26,6 +26,7 @@ namespace Capsule
             ClipboardCopyFeedback();
             SignInReplacesTheNumbers();
             IdeasBoxSurvivesUpdates();
+            AskClaudeBox();
             PastedParagraphsAreJoined();
             SettingsShowWhatIsSaved();
             TheSecretBoxIsWriteOnly();
@@ -540,6 +541,33 @@ namespace Capsule
             view.Update(m);
             Lay(view);
             TestRunner.Check(HasText(view, "Sign in") && HasText(view, "Sign in to the Claude CLI to see your usage"), "a Sign in button, with the reason");
+        }
+
+        // Ask Claude: a box that survives updates, and a link with the whole prompt escaped, so nothing in it is read as
+        // part of the link.
+        static void AskClaudeBox()
+        {
+            var view = new PanelView();
+            view.Update(Sample(1));
+            Lay(view);
+            TextBox box = view.AskBox;
+            TestRunner.Check(Contains(view, box) && box.MaxLength == PanelView.AskMaxChars, "the panel has the Ask Claude box, cut at the app's limit");
+            box.Text = "half-typed";
+            view.Update(Sample(4));
+            TestRunner.Check(ReferenceEquals(box, view.AskBox) && box.Text == "half-typed", "an update keeps what's in the Ask box");
+            view.AskResult(true, "Opened in Claude.");
+            TestRunner.Eq("", box.Text, "sent clears the box");
+            box.Text = "kept";
+            view.AskResult(false, "The Claude app didn't open.");
+            TestRunner.Eq("kept", box.Text, "not sent keeps the prompt");
+            string prompt = "fix & ship | \"now\" 100% ^ #1 ?x=y\r\nline 2 中";
+            string chat = Controller.AskLink(prompt, false), code = Controller.AskLink(prompt, true);
+            TestRunner.Check(chat.StartsWith("claude://claude.ai/new?q=") && code.StartsWith("claude://code/new?q="), "Enter opens a chat, Ctrl+Enter a Claude Code session");
+            string q = chat.Substring(chat.IndexOf("?q=") + 3);
+            TestRunner.Check(q.IndexOfAny(new[] { '&', '|', '"', ' ', '^', '#', '?', '=', '\r', '\n' }) < 0, "every character that means something in a link or a shell is escaped");
+            TestRunner.Eq(prompt, Uri.UnescapeDataString(q), "the prompt comes back whole");
+            string longer = new string('x', PanelView.AskMaxChars - 1) + "😀";
+            TestRunner.Eq(new string('x', PanelView.AskMaxChars - 1), Uri.UnescapeDataString(Controller.AskLink(longer, false).Substring(25)), "a prompt over the limit is cut without splitting a character");
         }
 
         static void IdeasBoxSurvivesUpdates()

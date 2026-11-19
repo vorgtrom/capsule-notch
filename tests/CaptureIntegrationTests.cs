@@ -27,6 +27,33 @@ namespace Capsule
             ProgressExclusion();
             ControllerAndCopy();
             PanelEntry();
+            CopyText();
+        }
+
+        // Copy text skips the preview: the area's text goes onto the clipboard, or a plain message says why not.
+        static void CopyText()
+        {
+            foreach (string read in new[] { "first\r\nsecond", "  ", null })
+            {
+                var visibility = new List<bool>();
+                var c = Coordinator(visibility);
+                string copied = null, error = null;
+                int lines = 0;
+                bool previewed = false;
+                c.SelectRequest = delegate { c.TextOnly = true; return Task.FromResult(Request()); };
+                c.ReadText = delegate { return Task.FromResult(read); };
+                c.SetClipboardText = t => copied = t;
+                c.TextCopied = n => lines = n;
+                c.ShowError = t => error = t;
+                c.ShowWindow = delegate { previewed = true; };
+                c.Open();
+                Wait(() => !c.Busy);
+                TestRunner.Check(!c.Busy && !previewed, "Copy text finishes without a preview");
+                if (read == "first\r\nsecond") TestRunner.Check(copied == read && lines == 2 && error == null, "Copy text puts the text on the clipboard and counts its lines");
+                else if (read == null) TestRunner.Check(copied == null && error == CaptureCoordinator.NoOcrLanguage, "with no OCR language, Copy text says how to add one");
+                else TestRunner.Check(copied == null && error == "No text found in that area.", "an area with no text copies nothing");
+                c.Dispose();
+            }
         }
         static CaptureRequest Request() { return new CaptureRequest { Mode = CaptureMode.Screenshot, Area = new RECT { Right = 2, Bottom = 2 } }; }
         static CaptureResult Result() { return new CaptureResult { Image = new CaptureFrame(2, 2, new byte[16]), Notice = "" }; }

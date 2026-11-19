@@ -15,6 +15,7 @@ namespace Capsule
         public string NotionDatabase = "";   // the ideas database's id (32 hex digits); "" = not set up
         public string Hotkey = HotkeyText.Default;   // the global shortcut that opens the panel on the Ideas box
         public string CaptureHotkey = "Ctrl+Alt+S";
+        public string MicHotkey = "Ctrl+Alt+M";   // mutes and unmutes the microphone in every app
         public string PanelHome = "default";
         public WeatherPlace WeatherPlace;
         public string WeatherUnits = "automatic";
@@ -73,6 +74,7 @@ namespace Capsule
             uint modifiers, key;
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "hotkey")), out modifiers, out key)) c.Hotkey = HotkeyText.Format(modifiers, key);
             if (HotkeyText.TryParse(Json.Str(Json.Get(o, "capture_hotkey")), out modifiers, out key)) c.CaptureHotkey = HotkeyText.Format(modifiers, key);
+            if (HotkeyText.TryParse(Json.Str(Json.Get(o, "mic_hotkey")), out modifiers, out key)) c.MicHotkey = HotkeyText.Format(modifiers, key);
             c.PanelHome = NormalizePanelHome(Json.Str(Json.Get(o, "panel_home")));
             c.WeatherPlace = WeatherPlace.From(Json.Str(Json.Get(o, "weather_place")), Json.Get(o, "weather_lat"), Json.Get(o, "weather_lon"));
             c.WeatherUnits = WeatherApi.NormalizeUnits(Json.Str(Json.Get(o, "weather_units")));
@@ -117,6 +119,7 @@ namespace Capsule
             d["notion_database"] = NotionDatabase;
             d["hotkey"] = Hotkey;
             d["capture_hotkey"] = CaptureHotkey;
+            d["mic_hotkey"] = MicHotkey;
             d["panel_home"] = NormalizePanelHome(PanelHome);
             if (WeatherPlace != null)
             {

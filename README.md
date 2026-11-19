@@ -109,6 +109,12 @@ On first run, Capsule asks whether to start with Windows. **No** is the default;
   When Claude or Codex is waiting on you, the same shortcut opens the request instead (see
   [the keyboard](#answer-with-the-keyboard)). Change the shortcut in the panel's Settings (⚙). It isn't
   Ctrl+Alt+Space, because the Claude desktop app uses that.
+- **Ask Claude**, the box under the Claude and Codex tiles, opens the Claude app with your prompt filled in: **Enter**
+  for a new chat, **Ctrl+Enter** for a new Claude Code session, **Shift+Enter** for a new line. The app shows the
+  prompt for you to check and send; Capsule never sends it.
+- **Ctrl+Alt+M** mutes or unmutes your microphone in every app at once (change it under **Mute microphone** in
+  Settings). While it's muted, the capsule shows a red **Muted** ring. If Windows or another app mutes it, that shows
+  too.
 - **Esc** closes the panel, and so does switching apps. Settings and open calendar forms stay open, so you can copy
   values from another app. **Back** leaves Settings and clears unsaved secret fields.
 - **Drag** the capsule to move it. It snaps to the left or right edge of the screen you drop it on.
@@ -463,12 +469,17 @@ have thumbnails. Click a row to copy it again ("Copied" confirms it), or **Clear
 Click the camera in the panel, choose **Capture...** in the menu, or press **Ctrl+Alt+S** (change it under **Capture
 shortcut** in Settings).
 
-1. Choose **Screenshot** for an area, or **Scrolling webpage** for a whole page in Chrome or Edge.
+1. Choose **Screenshot** for an area, **Scrolling webpage** for a whole page in Chrome or Edge, or **Copy text** to
+   copy the words in an area.
 2. Drag over the area. For a webpage, drag over the page itself, down to the bottom of the browser window.
 3. For a webpage, keep the pointer over the page while it scrolls; moving it away pauses. **Stop** keeps what's
    captured so far; **Esc** or **Cancel** throws it away.
 4. Check the preview. To crop, click **Crop**, drag over the area and press Enter.
-5. Choose **Copy**, **Save PNG** or **Keep on shelf**. **Retake** starts again.
+5. Choose **Copy**, **Save PNG**, **Copy text** or **Keep on shelf**. **Retake** starts again.
+
+**Copy text** skips the preview: drag over the area and its text is on the clipboard, one line per line. It uses
+Windows' own text recognition, offline, in your Windows display languages. If Windows has none installed, Capsule
+says how to add one.
 
 - A scrolling capture goes to the top of the page first, then scrolls to the end, joining the screenshots where they
   overlap. A fixed header or footer appears once. If the top is too far to reach in time, the image starts where the
@@ -536,6 +547,9 @@ was lost.
 | GitHub checks | public pull request and Actions data, no sign-in | `api.github.com`, once you save a repository |
 | Music | local Windows media sessions: track, artwork, playback state, controls and timeline | nothing; commands go only to the local player |
 | Volume | the default playback device's volume and mute | nothing |
+| Microphone | whether the default microphones are muted | nothing |
+| Copy text | the area you drag over, read by Windows' text recognition on this PC | nothing |
+| Ask Claude | the prompt you type, handed to the Claude app as a `claude://` link; never logged or kept | nothing; the Claude app opens it |
 | Updates (downloaded copies only) | nothing | `api.github.com`: the latest release's version number, once a day |
 | Google Calendar | the link, or the sign-in and client secret, you saved | with the link: `calendar.google.com` (the calendar's file); signed in: `oauth2.googleapis.com` (sign-in, renewing it, sign-out), `www.googleapis.com` (your calendar list and events, and adding, changing or deleting one) and `tasks.googleapis.com` (your tasks, and adding, ticking, renaming or deleting one) |
 | Weather | the place name you search for and the saved place label, coordinates rounded to two decimals, and units | `geocoding-api.open-meteo.com` (your query and UI language when you click Find), `api.open-meteo.com` (rounded latitude and longitude and temperature unit, only once you select a place) |
