@@ -13,7 +13,21 @@ namespace Capsule
             WritesShortcuts();
             ConfigKeepsTheShortcut();
             CaptureConfig();
+            MicConfig();
             ReadsKeyPresses();
+        }
+
+        static void MicConfig()
+        {
+            string path = Path.Combine(TestRunner.NewTempDir(), "config.json");
+            File.WriteAllText(path, "{\"hotkey\":\"Win+Q\"}");
+            TestRunner.Eq("Ctrl+Alt+M", Config.Load(path).MicHotkey, "the mute shortcut starts as Ctrl+Alt+M");
+            Config c = Config.Load(path);
+            c.MicHotkey = "Ctrl+Shift+F9";
+            TestRunner.Check(c.Save(path) && File.ReadAllText(path).Contains("mic_hotkey"), "the mute shortcut saves as mic_hotkey");
+            TestRunner.Eq("Ctrl+Shift+F9", Config.Load(path).MicHotkey, "the mute shortcut round trips");
+            File.WriteAllText(path, "{\"mic_hotkey\":\"Shift+M\"}");
+            TestRunner.Eq("Ctrl+Alt+M", Config.Load(path).MicHotkey, "a mute shortcut Capsule refuses falls back to Ctrl+Alt+M");
         }
 
         static void CaptureConfig()

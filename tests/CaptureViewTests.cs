@@ -25,6 +25,32 @@ namespace Capsule
             DpiTransition();
             Progress();
             ThemeRendering();
+            ReadsText();
+        }
+
+        // Windows' OCR reads text drawn into a capture; skipped on a PC with no OCR language.
+        static void ReadsText()
+        {
+            TestRunner.Check(ScreenText.Cjk('\u4E2D') && ScreenText.Cjk('\u3042') && !ScreenText.Cjk('a') && !ScreenText.Cjk('1'), "Chinese and Japanese characters join without spaces");
+            if (!ScreenText.Available) { Console.WriteLine("  OCR: no language installed, text reading skipped"); return; }
+            var visual = new DrawingVisual();
+            using (DrawingContext dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, 640, 160));
+                dc.DrawText(new FormattedText("Capsule reads 2026", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    new Typeface("Segoe UI"), 40, Brushes.Black, 1), new Point(20, 20));
+                dc.DrawText(new FormattedText("second line here", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    new Typeface("Segoe UI"), 40, Brushes.Black, 1), new Point(20, 90));
+            }
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(640, 160, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var pixels = new byte[640 * 160 * 4];
+            bitmap.CopyPixels(pixels, 640 * 4, 0);
+            Task<string> read = ScreenText.ReadAsync(new CaptureFrame(640, 160, pixels));
+            Pump(read);
+            string text = read.Result;
+            TestRunner.Check(text != null && text.Contains("Capsule reads 2026"), "OCR reads the first line");
+            TestRunner.Check(text != null && text.Contains("\r\n") && text.Contains("second line"), "OCR keeps each line on its own line");
         }
 
         static CaptureFrame Image()
@@ -36,7 +62,7 @@ namespace Capsule
 
         static void Chooser()
         {
-            foreach (Key key in new[] { Key.S, Key.W, Key.Escape })
+            foreach (Key key in new[] { Key.S, Key.W, Key.T, Key.Escape })
             {
                 var chooser = new CaptureChooser();
                 TestRunner.Check(chooser.Topmost, "the chooser opens above the app in front (the shortcut opens it from the background)");
@@ -48,6 +74,8 @@ namespace Capsule
                 TestRunner.Eq(key == Key.Escape ? 0 : 1, chosen, "chooser chooses once");
                 TestRunner.Eq(key == Key.Escape ? 1 : 0, cancelled, "chooser cancellation");
                 if (key == Key.W) TestRunner.Eq(CaptureMode.Scrolling, mode, "W chooses scrolling");
+                if (key == Key.T) TestRunner.Check(mode == CaptureMode.Screenshot && chooser.TextOnly, "T chooses Copy text: an area, read for its text");
+                else TestRunner.Check(!chooser.TextOnly, "only Copy text reads text");
                 chooser.Close();
             }
         }

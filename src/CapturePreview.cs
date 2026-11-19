@@ -63,6 +63,7 @@ namespace Capsule
             AddButton(buttons, "_Reset crop", ResetCrop);
             CopyButton = AddButton(buttons, "Cop_y", delegate { Write(true); });
             SaveButton = AddButton(buttons, "_Save PNG", delegate { Write(false); });
+            AddButton(buttons, "Copy te_xt", CopyText);
             if (keep != null) KeepButton = AddButton(buttons, "_Keep on shelf", delegate
             {
                 if (!IsReleased) status.Text = this.keep(CurrentImage);
@@ -296,6 +297,21 @@ namespace Capsule
             catch (ExternalException) { status.Text = "The image could not be copied. Try again when the clipboard is available."; }
             catch (IOException) { status.Text = "The image could not be saved. Choose another location."; }
             catch (UnauthorizedAccessException) { status.Text = "The image could not be saved. Choose a writable location."; }
+        }
+
+        async void CopyText()
+        {
+            if (IsReleased) return;
+            status.Text = "Reading the text…";
+            try
+            {
+                string text = await ScreenText.ReadAsync(CurrentImage);
+                if (IsReleased) return;
+                if (text == null) status.Text = CaptureCoordinator.NoOcrLanguage;
+                else if (text.Trim() == "") status.Text = "No text found in this image.";
+                else { CaptureCoordinator.SetText(text); status.Text = "Copied the text."; }
+            }
+            catch (Exception) { if (!IsReleased) status.Text = "The text could not be read or copied. Try again."; }
         }
 
         static bool CopyDefault(CaptureFrame frame)

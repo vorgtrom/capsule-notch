@@ -42,6 +42,11 @@ namespace Capsule
         readonly TextBlock panelHomeResult = new TextBlock();
         readonly Border claudeTile = new Border(), codexTile = new Border(), sessionsTile = new Border(), calendarTile = new Border(), ideasTile = new Border();
         readonly Border needsYouTile = new Border();
+        // Ask Claude: a prompt for a new Claude chat (Enter) or Claude Code session (Ctrl+Enter) in the Claude app.
+        readonly Border askTile = new Border(), askField = new Border();
+        readonly TextBox askBox = new TextBox();
+        readonly TextBlock askHint = new TextBlock(), askNote = new TextBlock();
+        public const int AskMaxChars = 14000;   // the Claude app cuts a longer prompt there
         readonly StackPanel needsYou = new StackPanel(), reviewRows = new StackPanel(), githubRows = new StackPanel();
         readonly TextBlock reviewResult = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
         readonly List<PendingReview> shownReviews = new List<PendingReview>();
@@ -101,6 +106,7 @@ namespace Capsule
         public event Action RefreshAllClicked;
         public event Action<string> RefreshClicked;        // "claude" or "codex"
         public event Action SignInClicked;
+        public event Action<string, bool> AskClaude;          // the prompt, and true for Claude Code instead of a chat
         public event Action<string> IdeaSubmitted;         // the text in the Ideas box, on Enter
         public event Action<string> IdeaOpened;            // an idea's Notion link
         public event Action DiscardClicked;
@@ -143,20 +149,22 @@ namespace Capsule
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
             tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 19; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
+            for (int i = 0; i < 21; i++) tiles.RowDefinitions.Add(new RowDefinition { Height = i % 2 == 1 ? new GridLength(Gap) : GridLength.Auto });
             Place(claudeTile, 0, 0, 1);
             Place(codexTile, 0, 2, 1);
-            Place(sessionsTile, 2, 0, 3);
-            Place(calendarTile, 4, 0, 3);
-            Place(weatherTile, 6, 0, 3);
-            Place(musicTile, 8, 0, 3);
-            Place(focusTile, 10, 0, 3);
-            Place(clipTile, 12, 0, 3);
-            Place(shelfTile, 14, 0, 3);
+            Place(askTile, 2, 0, 3);
+            BuildAsk();
+            Place(sessionsTile, 4, 0, 3);
+            Place(calendarTile, 6, 0, 3);
+            Place(weatherTile, 8, 0, 3);
+            Place(musicTile, 10, 0, 3);
+            Place(focusTile, 12, 0, 3);
+            Place(clipTile, 14, 0, 3);
+            Place(shelfTile, 16, 0, 3);
             shelfTile.Resized += delegate { FixGaps(); RaiseResized(); };
             musicTile.Child = music;
-            Place(ideasTile, 16, 0, 3);
-            Place(needsYouTile, 18, 0, 3);
+            Place(ideasTile, 18, 0, 3);
+            Place(needsYouTile, 20, 0, 3);
             needsYouTile.Child = needsYou;
             needsYouTile.Visibility = Visibility.Collapsed;
             foreach (Border tile in new[] { calendarTile, weatherTile, musicTile, focusTile, clipTile }) tile.Visibility = Visibility.Collapsed;
@@ -213,6 +221,52 @@ namespace Capsule
             Restyle();
         }
 
+        void BuildAsk()
+        {
+            askHint.Text = "Ask Claude…   Enter: chat · Ctrl+Enter: Code";
+            askHint.IsHitTestVisible = false;
+            askHint.VerticalAlignment = VerticalAlignment.Center;
+            askHint.TextTrimming = TextTrimming.CharacterEllipsis;
+            Plain(askBox);
+            askBox.MaxLength = AskMaxChars;
+            askBox.TextWrapping = TextWrapping.Wrap;
+            askBox.MaxHeight = 120;
+            askBox.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            System.Windows.Automation.AutomationProperties.SetName(askBox, "Ask Claude");
+            askBox.TextChanged += delegate { askHint.Visibility = askBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; askNote.Visibility = Visibility.Collapsed; };
+            askBox.PreviewKeyDown += delegate(object sender, KeyEventArgs e)
+            {
+                if (e.Key != Key.Enter) return;
+                if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) return;   // Shift+Enter: a new line
+                e.Handled = true;
+                if (askBox.Text.Trim() != "" && AskClaude != null) AskClaude(askBox.Text, (Keyboard.Modifiers & ModifierKeys.Control) != 0);
+            };
+            var field = new Grid();
+            field.Children.Add(askHint);
+            field.Children.Add(askBox);
+            Field(askField, field);
+            askNote.FontSize = 11.5;
+            askNote.TextWrapping = TextWrapping.Wrap;
+            askNote.Margin = new Thickness(2, 6, 0, 0);
+            askNote.Visibility = Visibility.Collapsed;
+            var box = new StackPanel();
+            box.Children.Add(askField);
+            box.Children.Add(askNote);
+            askTile.Child = box;
+        }
+
+        public TextBox AskBox { get { return askBox; } }
+
+        // After Enter: sent clears the box; otherwise the text stays and the note says why.
+        public void AskResult(bool sent, string note)
+        {
+            if (sent) askBox.Clear();
+            askNote.Text = note ?? "";
+            askNote.Foreground = NotchView.Brush(sent ? Palette.Secondary : Palette.Amber);
+            askNote.Visibility = string.IsNullOrEmpty(note) ? Visibility.Collapsed : Visibility.Visible;
+            RaiseResized();
+        }
+
         void Place(Border tile, int row, int column, int span)
         {
             Grid.SetRow(tile, row);
@@ -222,6 +276,7 @@ namespace Capsule
             tiles.Children.Add(tile);
         }
 
+        public ShortcutField MicShortcut { get; private set; }
         public TextBox IdeaBox { get { return ideaBox; } }
         internal ShelfView ShelfTile { get { return shelfTile; } }
         public MusicView Music { get { return music; } }
@@ -272,7 +327,7 @@ namespace Capsule
             month.Restyle();
             usage.Restyle();
             music.Restyle();
-            foreach (Border tile in new[] { claudeTile, codexTile, sessionsTile, calendarTile, weatherTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
+            foreach (Border tile in new[] { claudeTile, codexTile, askTile, sessionsTile, calendarTile, weatherTile, musicTile, focusTile, clipTile, shelfTile, ideasTile, needsYouTile })
             {
                 tile.CornerRadius = new CornerRadius(TileRadius);
                 tile.Padding = new Thickness(TilePad);
@@ -280,8 +335,8 @@ namespace Capsule
                 tile.Background = theme.Brush(theme.Tile);
                 tile.BorderBrush = theme.Brush(theme.TileRim);
             }
-            foreach (Border box in new[] { ideaField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent, (Border)githubRepoBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
-            foreach (Control box in new Control[] { ideaBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox, githubRepoBox }) box.Foreground = NotchView.Brush(Palette.Text);
+            foreach (Border box in new[] { ideaField, askField, (Border)secretBox.Parent, (Border)linkBox.Parent, shortcutBox, captureShortcutBox, (Border)clientIdBox.Parent, (Border)clientSecretBox.Parent, (Border)calendarLinkBox.Parent, (Border)githubRepoBox.Parent }) box.Background = NotchView.Brush(Palette.Track);
+            foreach (Control box in new Control[] { ideaBox, askBox, secretBox, linkBox, clientIdBox, clientSecretBox, calendarLinkBox, githubRepoBox }) box.Foreground = NotchView.Brush(Palette.Text);
             githubRepoBox.CaretBrush = NotchView.Brush(Palette.Text);
             StyleAction(githubSave);
             StyleAction(githubOff);
@@ -300,6 +355,10 @@ namespace Capsule
             shelfTile.Refresh();
             calendarLinkBox.CaretBrush = NotchView.Brush(Palette.Text);
             ideaBox.CaretBrush = NotchView.Brush(Palette.Text);
+            askBox.CaretBrush = NotchView.Brush(Palette.Text);
+            askHint.Foreground = NotchView.Brush(Palette.Secondary);
+            askHint.FontSize = 13;
+            askHint.FontFamily = askBox.FontFamily;
             linkBox.CaretBrush = NotchView.Brush(Palette.Text);
             secretBox.CaretBrush = NotchView.Brush(Palette.Text);
             clientIdBox.CaretBrush = NotchView.Brush(Palette.Text);
@@ -309,6 +368,7 @@ namespace Capsule
             ideaHint.FontFamily = ideaBox.FontFamily;
             shortcutText.Foreground = NotchView.Brush(Palette.Text);
             captureShortcutText.Foreground = NotchView.Brush(Palette.Text);
+            if (MicShortcut != null) MicShortcut.Restyle();
             foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint, builtInHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
             googleAccount.Foreground = NotchView.Brush(Palette.Text);
 
@@ -351,6 +411,7 @@ namespace Capsule
             // Claude and Codex share a row; either one alone takes all of it.
             bool claude = m.Claude != null, codex = m.Codex != null;
             Show(claudeTile, claude);
+            Show(askTile, claude);   // Ask Claude goes with the Claude ring
             Show(codexTile, codex);
             Grid.SetColumnSpan(claudeTile, codex ? 1 : 3);
             Grid.SetColumn(codexTile, claude ? 2 : 0);
@@ -670,6 +731,8 @@ namespace Capsule
             captureShortcutResult.Margin = new Thickness(0, 3, 0, 0);
             captureSettings.Children.Add(captureShortcutResult);
             settingsBody.Children.Add(captureSettings);
+            MicShortcut = new ShortcutField(Section("Mute microphone"), "Mute microphone shortcut") { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
+            settingsBody.Children.Add(MicShortcut);
         }
 
         UIElement BuildGitHubSettings()

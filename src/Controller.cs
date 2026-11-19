@@ -44,6 +44,8 @@ namespace Capsule
         HoverCard card;
         PanelWindow panel;
         GlobalHotkey shortcut;
+        GlobalHotkey micKey;     // mutes and unmutes the microphone in every app
+        bool micRegistered;
         CaptureCoordinator capture;
         bool captureHidden;
         Tray tray;
@@ -254,7 +256,10 @@ namespace Capsule
                 panel.View.ShowGoogle(calendar.Settings());
                 panel.View.ShowWeatherSettings(config.WeatherPlace, config.WeatherUnits, true);
                 panel.View.ShowGitHubSettings(config.GitHubRepo);
+                panel.View.MicShortcut.Show(config.MicHotkey, micRegistered);
             };
+            panel.View.AskClaude += delegate(string text, bool code) { Guard("ask claude", delegate { OnAskClaude(text, code); }); };
+            panel.View.MicShortcut.Chosen += delegate(string text) { Guard("mic shortcut", delegate { OnMicShortcutChosen(text); }); };
             panel.View.NotionSaved += OnNotionSaved;
             panel.View.ShortcutChosen += OnShortcutChosen;
             panel.View.CaptureClicked += delegate { capture.Open(); };
@@ -313,11 +318,16 @@ namespace Capsule
             RegisterShortcut(config.Hotkey);
             capture = new CaptureCoordinator(CaptureVisibilityChanged);
             capture.KeepOnShelf = shelf.Keep;
+            capture.TextCopied = lines => tray.Balloon("Capsule", "Copied " + lines + (lines == 1 ? " line" : " lines") + " of text.");
             if (!capture.RegisterShortcut(config.CaptureHotkey))
             {
                 Log.Info("capture shortcut: " + config.CaptureHotkey + " is taken by another app");
                 tray.Balloon("Capsule", config.CaptureHotkey + " is already used by another app. Pick another capture shortcut in Capsule's settings (⚙ in the panel).");
             }
+            micKey = new GlobalHotkey();
+            micKey.Pressed += delegate { Guard("mic", ToggleMic); };
+            micRegistered = RegisterMicShortcut(config.MicHotkey);
+            if (!micRegistered) tray.Balloon("Capsule", config.MicHotkey + " is already used by another app. Pick another mute shortcut in Capsule's settings (⚙ in the panel).");
             if (sessions.HooksConnected && HookSetup.NeedsUpdate(Paths.ClaudeSettings))
             {
                 // Its permission hook is stopped after 5 s: a request would leave the card before it could be answered.
@@ -715,6 +725,9 @@ namespace Capsule
                 focusCell = cells.Count;
                 cells.Add(focus.Cell(now));
             }
+            bool micMuted;
+            if (SystemVolume.TryReadMic(out micMuted) && micMuted)   // read every time: Windows or another app may have changed it
+                cells.Add(new CellModel { Provider = "mic", Glyph = MicOffGlyph, Text = "Muted", ShowArc = true, Used = 100, ArcColor = Palette.Red });
             if (card.IsVisible && cardCell >= cells.Count) HideCard();   // its cell is gone (signed out, say)
             notchCells = cells;
             notch.SetCells(cells);
@@ -1513,6 +1526,70 @@ namespace Capsule
             panel.View.ShowShortcutResult(false, config.Hotkey, text + " is used by another app. Try another.");
         }
 
+        // Ask Claude: the Claude app opens a new chat, or a Claude Code session, with the prompt filled in for you to send.
+        // The prompt goes only into the link handed to Windows; it's never logged or kept.
+        void OnAskClaude(string text, bool code)
+        {
+            string link = AskLink(text, code);
+            if (link.Length > AskLinkMax)
+            {
+                panel.View.AskResult(false, "That's too long to hand to the Claude app. Shorten it, or paste it into Claude.");
+                return;
+            }
+            try
+            {
+                System.Diagnostics.Process.Start(link);
+                panel.View.AskResult(true, code ? "Opened in Claude Code. Check the prompt and send it." : "Opened in Claude. Check the prompt and send it.");
+            }
+            catch (Exception e)
+            {
+                Log.Info("ask claude: the Claude app didn't open (" + e.GetType().Name + ")");
+                panel.View.AskResult(false, "The Claude app didn't open. Install it from claude.ai/download, then try again.");
+            }
+        }
+
+        // Windows starts the Claude app with the link on its command line, which holds 32,767 characters. Escaped, a
+        // character takes up to 9 (Chinese, for one), so a long prompt in some languages won't fit.
+        internal const int AskLinkMax = 32000;
+
+        internal static string AskLink(string text, bool code)
+        {
+            if (text.Length > PanelView.AskMaxChars) text = text.Substring(0, PanelView.AskMaxChars - (char.IsHighSurrogate(text[PanelView.AskMaxChars - 1]) ? 1 : 0));
+            return (code ? "claude://code/new?q=" : "claude://claude.ai/new?q=") + Uri.EscapeDataString(text);
+        }
+
+        const string MicOffGlyph = "";   // U+EC54 MicOff in the Segoe icon fonts
+
+        // The mute shortcut: every default microphone muted, or every one unmuted, and the capsule shows it at once.
+        void ToggleMic()
+        {
+            bool muted;
+            bool known = SystemVolume.TryReadMic(out muted);
+            if (!known || !SystemVolume.TrySetMic(!muted)) { tray.Balloon("Capsule", "No microphone to mute."); return; }
+            Log.Info("mic: " + (muted ? "unmuted" : "muted"));
+            Render();
+        }
+
+        bool RegisterMicShortcut(string text)
+        {
+            uint modifiers, key;
+            return HotkeyText.TryParse(text, out modifiers, out key) && micKey.Register(modifiers, key);
+        }
+
+        void OnMicShortcutChosen(string text)
+        {
+            if (RegisterMicShortcut(text))
+            {
+                micRegistered = true;
+                config.MicHotkey = text;
+                bool saved = config.Save(Paths.ConfigFile);
+                panel.View.MicShortcut.Result(saved, text, saved ? "Saved" : "Works now, but could not save the shortcut.");
+                return;
+            }
+            micRegistered = RegisterMicShortcut(config.MicHotkey);
+            panel.View.MicShortcut.Result(false, config.MicHotkey, text + " is unavailable. Try another shortcut.");
+        }
+
         void OnCaptureShortcutChosen(string text)
         {
             if (capture.RegisterShortcut(text))
@@ -2020,6 +2097,7 @@ namespace Capsule
             {
                 if (sessions != null) sessions.Dispose();
                 if (shortcut != null) shortcut.Dispose();
+                if (micKey != null) micKey.Dispose();
                 if (tray != null) tray.Dispose();
                 if (menuOwner != null) menuOwner.Dispose();
             }

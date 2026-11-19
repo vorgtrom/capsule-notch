@@ -20,12 +20,16 @@ namespace Capsule
         CapturePreviewWindow preview;
         string registeredText;
         bool disposed, suppressed;
+        internal bool TextOnly;   // this capture is Copy text: its text goes to the clipboard, with no preview
         internal Func<CancellationToken, Task<CaptureRequest>> SelectRequest;
         internal Func<CaptureRequest, CancellationToken, Task<CaptureResult>> Capture;
         internal Func<CaptureResult, CapturePreviewWindow> CreatePreview;
         internal Func<CaptureFrame, string> KeepOnShelf;
         internal Action<Window> ShowWindow;
         internal Action<string> ShowError;
+        internal Func<CaptureFrame, Task<string>> ReadText = ScreenText.ReadAsync;
+        internal Action<string> SetClipboardText = SetText;
+        internal Action<int> TextCopied;   // the number of lines copied by Copy text
         internal Func<Action, IDisposable> WatchEscape;   // calls its action when Esc is pressed, until disposed
         internal Action WaitForComposition = delegate
         {
@@ -90,6 +94,7 @@ namespace Capsule
             CaptureResult result = null;
             try
             {
+                TextOnly = false;
                 suppressed = true;
                 visibility(true);
                 CaptureRequest request = await SelectRequest(source.Token);
@@ -98,6 +103,7 @@ namespace Capsule
                     result = await Capture(request, source.Token);
                 source.Token.ThrowIfCancellationRequested();
                 RestoreVisibility();
+                if (TextOnly) { await CopyText(result.Image); return; }
                 preview = CreatePreview(result);
                 var closed = new TaskCompletionSource<bool>();
                 preview.Closed += delegate { closed.TrySetResult(true); };
@@ -106,9 +112,10 @@ namespace Capsule
                 await closed.Task;
             }
             catch (OperationCanceledException) { }
-            catch (Exception)
+            catch (Exception e)
             {
-                // Never expose page content, native details, or private paths in an error.
+                // Never expose page content, native details, or private paths in an error; the log gets the kind only.
+                Log.Info("capture: failed (" + e.GetType().Name + (e.TargetSite != null ? " in " + e.TargetSite.Name : "") + ")");
                 RestoreVisibility();
                 if (!disposed) ShowError("Capture could not finish. Try another area or use Screenshot.");
             }
@@ -135,11 +142,33 @@ namespace Capsule
             {
                 ShowWindow(chooser);
                 CaptureMode mode = await choice.Task;
+                TextOnly = chooser != null && chooser.TextOnly;
                 chooser = null;
                 cancel.ThrowIfCancellationRequested();
                 return await CaptureSelection.Open(mode, cancel);
             }
         }
+
+        // Copy text: the area's text onto the clipboard, with no preview. The text itself is never logged or shown in an error.
+        async Task CopyText(CaptureFrame image)
+        {
+            string text = await ReadText(image);
+            if (disposed) return;
+            if (text == null) ShowError(NoOcrLanguage);
+            else if (text.Trim() == "") ShowError("No text found in that area.");
+            else
+            {
+                SetClipboardText(text);
+                if (TextCopied != null) TextCopied(text.Split((char)10).Length);
+            }
+        }
+
+        // WPF's SetText throws when another app (or Capsule's own clipboard history, which reads every copy) has the
+        // clipboard open at that moment; Windows Forms' version waits and tries again, up to a second.
+        internal static void SetText(string text) { System.Windows.Forms.Clipboard.SetDataObject(text, true, 10, 100); }
+
+        internal const string NoOcrLanguage = "Windows has no text recognition for your languages yet. In Settings > Time & language > " +
+            "Language & region, open a language's options and add its Optical character recognition.";
 
         async Task<CaptureResult> CaptureAsync(CaptureRequest request, CancellationToken cancel)
         {
