@@ -14,9 +14,29 @@ namespace Capsule
 {
     public static class MusicTests
     {
+        // The Music tab takes the artwork's colour, and its progress is a wave while playing.
+        static void ArtworkTintAndWave()
+        {
+            var red = new DrawingImage(new GeometryDrawing(Brushes.Red, null, new RectangleGeometry(new Rect(0, 0, 40, 40))));
+            red.Freeze();
+            Color? tint = MusicView.AverageColour(red);
+            TestRunner.Check(tint.HasValue && tint.Value.R > 240 && tint.Value.G < 15 && tint.Value.B < 15, "the tint of an all-red cover is red");
+            TestRunner.Check(MusicView.AverageColour(null) == null, "no artwork, no tint");
+            var view = new MusicView();
+            var playing = new MusicSnapshot();
+            playing.Tracks.Add(new MusicTrack { Key = "a", Source = "Spotify", Title = "Song", Artwork = red, Playing = true, CanToggle = true });
+            playing.SelectedKey = "a";
+            view.Update(playing);
+            TestRunner.Check(view.Tint.HasValue && view.Tint.Value.R > 240, "the view reads the tint once the artwork shows");
+            var wave = new WaveBar();
+            wave.Set(0.4, true, Brushes.Green);
+            TestRunner.Near(0.4, wave.Fraction, "the wave goes as far as the track has");
+        }
+
         public static void Run()
         {
             SelectionAndSources();
+            ArtworkTintAndWave();
             TheCellHidesWhenNothingPlays();
             ModelsAndViews();
             OutputVolumeControls();
@@ -173,6 +193,7 @@ namespace Capsule
             var panel = new PanelWindow(audio) { ShowActivated = false, Left = -10000, Top = -10000, Width = 1, Height = 1 };
             var snapshot = new MusicSnapshot();
             panel.View.UpdateMusic(snapshot);
+            panel.View.SelectTab("music");
             panel.RefreshMusic(snapshot);
             TestRunner.Eq(0, audio.Reads, "the closed panel does not read output volume");
 

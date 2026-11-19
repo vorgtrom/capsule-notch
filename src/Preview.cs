@@ -88,6 +88,7 @@ namespace Capsule
                 var clipboard = new PanelView();
                 clipboard.Update(new PanelModel { Clipboard = clips, Ideas = new IdeasTile() });
                 clipboard.UpdateClipboard(clips, copied);
+                clipboard.SelectTab("clipboard");
                 SavePanelView(dir, "quick-wins-copied.png", clipboard);
             }
 
@@ -97,6 +98,7 @@ namespace Capsule
                 view.ShelfTile.Bind(shelf);
                 view.ShelfTile.SetDropTarget(true);
                 view.Update(new PanelModel { Ideas = new IdeasTile() });
+                view.SelectTab("shelf");
                 SavePanelView(dir, "quick-wins-shelf" + suffix + ".png", view);
             }
         }
@@ -132,7 +134,7 @@ namespace Capsule
             clips.Items.Add(ClipboardHistory.FromText("rgb(255, 69, 58)", now));
             clips.Items.Add(ClipboardHistory.FromText("ssh deploy@staging.example.com", now));
             panel.Clipboard = clips;
-            SavePanel(dir, "panel-focus" + suffix + ".png", panel, false);
+            SavePanel(dir, "panel-focus" + suffix + ".png", panel, false, "focus");
             var focusCard = new CardView();
             focusCard.ShowFocus(FocusTile.From(timer, now, en), true);
             focusCard.SetPointer(48);
@@ -178,7 +180,7 @@ namespace Capsule
             SavePng(host, Path.Combine(dir, "card-music" + suffix + ".png"));
             PanelModel panel = SamplePanel(claude, codex, now, en);
             panel.Music = m;
-            SavePanel(dir, "panel-music" + suffix + ".png", panel, false);
+            SavePanel(dir, "panel-music" + suffix + ".png", panel, false, "music");
         }
 
         // The capsule's cells with the calendar's under them, during the made-up meeting.
@@ -340,10 +342,11 @@ namespace Capsule
             };
         }
 
-        static void SavePanel(string dir, string name, PanelModel model, bool settings)
+        static void SavePanel(string dir, string name, PanelModel model, bool settings, string tab = null)
         {
             var view = new PanelView();
             view.Update(model);
+            if (tab != null) view.SelectTab(tab);
             if (settings)
             {
                 view.ShowSettings(true, "0123456789abcdef0123456789abcdef", HotkeyText.Default);
@@ -381,7 +384,7 @@ namespace Capsule
             SavePng(host, Path.Combine(dir, "calendar-card" + suffix + ".png"));
             PanelModel panel = SamplePanel(claude, codex, now, en);
             panel.Calendar = CalendarDay.Tile(day, now, zone, en);
-            SavePanel(dir, "calendar-panel" + suffix + ".png", panel, false);
+            SavePanel(dir, "calendar-panel" + suffix + ".png", panel, false, "calendar");
             var settings = new GoogleSettings { ClientId = "123456789012-sample.apps.googleusercontent.com", SecretSaved = true, SignedIn = true, Account = "you@example.com" };
             settings.Calendars.Add(new CalendarChoice { Id = "you@example.com", Name = "you@example.com", Color = "#9fe1e7", Shown = true });
             settings.Calendars.Add(new CalendarChoice { Id = "family", Name = "Family", Color = "#f83a22", Shown = true });

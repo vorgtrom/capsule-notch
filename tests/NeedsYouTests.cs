@@ -72,7 +72,7 @@ namespace Capsule
             model.NeedsYou = NeedsYouTile.From(claude, null, null, 6000);
             view.Update(model);
             TextBlock title = Find<TextBlock>(view, t => t.Text == "Needs you");
-            TestRunner.Check(title != null && Grid.GetRow((Border)((StackPanel)title.Parent).Parent) == 0, "a pending request puts Needs you in the first row");
+            TestRunner.Check(title != null && Grid.GetRow((Border)((StackPanel)title.Parent).Parent) == 2 && view.Tab == PanelView.HomeTab, "Needs you sits on Home, right under the usage tiles");
             TestRunner.Check(Find<TextBlock>(view, t => t.Text == "Claude · Example") != null, "agent-only tile shows the agent");
             TestRunner.Check(Find<TextBlock>(view, t => t.Text == "GitHub checks") == null, "disabled GitHub section is absent");
             PendingReview clicked = null;
@@ -99,10 +99,11 @@ namespace Capsule
             TestRunner.Eq("owner/repo:1234", opened, "Open run forwards only configured repo and numeric run ID");
             view.ShowReviewExpired();
             TestRunner.Check(Find<TextBlock>(view, t => t.Text == "This request is no longer pending.") != null, "stale review displays feedback");
-            Border needsTile = (Border)((StackPanel)title.Parent).Parent;
-            TestRunner.Check(Grid.GetRow(needsTile) > 0, "without pending requests the calendar preference takes priority again");
+            view.SelectStartTab();
+            TestRunner.Eq("calendar", view.Tab, "without pending requests the panel opens on the calendar, as set");
             view.SetPanelHome("needs_you");
-            TestRunner.Eq(0, Grid.GetRow(needsTile), "the Needs you preference promotes the tile without a request");
+            view.SelectStartTab();
+            TestRunner.Eq(PanelView.HomeTab, view.Tab, "Needs you opens on Home, where it is");
 
             model.NeedsYou = NeedsYouTile.From(new PromptBroker(() => false), null, null, 6000);
             view.Update(model);

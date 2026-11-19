@@ -48,15 +48,16 @@ namespace Capsule
             var view = new PanelView();
             var model = Sample(5);
             model.Calendar = new CalendarTile();
+            view.SelectTab("weather");
             view.Update(model);
             Lay(view);
-            TestRunner.Check(!HasText(view, "Weather"), "the weather tile is hidden without a saved place");
+            TestRunner.Check(!HasText(view, "Weather") && view.Tab == PanelView.HomeTab, "the weather tile is hidden without a saved place");
 
             WeatherForecast forecast = WeatherApi.Forecast(TestRunner.Fixture("weather-forecast.json"), "celsius");
             model.Weather = new WeatherTile { Place = "Zürich", Forecast = forecast, UpdatedAt = Now };
             view.Update(model);
             Lay(view);
-            TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Weather").Y, "Weather follows Calendar in default order");
+            TestRunner.Check(view.Tab == "weather" && !HasText(view, "Calendar") && !HasText(view, "Claude"), "Weather has a tab to itself");
             TestRunner.Check(HasText(view, "Zürich") && HasText(view, "4°C"), "Weather displays the selected place and temperature");
             TestRunner.Check(!HasText(view, "19%") && HasText(view, "20%"), "Weather shows rain chance only from twenty percent");
             TextBlock hourHeading = FindText(view, "Next 6 hours");
@@ -73,14 +74,16 @@ namespace Capsule
                 link.NavigateUri.AbsoluteUri == "https://open-meteo.com/", "Weather credits and links to its provider");
 
             model.PanelHome = "weather";
+            view.SelectTab(PanelView.HomeTab);
             view.Update(model);
+            view.SelectStartTab();
             Lay(view);
-            TestRunner.Check(Position(view, "Weather").Y < Position(view, "Claude").Y, "Weather can open first");
+            TestRunner.Eq("weather", view.Tab, "the panel can open on Weather");
             model.Weather = null;
             view.Update(model);
             Lay(view);
-            TestRunner.Check(!HasText(view, "Weather") && Position(view, "Claude").Y < Position(view, "Calendar").Y,
-                "turning Weather off hides the tile and restores default order");
+            TestRunner.Check(!HasText(view, "Weather") && view.Tab == PanelView.HomeTab && HasText(view, "Claude"),
+                "turning Weather off hides the tile and falls back to Home");
         }
 
         static void PanelOpeningPreference()
@@ -100,25 +103,30 @@ namespace Capsule
             model.Calendar = new CalendarTile();
             model.Clipboard = new ClipboardTile();
             view.Update(model);
+            view.SelectStartTab();
             Lay(view);
-            TestRunner.Check(Position(view, "Calendar").Y < Position(view, "Claude").Y, "Calendar opens first when available");
-            var boardTiles = (Grid)ScrollOf(view).Content;
-            TestRunner.Check(HasText(boardTiles.Children[0], "Calendar"), "Calendar also comes first in the accessibility order");
-            TestRunner.Near(Position(view, "Claude").Y, Position(view, "Codex").Y, "the usage tiles stay paired");
-            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y, "the other tiles keep their order");
+            TestRunner.Check(view.Tab == "calendar" && HasText(view, "Calendar") && !HasText(view, "Claude"), "the panel opens on the Calendar tab when set");
+            view.SelectTab(PanelView.HomeTab);
+            Lay(view);
+            TestRunner.Near(Position(view, "Claude").Y, Position(view, "Codex").Y, "the usage tiles stay paired on Home");
+            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y && !HasText(view, "Calendar"), "Home has the usage tiles and sessions, and nothing else");
             model.Calendar = null;
             view.Update(model);
+            view.SelectStartTab();
             Lay(view);
-            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Clipboard").Y, "a hidden preferred section falls back to default order");
-            TestRunner.Check(HasText(boardTiles.Children[0], "Claude"), "falling back restores the accessibility order");
+            TestRunner.Eq(PanelView.HomeTab, view.Tab, "with no calendar, it opens on Home");
             model.PanelHome = "clipboard";
             view.Update(model);
+            view.SelectStartTab();
             Lay(view);
-            TestRunner.Check(Position(view, "Clipboard").Y < Position(view, "Claude").Y, "Clipboard can open first");
+            TestRunner.Check(view.Tab == "clipboard" && HasText(view, "Clipboard"), "it can open on Clipboard");
             view.UpdateClipboard(null);
             Lay(view);
-            TestRunner.Check(Position(view, "Claude").Y < Position(view, "Sessions").Y, "hiding Clipboard restores the default order immediately");
+            TestRunner.Check(view.Tab == PanelView.HomeTab && HasText(view, "Claude"), "turning clipboard history off falls back to Home at once");
+            foreach (string[] t in PanelView.Tabs)
+                TestRunner.Check(t[1].Length == 1 && t[1][0] >= (char)0xE000 && t[1][0] <= (char)0xF8FF, t[2] + " tab icon is one icon-font character");
 
+            view.SelectTab(PanelView.HomeTab);
             view.ConstrainHeight(190);
             Lay(view);
             ScrollViewer scroll = ScrollOf(view);
@@ -130,7 +138,7 @@ namespace Capsule
             TestRunner.Near(0, scroll.VerticalOffset, "an ordinary open returns to the top");
             view.FocusIdeas();
             view.UpdateLayout();
-            TestRunner.Check(scroll.VerticalOffset > 0, "the Ideas shortcut scrolls to its field");
+            TestRunner.Check(view.Tab == "ideas", "the Ideas shortcut opens the Ideas tab");
         }
 
         static Point Position(PanelView view, string text)
@@ -224,6 +232,7 @@ namespace Capsule
             PanelModel m = Sample(0);
             m.Ideas = new IdeasTile { Configured = false, Waiting = 1, Note = "Set up Notion to send ideas there.", DiskNote = "Couldn't save to disk yet. Retrying." };
             var view = new PanelView();
+            view.SelectTab("ideas");
             view.Update(m);
             Lay(view);
             TextBlock disk = FindText(view, "Couldn't save to disk yet. Retrying.");
@@ -494,7 +503,8 @@ namespace Capsule
             {
                 TextBlock label = FindText(view, text);
                 if (label != null) label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                TestRunner.Check(label != null && label.DesiredSize.Width <= ((WrapPanel)label.Parent).ActualWidth + 0.5,
+                FrameworkElement holder = label == null ? null : label.Parent as Panel ?? (FrameworkElement)((FrameworkElement)label.Parent).Parent;   // the chip's line holds its Border
+                TestRunner.Check(label != null && label.DesiredSize.Width <= holder.ActualWidth + 0.5,
                     text + " fits in the two-column layout with the scrollbar");
             }
         }
@@ -502,6 +512,7 @@ namespace Capsule
         static void ClipboardCopyFeedback()
         {
             var view = new PanelView();
+            view.SelectTab("clipboard");
             var clips = new ClipboardTile();
             ClipItem item = ClipboardHistory.FromText("git status", Now);
             clips.Items.Add(item);
@@ -528,6 +539,8 @@ namespace Capsule
             TestRunner.Check(HasText(view, "73% used") && HasText(view, "Resets in 51 min") && HasText(view, "Max"), "the Claude tile");
             TestRunner.Check(HasText(view, "Codex isn't set up on this PC"), "the Codex tile says why it's empty");
             TestRunner.Check(HasText(view, "confetti") && HasText(view, "waiting · asked you a question") && HasText(view, "working · 2m"), "the Sessions tile");
+            view.SelectTab("ideas");
+            Lay(view);
             TestRunner.Check(HasText(view, "idea 0") && HasText(view, "✓") && HasText(view, "idea 2"), "the Ideas tile's rows");
             TestRunner.Check(HasText(view, "2 waiting to sync"), "and how many wait");
             TestRunner.Check(HasText(view, "Jot an idea…"), "an empty box shows its hint");
