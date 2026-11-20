@@ -539,7 +539,10 @@ namespace Capsule
             TestRunner.Check(HasText(view, "73% used") && HasText(view, "Resets in 51 min") && HasText(view, "Max"), "the Claude tile");
             TestRunner.Check(HasText(view, "Codex isn't set up on this PC"), "the Codex tile says why it's empty");
             TestRunner.Check(HasText(view, "confetti") && HasText(view, "waiting · asked you a question") && HasText(view, "working · 2m"), "the Sessions tile");
+            int resized = 0;
+            view.Resized += delegate { resized++; };
             view.SelectTab("ideas");
+            TestRunner.Check(resized > 0, "a tab switch asks the window to fit the new tab at once");
             Lay(view);
             TestRunner.Check(HasText(view, "idea 0") && HasText(view, "✓") && HasText(view, "idea 2"), "the Ideas tile's rows");
             TestRunner.Check(HasText(view, "2 waiting to sync"), "and how many wait");
