@@ -582,6 +582,7 @@ namespace Capsule
             ApplyTab();
             FixGaps();
             Relayout();
+            RaiseResized();   // the window fits the new tab now: a taller one waited for the next refresh, up to a second, cut off
         }
 
         void ApplyTab()
@@ -1490,11 +1491,13 @@ namespace Capsule
                 string warning = Palette.UsedWarning(t.Used);
                 if (warning != "")
                 {
-                    Color amber = NotchView.Brush(Palette.Amber).Color;
+                    // Solid amber with dark text: a see-through tint was unreadable over the live blur.
+                    TextBlock word = CardView.MakeText(warning, 10.5, Palette.Amber, FontWeights.SemiBold);
+                    word.Foreground = Theme.Current.Brush(Color.FromRgb(0x1C, 0x1C, 0x1E));
                     var chip = new Border
                     {
-                        Child = CardView.MakeText(warning, 10.5, Palette.Amber, FontWeights.SemiBold),
-                        Background = Theme.Current.Brush(Color.FromArgb(0x2E, amber.R, amber.G, amber.B)),
+                        Child = word,
+                        Background = NotchView.Brush(Palette.Amber),
                         CornerRadius = new CornerRadius(6),
                         Padding = new Thickness(6, 0, 6, 1),
                         Margin = new Thickness(0, 3, 0, 1),
