@@ -15,6 +15,10 @@ namespace Capsule
         public static void Run()
         {
             RECT work = R(0, 0, 1920, 1040);
+            RECT shorter = Layout.KeepTop(R(100, 400, 400, 600), 200, work);
+            TestRunner.Check(shorter.Top == 200 && shorter.Bottom == 400, "a shorter tab keeps the panel's top, so the tabs stay under the pointer");
+            RECT taller = Layout.KeepTop(R(100, 100, 400, 1000), 300, work);
+            TestRunner.Check(taller.Top == 140 && taller.Bottom == 1040, "a taller one moves up only as far as it must to fit");
             RECT right = Layout.NotchRect(work, false, 0.5, 84, 312);
             TestRunner.Eq(1836, right.Left, "flush with the right side");
             TestRunner.Eq(364, right.Top, "centred");

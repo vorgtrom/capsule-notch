@@ -45,6 +45,16 @@ namespace Capsule
             return r;
         }
 
+        // The panel rect r moved to start at top, as far as it fits in the work area.
+        public static RECT KeepTop(RECT r, int top, RECT work)
+        {
+            int height = r.Bottom - r.Top;
+            var moved = r;
+            moved.Top = Math.Max(work.Top, Math.Min(work.Bottom - height, top));
+            moved.Bottom = moved.Top + height;
+            return moved;
+        }
+
         // r grown by n pixels on every side: a window with room around its content for a shadow.
         public static RECT Inflate(RECT r, int n)
         {

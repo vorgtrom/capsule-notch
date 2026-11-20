@@ -47,6 +47,9 @@ namespace Capsule
                 if (!IsOpen) return;
                 Place();
             };
+            // Content that sizes itself after the switch (a clipboard picture, the artwork) fits the window at once,
+            // instead of at the next refresh.
+            view.SizeChanged += delegate { if (IsOpen) Place(); };
             Content = view;
             AllowDrop = true;
             PreviewDragEnter += OnFileDragOver;
@@ -304,7 +307,12 @@ namespace Capsule
             view.Relayout();
             int width = (int)Math.Ceiling((view.DesiredSize.Width - 2 * PanelView.ShadowMargin) * scale);
             int height = (int)Math.Ceiling((view.DesiredSize.Height - 2 * PanelView.ShadowMargin) * scale);
+            int oldTop = body.Top;
+            bool keepTop = IsVisible && body.Bottom > body.Top;
             body = Layout.PanelRect(capsule, leftEdge, monitor.Work, width, height, (int)Math.Round(8 * scale));
+            // Already open: the header stays where it is when the content changes (another tab, a longer list), so the
+            // tab icons don't move from under the pointer. It moves up only as far as a taller page needs to fit.
+            if (keepTop) body = Layout.KeepTop(body, oldTop, monitor.Work);
             RECT r = Layout.Inflate(body, (int)Math.Round(PanelView.ShadowMargin * scale));
             Native.MovePair(hwnd, GlassHandle, r.Left, r.Top, r.Width, r.Height);
             if (glass != null)
