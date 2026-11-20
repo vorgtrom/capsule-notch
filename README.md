@@ -22,7 +22,7 @@ Every ring can be switched off. Install it with [Scoop](#get-it) or download it 
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
-| <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73%, a Codex ring at 21%, and the calendar ring filling during a meeting, marked now"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel: Claude and Codex tiles, the sessions, the Calendar tile with today's and tomorrow's events and tasks, and the Ideas box with recent ideas from Notion"> |
+| <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73%, a Codex ring at 21%, and the calendar ring filling during a meeting, marked now"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel on its Home tab: a row of tab icons, the Claude and Codex tiles, the Ask Claude bar and the sessions"> |
 
 *The pictures show the solid look. On Windows 11 the capsule, its cards and the panel are clear glass, with the
 windows behind them blurred live. They follow Windows' light or dark mode, and turn solid with **Transparency
@@ -457,7 +457,7 @@ volume slider. No sign-in or API key is needed.
 
 | The Focus ring | Focus and Clipboard tiles | Choose your rings |
 |:---:|:---:|:---:|
-| <img src="docs/images/notch-focus.png" width="116" alt="Capsule with Claude and Codex rings and a red Focus ring counting down, 18:42 left"> | <img src="docs/images/panel-focus.png" width="340" alt="The panel with each session's model and tokens, the Focus tile with Pause, Skip and Stop, and the Clipboard tile listing a command, a link, two colours and a note"> | <img src="docs/images/settings-rings.png" width="340" alt="Settings: a switch for each ring and for clipboard history, and the focus lengths"> |
+| <img src="docs/images/notch-focus.png" width="116" alt="Capsule with Claude and Codex rings and a red Focus ring counting down, 18:42 left"> | <img src="docs/images/panel-focus.png" width="340" alt="The panel on its Focus tab: 18:42 left in red, round 1 of 4, with Pause, Skip and Stop"> | <img src="docs/images/settings-rings.png" width="340" alt="Settings: a switch for each ring and for clipboard history, and the focus lengths"> |
 
 Click **Start** on the Focus tile, or **Start focus** in the menu: 25 minutes of focus, a 5-minute break, and a
 15-minute break after every four. A Focus ring counts down on the capsule, red while you focus, green on a break and
@@ -633,7 +633,7 @@ Windows app package, and Windows would redirect AppData writes from there to a p
   The bucket gets each release within a few hours.
 - **winget:** `winget upgrade vorgtrom.Capsule`.
 - **Downloaded:** once a day Capsule checks for a newer release. When there is one, a balloon says so and the menu's
-  first item reads **Capsule v1.11.0 is available…**; choose it for the release page. Quit Capsule, unzip the new zip
+  first item reads **Capsule v1.12.0 is available…**; choose it for the release page. Quit Capsule, unzip the new zip
   over the same folder, and start `Capsule.exe`. To stop the check, untick **Check for updates**.
 - **Built from source:**
   1. `git checkout main`, then `git pull`. (To try a change that isn't merged yet: `git fetch origin`, then
