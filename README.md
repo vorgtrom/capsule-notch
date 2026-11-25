@@ -6,27 +6,31 @@ A little glass capsule on the edge of your Windows screen that keeps an eye on *
 
 https://github.com/user-attachments/assets/390b5032-8688-4078-9ba8-860c0a3ff868
 
-- **Your usage limits at a glance.** One ring per tool, and when each limit resets. Capsule forecasts when you'll
-  run out at your current pace, and warns you before you do.
-- **Your sessions.** Whether each Claude Code session is working, waiting on you or done, with your last prompt,
-  what Claude did last, and how full its context is.
-- **Answer without switching apps.** Approve a command, review a file edit line by line, approve a plan or answer a
-  question right on the capsule. Codex and local ChatGPT Work command approvals and questions too.
-- **Your token history.** A heatmap of tokens per day and model, like Claude Code's `/stats`.
-- **The rest of your day**, in one panel: Google Calendar and Tasks, weather, Spotify or YouTube Music with a volume
-  slider, a focus timer, clipboard history, screenshots of an area or a whole scrolling webpage, a shelf for files,
-  failing GitHub checks, and an Ideas box that saves to Notion.
+- **Your limits at a glance.** One ring per tool, when each limit resets, and a warning before you run out at your
+  current pace.
+- **Answer without switching apps.** Approve a command, review an edit line by line, approve a plan or answer a
+  question right on the capsule, for Claude Code, Codex and local ChatGPT Work.
+- **Your sessions and history.** What each Claude Code session is doing, a heatmap of your tokens, and what they'd
+  cost at API prices.
+- **Ask Claude** from the panel: a prompt goes straight into a new Claude chat or Claude Code session.
+- **The rest of your day**, a tab each: Google Calendar and Tasks, weather, music, a focus timer, clipboard history,
+  a file shelf, failing GitHub checks and an Ideas box that saves to Notion.
+- **Handy tools:** screenshots of an area or a whole webpage, copying the text on screen, and one key to mute your
+  mic in every app.
 
-Every ring can be switched off. Install it with [Scoop](#get-it) or download it from the
+Free and open source. Install it with [Scoop](#get-it) or download it from the
 [Releases page](https://github.com/vorgtrom/capsule-notch/releases/latest).
 
 | On the screen edge | Hover a ring | Click it |
 |:---:|:---:|:---:|
 | <img src="docs/images/notch-normal.png" width="116" alt="Capsule on the right screen edge: a Claude ring at 73%, a Codex ring at 21%, and the calendar ring filling during a meeting, marked now"> | <img src="docs/images/card-claude.png" width="328" alt="The Claude card: each limit with its bar and reset time, and the live Claude Code sessions"> | <img src="docs/images/panel.png" width="340" alt="The panel on its Home tab: a row of tab icons, the Claude and Codex tiles, the Ask Claude bar and the sessions"> |
 
-*The pictures show the solid look. On Windows 11 the capsule, its cards and the panel are clear glass, with the
-windows behind them blurred live. They follow Windows' light or dark mode, and turn solid with **Transparency
-effects** off or on Windows 10.*
+| The Music tab | News beside the capsule | Capture |
+|:---:|:---:|:---:|
+| <img src="docs/images/panel-music.png" width="300" alt="The Music tab: large artwork, the tile tinted with its colours, a wavy progress line and big controls"> | <img src="docs/images/news-pill.png" width="220" alt="A small pill beside the capsule showing the song that just started"> | <img src="docs/images/capture-chooser.png" width="300" alt="The capture window: Screenshot, Whole page and Copy text, each with its key"> |
+
+*The pictures show the solid look. On Windows 11 everything is clear glass with the windows behind blurred live. It
+follows Windows' light or dark mode, and turns solid with **Transparency effects** off or on Windows 10.*
 
 **Contents:**
 [Get it](#get-it) ·
@@ -86,6 +90,9 @@ What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and on each rel
 
 ### Antivirus
 
+<details>
+<summary>If your antivirus freezes or removes Capsule</summary>
+
 Behaviour-based antivirus may freeze or remove Capsule. It's a new, unsigned program that reads the Claude and
 Codex sign-in files, keeps an encrypted Notion secret and Google sign-in, and goes online, which is also what
 token-stealing malware does. Norton did this on the first run.
@@ -98,34 +105,34 @@ If it happens to you:
 
 Only exclusions survive updates and rebuilds. All the source is in this repo, so you can check what it does first.
 
+</details>
+
 ## Use
 
 On first run, Capsule asks whether to start with Windows. **No** is the default; change it in the menu any time.
 
-- **Hover** a ring for its details.
-- **Click** the capsule for the panel. Its ⟳ buttons check again now. If Claude needs signing in, its tile has a
-  **Sign in** button, which runs `claude auth login`.
-- **Ctrl+Alt+N** from any app opens the panel with the cursor in the Ideas box. Type, press Enter, and it's saved.
-  When Claude or Codex is waiting on you, the same shortcut opens the request instead (see
-  [the keyboard](#answer-with-the-keyboard)). Change the shortcut in the panel's Settings (⚙). It isn't
-  Ctrl+Alt+Space, because the Claude desktop app uses that.
-- **Ask Claude**, the box under the Claude and Codex tiles, opens the Claude app with your prompt filled in: **Enter**
-  for a new chat, **Ctrl+Enter** for a new Claude Code session, **Shift+Enter** for a new line. The app shows the
-  prompt for you to check and send; Capsule never sends it.
-- **Ctrl+Alt+M** mutes or unmutes your microphone in every app at once (change it under **Mute microphone** in
-  Settings). While it's muted, the capsule shows a red **Muted** ring. If Windows or another app mutes it, that shows
-  too.
-- **Esc** closes the panel, and so does switching apps. Settings and open calendar forms stay open, so you can copy
-  values from another app. **Back** leaves Settings and clears unsaved secret fields.
-- **Drag** the capsule to move it. It snaps to the left or right edge of the screen you drop it on.
-- **Right-click** the capsule or the tray icon for the menu. **Left-click** the tray icon to hide or show the capsule.
-- It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
+| Do this | And |
+|---|---|
+| **Hover** a ring | its details |
+| **Click** the capsule | the panel. Its ⟳ buttons check again now; a **Sign in** button runs `claude auth login` when Claude needs it |
+| **Drag** the capsule | it snaps to the left or right edge of the screen you drop it on |
+| **Right-click** the capsule or the tray icon | the menu. **Left-click** the tray icon hides or shows the capsule |
+| **Ctrl+Alt+N** | the panel on Ideas, ready to type. While Claude or Codex waits on you, it opens [the request](#answer-with-the-keyboard) instead |
+| **Ctrl+Alt+S** | [Capture](#screenshots-and-scrolling-webpages): a screenshot, a whole webpage, or the text in an area |
+| **Ctrl+Alt+M** | mutes or unmutes your microphone in every app. A red **Muted** ring shows while it's off, however it was muted |
+| **Esc** | closes the panel, as does switching apps. Settings and open calendar forms stay open, so you can copy from another app |
+
+Each shortcut can be changed in Settings. Ctrl+Alt+N isn't Ctrl+Alt+Space, because the Claude desktop app uses that.
+
+- **Ask Claude**, the bar on Home, opens the Claude app with your prompt filled in: **Enter** for a new chat,
+  **Ctrl+Enter** for a new Claude Code session, **Shift+Enter** for a new line. You check and send it there; Capsule
+  never sends it.
 - **News beside the capsule.** A song that starts, text copied from the screen, or the mic muted shows for a moment in
-  a small pill that grows out of its ring, instead of a Windows notification. Limit and session alerts stay Windows
-  notifications. Nothing shows over a request card or the open panel, nor while you focus quietly.
+  a small pill that grows out of its ring. Limit and session alerts stay Windows notifications; click one to open the
+  panel. Nothing shows over a request card or the open panel, nor while you focus quietly.
 - **Slim capsule** (Settings, off by default) turns the capsule into a thin line on the screen edge until you point at
   it. It stays full while something waits on you, the mic is muted, or its card or the panel is open.
-- **Click a usage or session alert** to open the panel.
+- It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
 
 **Settings (⚙ in the panel):**
 - **Your rings.** A switch each for Claude, Codex, Calendar, Music and Focus. A ring that's off leaves the capsule and
@@ -354,6 +361,9 @@ changes come within 5 minutes, and you can add, edit and delete from the [month 
 **Your own Google client (sign in; several calendars).** About ten minutes, once. You sign in instead of pasting a
 link, choose which calendars show, get changes within 5 minutes, and can add, edit and delete from the month page.
 
+<details>
+<summary>Set up your own Google client, step by step</summary>
+
 1. **A project.** In the [Google Cloud console](https://console.cloud.google.com/), create a project (call it Capsule).
 2. **The APIs.** In **APIs & Services → Library**, enable **Google Calendar API** and **Google Tasks API**.
 3. **The consent screen.** Open **Google Auth Platform** (formerly **OAuth consent screen**) and click **Get started**.
@@ -391,6 +401,8 @@ Then Settings shows your account and a box for each calendar: the ones you show 
 **Change client** signs in with another client; **Sign out** forgets the sign-in, asks Google to revoke it, and a saved
 link takes over again. Signed in before adding existed? Add the permissions in step 4 (and the Tasks API, step 2), then
 click **Sign in again**.
+
+</details>
 
 **Either way,** Capsule reads your calendar every 5 minutes signed in, or every 15 with the link, and also when the
 panel opens, after the PC wakes and when the network comes back. If Google can't be reached, it keeps the last list,
