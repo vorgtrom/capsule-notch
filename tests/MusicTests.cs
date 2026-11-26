@@ -204,6 +204,7 @@ namespace Capsule
                 panel.RefreshMusic(snapshot);
                 TestRunner.Eq(2, audio.Reads, "the panel's music refresh reads output volume");
                 panel.View.ShowSettings(false, "", HotkeyText.Default);
+                panel.View.ShowEverySetting();
                 panel.RefreshMusic(snapshot);
                 TestRunner.Eq(2, audio.Reads, "the settings page does not read output volume");
                 panel.View.ShowBoard();

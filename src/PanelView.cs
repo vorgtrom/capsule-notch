@@ -423,6 +423,8 @@ namespace Capsule
             foreach (TextBlock t in new[] { secretHint, shortcutResult, captureShortcutResult, notionResult, clientSecretHint, calendarLinkHint, builtInHint }) t.Foreground = NotchView.Brush(Palette.Secondary);
             googleAccount.Foreground = NotchView.Brush(Palette.Text);
             TintMusic(true);
+            BuildPageButtons();   // the settings pages' pills, in the new colours
+            ShowSettingsPage(settingsPage);
             tabBar.Children.Clear();   // the tab icons, in the new colours
             tabButtons.Clear();
             RefreshTabBar();
@@ -550,6 +552,7 @@ namespace Capsule
         public void ShowPanelHomeResult(bool saved)
         {
             panelHomeResult.Text = saved ? "" : "Couldn't save which section opens first.";
+            panelHomeResult.Visibility = saved ? Visibility.Collapsed : Visibility.Visible;
             RaiseResized();
         }
 
@@ -693,7 +696,8 @@ namespace Capsule
             settingsHeader.Measure(new Size(PanelWidth, double.PositiveInfinity));
             tabBar.Measure(new Size(PanelWidth, double.PositiveInfinity));   // DesiredSize includes its margin
             boardScroll.MaxHeight = Math.Max(1, height - header.DesiredSize.Height - tabBar.DesiredSize.Height);
-            settingsScroll.MaxHeight = Math.Max(1, height - settingsHeader.DesiredSize.Height - Pad);
+            settingsPages.Measure(new Size(PanelWidth, double.PositiveInfinity));
+            settingsScroll.MaxHeight = Math.Max(1, height - settingsHeader.DesiredSize.Height - settingsPages.DesiredSize.Height - Pad);
             month.ConstrainHeight(height);
             usage.ConstrainHeight(height);
         }
@@ -729,6 +733,17 @@ namespace Capsule
         // ---- Settings ----
 
         readonly StackPanel settingsHeader = new StackPanel { Orientation = Orientation.Horizontal };
+        // Settings in three pages, picked from a row of pills under the header: General, Connections and Keys.
+        readonly StackPanel settingsPages = new StackPanel { Orientation = Orientation.Horizontal };
+        readonly StackPanel generalPage = new StackPanel(), connectionsPage = new StackPanel(), keysPage = new StackPanel();
+        readonly StackPanel capsuleBox = new StackPanel();
+        readonly Dictionary<string, Border> pageButtons = new Dictionary<string, Border>();
+        readonly Dictionary<string, TextBlock> connectionStatus = new Dictionary<string, TextBlock>();
+        readonly Dictionary<string, Action<bool>> connectionOpen = new Dictionary<string, Action<bool>>();   // opens or closes a service's setup
+        string settingsPage = "general";
+        public event Action<string, bool> OptionToggled;   // "autostart", "sounds", "limit_alerts" or "finished_alerts", and its new state
+        public Func<bool> AutostartOn = () => false;
+        public string SettingsPage { get { return settingsPage; } }
         readonly System.Collections.Generic.List<TextBlock> settingsLabels = new System.Collections.Generic.List<TextBlock>();
         readonly Border saveButtonHost = new Border();
 
@@ -740,11 +755,15 @@ namespace Capsule
             settings.Margin = new Thickness(0, 0, 0, Pad);
             settingsHeader.Margin = new Thickness(Pad + 4, Pad, Pad, 10);
             settings.Children.Add(settingsHeader);
+            settingsPages.Margin = new Thickness(Pad + 4, 0, Pad, 10);
+            settings.Children.Add(settingsPages);
             settingsScroll.Content = settingsBody;
             settings.Children.Add(settingsScroll);
+            foreach (StackPanel page in new[] { generalPage, connectionsPage, keysPage }) settingsBody.Children.Add(page);
 
+            capsuleBox.Margin = new Thickness(Pad + 4, 0, Pad + 4, 8);
+            generalPage.Children.Add(capsuleBox);   // first: the capsule's own options
             ringsBox.Margin = new Thickness(Pad + 4, 0, Pad + 4, 8);
-            settingsBody.Children.Add(ringsBox);   // first: what the capsule shows
 
             var opening = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 8) };
             opening.Children.Add(SettingsHeading("Open panel with"));
@@ -760,14 +779,19 @@ namespace Capsule
                 if (choice != null && (string)choice.Tag != panelHome && PanelHomeChanged != null)
                     PanelHomeChanged((string)choice.Tag);
             };
+            panelHomeChoice.Visibility = Visibility.Collapsed;   // shown as pills; the box keeps the choice
             opening.Children.Add(panelHomeChoice);
+            opening.Children.Add(Pills(panelHomeChoice));
             panelHomeResult.Foreground = NotchView.Brush(Palette.Amber);
             panelHomeResult.TextWrapping = TextWrapping.Wrap;
+            panelHomeResult.Visibility = Visibility.Collapsed;   // only while there's something to say
             opening.Children.Add(panelHomeResult);
-            settingsBody.Children.Add(opening);
-            settingsBody.Children.Add(BuildGitHubSettings());
-            settingsBody.Children.Add(BuildGoogle());
-            settingsBody.Children.Add(BuildWeatherSettings());
+            generalPage.Children.Add(opening);
+            generalPage.Children.Add(ringsBox);
+            connectionsPage.Margin = new Thickness(0, 0, 0, 8);
+            connectionsPage.Children.Add(Connection("google", "Google Calendar", BuildGoogle()));
+            connectionsPage.Children.Add(Connection("weather", "Weather", BuildWeatherSettings()));
+            connectionsPage.Children.Add(Connection("github", "GitHub checks", BuildGitHubSettings()));
 
             var notion = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
             notion.Children.Add(Section("Ideas → Notion"));
@@ -798,8 +822,10 @@ namespace Capsule
             notionResult.Margin = new Thickness(10, 0, 0, 0);
             save.Children.Add(notionResult);
             notion.Children.Add(save);
+            connectionsPage.Children.Add(Connection("notion", "Ideas → Notion", notion));
 
-            notion.Children.Add(Section("Shortcut"));
+            var ideasKey = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
+            ideasKey.Children.Add(Section("Panel and Ideas"));
             shortcutText.FontSize = 13;
             shortcutText.FontWeight = FontWeights.SemiBold;
             shortcutBox.Child = shortcutText;
@@ -824,14 +850,14 @@ namespace Capsule
                 capturing = false;
                 shortcutText.Text = shortcut;
             };
-            notion.Children.Add(shortcutBox);
+            ideasKey.Children.Add(shortcutBox);
             shortcutResult.FontSize = 11;
             shortcutResult.TextWrapping = TextWrapping.Wrap;
             shortcutResult.Margin = new Thickness(0, 3, 0, 0);
-            notion.Children.Add(shortcutResult);
-            settingsBody.Children.Add(notion);
+            ideasKey.Children.Add(shortcutResult);
+            keysPage.Children.Add(ideasKey);
             var captureSettings = new StackPanel { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
-            captureSettings.Children.Add(Section("Capture shortcut"));
+            captureSettings.Children.Add(Section("Capture"));
             captureShortcutText.FontSize = 13;
             captureShortcutText.FontWeight = FontWeights.SemiBold;
             captureShortcutBox.Child = captureShortcutText;
@@ -871,9 +897,155 @@ namespace Capsule
             captureShortcutResult.TextWrapping = TextWrapping.Wrap;
             captureShortcutResult.Margin = new Thickness(0, 3, 0, 0);
             captureSettings.Children.Add(captureShortcutResult);
-            settingsBody.Children.Add(captureSettings);
+            keysPage.Children.Add(captureSettings);
             MicShortcut = new ShortcutField(Section("Mute microphone"), "Mute microphone shortcut") { Margin = new Thickness(Pad + 4, 0, Pad + 4, 0) };
-            settingsBody.Children.Add(MicShortcut);
+            keysPage.Children.Add(MicShortcut);
+            TextBlock keysHint = Hint("Click one, then press the new keys. Ctrl, Alt or Win with a letter, digit, F-key or Space.");
+            keysHint.Margin = new Thickness(Pad + 4, 12, Pad + 4, 0);
+            keysPage.Children.Add(keysHint);
+            BuildPageButtons();
+            ShowSettingsPage("general");
+        }
+
+        void BuildPageButtons()
+        {
+            settingsPages.Children.Clear();
+            pageButtons.Clear();
+            foreach (string[] p in new[] { new[] { "general", "General" }, new[] { "connections", "Connections" }, new[] { "keys", "Keys" } })
+            {
+                string key = p[0];
+                Border b = Button(CardView.MakeText(p[1], 12.5, Palette.Text, FontWeights.SemiBold), delegate { ShowSettingsPage(key); },
+                    Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(12, 4, 12, 5));
+                b.Margin = new Thickness(0, 0, 4, 0);
+                b.Focusable = true;
+                b.FocusVisualStyle = null;
+                b.BorderThickness = new Thickness(1);
+                System.Windows.Automation.AutomationProperties.SetName(b, p[1] + " settings");
+                b.KeyDown += delegate(object sender, KeyEventArgs e)
+                {
+                    if (e.Key != Key.Enter && e.Key != Key.Space) return;
+                    e.Handled = true;
+                    ShowSettingsPage(key);
+                };
+                b.GotKeyboardFocus += delegate { b.BorderBrush = NotchView.Brush(Palette.Text); };
+                b.LostKeyboardFocus += delegate { b.BorderBrush = null; };
+                pageButtons[key] = b;
+                settingsPages.Children.Add(b);
+            }
+        }
+
+        // One of the three settings pages; the picked pill sits on a light chip.
+        public void ShowSettingsPage(string key)
+        {
+            settingsPage = key;
+            generalPage.Visibility = key == "general" ? Visibility.Visible : Visibility.Collapsed;
+            connectionsPage.Visibility = key == "connections" ? Visibility.Visible : Visibility.Collapsed;
+            keysPage.Visibility = key == "keys" ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var pair in pageButtons)
+            {
+                Brush rest = pair.Key == key ? NotchView.Brush(Palette.Track) : Brushes.Transparent;
+                pair.Value.Background = rest;
+                pair.Value.Tag = rest;
+                ((TextBlock)pair.Value.Child).Foreground = NotchView.Brush(pair.Key == key ? Palette.Text : Palette.Secondary);
+            }
+            settingsScroll.ScrollToTop();
+            RaiseResized();
+        }
+
+        // A service on the Connections page: one line with its name and how it stands ("Connected", "Off", the place),
+        // which opens its setup underneath. Closed at first, so the page is a short list.
+        UIElement Connection(string key, string title, UIElement setup)
+        {
+            var body = setup as StackPanel;
+            if (body != null && body.Children.Count > 0)
+            {
+                var first = body.Children[0] as TextBlock;
+                if (first != null && first.Text == title) body.Children.RemoveAt(0);   // the line above names it already
+            }
+            setup.Visibility = Visibility.Collapsed;
+            var status = CardView.MakeText("", 12, Palette.Secondary, FontWeights.Normal);
+            status.VerticalAlignment = VerticalAlignment.Center;
+            connectionStatus[key] = status;
+            var chevron = new TextBlock { Text = "\uE76C", FontFamily = new FontFamily(IconFont), FontSize = 10, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0), Foreground = NotchView.Brush(Palette.Secondary) };
+            var line = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(chevron, Dock.Right);
+            DockPanel.SetDock(status, Dock.Right);
+            line.Children.Add(chevron);
+            line.Children.Add(status);
+            TextBlock name = CardView.MakeText(title, 13, Palette.Text, FontWeights.SemiBold);
+            name.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(name);
+            Action<bool> show = open =>
+            {
+                setup.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                chevron.Text = open ? "\uE70D" : "\uE76C";
+                RaiseResized();
+            };
+            connectionOpen[key] = show;
+            Border row = Button(line, delegate { show(setup.Visibility != Visibility.Visible); }, Brushes.Transparent, NotchView.Brush(Palette.Track), new Thickness(10, 8, 10, 8));
+            System.Windows.Automation.AutomationProperties.SetName(row, title);
+            row.Margin = new Thickness(Pad - 6, 0, Pad - 6, 2);   // its text lines up with the settings' own
+            var box = new StackPanel();
+            box.Children.Add(row);
+            box.Children.Add(setup);
+            return box;
+        }
+
+        // Every page at once, each service open: the previews and the tests read the settings as one list.
+        internal void ShowEverySetting()
+        {
+            foreach (StackPanel page in new[] { generalPage, connectionsPage, keysPage }) page.Visibility = Visibility.Visible;
+            foreach (UIElement c in connectionsPage.Children)
+            {
+                var box = c as StackPanel;
+                if (box != null && box.Children.Count == 2) box.Children[1].Visibility = Visibility.Visible;
+            }
+            RaiseResized();
+        }
+
+        // The Connections page with one service's setup open, as when the calendar tile says to connect it.
+        public void OpenConnection(string key)
+        {
+            ShowSettingsPage("connections");
+            Action<bool> show;
+            if (connectionOpen.TryGetValue(key, out show)) show(true);
+        }
+
+        void SetConnectionStatus(string key, string text)
+        {
+            TextBlock status;
+            if (connectionStatus.TryGetValue(key, out status)) status.Text = text;
+        }
+
+        // A choice as a row of pills, for a ComboBox that stays hidden and keeps the value (and its SelectionChanged).
+        // A WPF ComboBox draws a white Windows box that matched nothing else in Capsule.
+        UIElement Pills(ComboBox box)
+        {
+            var row = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+            Action paint = delegate
+            {
+                foreach (Border pill in row.Children)
+                {
+                    bool picked = pill.Tag == box.SelectedItem;
+                    pill.Background = NotchView.Brush(picked ? Palette.Track : "#00000000");
+                    pill.BorderBrush = NotchView.Brush(picked ? Palette.Text : Palette.Track);
+                    ((TextBlock)pill.Child).Foreground = NotchView.Brush(picked ? Palette.Text : Palette.Secondary);
+                }
+            };
+            foreach (ComboBoxItem item in box.Items)
+            {
+                ComboBoxItem choice = item;
+                var pill = new Border { Child = CardView.MakeText((string)item.Content, 12.5, Palette.Text, FontWeights.SemiBold), Tag = item,
+                    CornerRadius = new CornerRadius(10), Padding = new Thickness(11, 4, 11, 5), Margin = new Thickness(0, 0, 6, 6),
+                    BorderThickness = new Thickness(1), Cursor = Cursors.Hand };
+                System.Windows.Automation.AutomationProperties.SetName(pill, (string)item.Content);
+                pill.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e) { e.Handled = true; box.SelectedItem = choice; };
+                row.Children.Add(pill);
+            }
+            box.SelectionChanged += delegate { paint(); };
+            paint();
+            return row;
         }
 
         UIElement BuildGitHubSettings()
@@ -904,6 +1076,7 @@ namespace Capsule
         internal void ShowGitHubSettings(string repo)
         {
             githubRepoBox.Text = repo;
+            SetConnectionStatus("github", repo != "" ? repo : "Off");
             githubOff.Visibility = repo != "" ? Visibility.Visible : Visibility.Collapsed;   // a disabled button draws white
             ShowGitHubSettingsResult(repo == "" ? "Off. Capsule checks only public repositories." : "Saved. Capsule checks this repository without signing in.", true);
         }
@@ -945,6 +1118,7 @@ namespace Capsule
             secretBox.Clear();
             clientSecretBox.Clear();
             calendarLinkBox.Clear();
+            SetConnectionStatus("notion", secretSaved && databaseId != "" ? "Connected" : secretSaved ? "No database yet" : "Off");
             clientOpen = false;
             clientIdFresh = true;
             secretHint.Text = secretSaved
@@ -973,7 +1147,7 @@ namespace Capsule
             }
             board.Visibility = Visibility.Collapsed;
             settings.Visibility = Visibility.Visible;
-            RaiseResized();
+            ShowSettingsPage("general");
         }
 
         public void ShowBoard()
@@ -1152,6 +1326,7 @@ namespace Capsule
         {
             if (s.SignedIn && !google.SignedIn) clientOpen = false;   // a sign-in just worked: the client's fields fold away
             google = s;
+            SetConnectionStatus("google", s.SignedIn ? (s.Account != "" ? s.Account : "Signed in") : s.LinkSaved ? "Calendar link" : "Off");
             if (clientIdFresh)
             {
                 clientIdBox.Text = s.UsingBuiltIn ? "" : s.ClientId;   // Capsule's own client is never shown as yours
@@ -1441,11 +1616,34 @@ namespace Capsule
         {
             button.Background = NotchView.Brush(Palette.Track);
             button.Foreground = NotchView.Brush(Palette.Text);
-            button.BorderBrush = NotchView.Brush(Palette.Secondary);
-            button.Padding = new Thickness(8, 3, 8, 3);
-            button.Margin = new Thickness(5, 4, 0, 4);
+            button.Padding = new Thickness(12, 4, 12, 5);
+            button.Margin = new Thickness(0, 4, 6, 4);
             button.VerticalAlignment = VerticalAlignment.Center;
-            button.FontSize = 12;
+            button.FontSize = 12.5;
+            button.FontWeight = FontWeights.SemiBold;
+            button.Cursor = Cursors.Hand;
+            if (button.Template != null && button.Template.Resources.Contains("CapsulePill")) return;
+            // Capsule's pill, as PillButton draws it, in place of Windows' grey box.
+            var surface = new FrameworkElementFactory(typeof(Border), "Surface");
+            surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            surface.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            surface.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            surface.AppendChild(content);
+            var template = new ControlTemplate(typeof(Button)) { VisualTree = surface };
+            template.Resources.Add("CapsulePill", true);
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(UIElement.OpacityProperty, 0.8, "Surface"));
+            template.Triggers.Add(hover);
+            var focus = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+            focus.Setters.Add(new Setter(UIElement.OpacityProperty, 0.8, "Surface"));
+            template.Triggers.Add(focus);
+            var off = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            off.Setters.Add(new Setter(UIElement.OpacityProperty, 0.4, "Surface"));
+            template.Triggers.Add(off);
+            button.Template = template;
         }
 
         UIElement UsageContent(UsageTile t)
@@ -1794,10 +1992,20 @@ namespace Capsule
             bool renew = c.RenewClaudeSignIn;
             ringsBox.Children.Insert(2, SwitchRow("Renew Claude sign-in in the background", renew, true, null,
                 delegate { if (ClaudeRenewalToggled != null) ClaudeRenewalToggled(!renew); }));
+            capsuleBox.Children.Clear();
+            capsuleBox.Children.Add(SettingsHeading("The capsule"));
             bool slimOn = c.SlimCapsule;
-            ringsBox.Children.Add(SwitchRow("Slim capsule", slimOn, true, "A thin line on the screen edge until you point at it", delegate { if (SlimToggled != null) SlimToggled(!slimOn); }));
+            capsuleBox.Children.Add(SwitchRow("Slim capsule", slimOn, true, "A thin line on the screen edge until you point at it", delegate { if (SlimToggled != null) SlimToggled(!slimOn); }));
+            bool autostart = AutostartOn();
+            capsuleBox.Children.Add(SwitchRow("Start with Windows", autostart, true, null, delegate { if (OptionToggled != null) OptionToggled("autostart", !autostart); }));
+            bool sounds = c.Sounds;
+            capsuleBox.Children.Add(SwitchRow("Sounds", sounds, true, "A short chime when a session needs you or finishes", delegate { if (OptionToggled != null) OptionToggled("sounds", !sounds); }));
+            bool alerts = c.LimitAlerts;
+            capsuleBox.Children.Add(SwitchRow("Limit alerts", alerts, true, "A notification as a limit nears, or is on pace to run out", delegate { if (OptionToggled != null) OptionToggled("limit_alerts", !alerts); }));
+            bool finished = c.FinishedAlerts;
+            capsuleBox.Children.Add(SwitchRow("Notify when long turns finish", finished, true, null, delegate { if (OptionToggled != null) OptionToggled("finished_alerts", !finished); }));
             bool clip = c.ClipboardHistory;
-            ringsBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
+            capsuleBox.Children.Add(SwitchRow("Clipboard history", clip, true, "The last 25 copies, in memory only", delegate { if (ClipboardToggled != null) ClipboardToggled(!clip); }));
             if (c.RingOn("focus"))
             {
                 ringsBox.Children.Add(SettingsHeading("Focus lengths"));

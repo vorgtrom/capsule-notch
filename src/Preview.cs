@@ -414,6 +414,7 @@ namespace Capsule
             view.Update(model);
             view.ShowSettings(true, "0123456789abcdef0123456789abcdef", HotkeyText.Default);
             view.ShowGoogle(google);
+            view.OpenConnection("google");
             view.Relayout();
             var host = new Grid { Background = NotchView.Brush(Wallpaper) };
             host.Children.Add(view);

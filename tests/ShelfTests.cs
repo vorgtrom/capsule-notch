@@ -103,6 +103,7 @@ namespace Capsule
                 {
                     panel.View.ShelfTile.Bind(shelf);
                     panel.View.ShowSettings(false, "", "Ctrl+Alt+N");
+                    panel.View.ShowEverySetting();
                     panel.View.ShelfTile.DragFiles(panel.View.ShelfTile, new[] { path }, (source, data, effects) => DragDropEffects.None);
                     TestRunner.Check(panel.IsOpen && panel.View.ShowingSettings, "Settings can stay open when an outbound drag ends");
                 });
@@ -114,6 +115,7 @@ namespace Capsule
             WithInactivePanel(panel =>
             {
                 panel.View.ShowSettings(false, "", "Ctrl+Alt+N");
+                panel.View.ShowEverySetting();
                 panel.View.ClientSecretBox.Password = "unfinished-test-value";
                 TestRunner.Check(!panel.BeginFileDragAtNotch(), "a drag over the notch does not reopen an open Settings page");
                 TestRunner.Eq("unfinished-test-value", panel.View.ClientSecretBox.Password, "the drag preserves an unsaved settings value");
