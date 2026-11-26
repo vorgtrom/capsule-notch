@@ -11,6 +11,7 @@ namespace Capsule
         public const string Working = "working";
         public const string Waiting = "waiting";
         public const string Done = "done";
+        public const string Stopped = "stopped";   // the turn ended on an API error (StopFailure)
     }
 
     // What one hook event does to its session's status file.
@@ -161,12 +162,32 @@ namespace Capsule
                     if (notificationType != null && WaitingNotifications.Contains(notificationType)) return HookOutcome.Set(States.Waiting, Cut(message, 80));
                     return HookOutcome.Nothing();
                 case "Stop":
-                case "StopFailure":
                     return HookOutcome.Set(States.Done, "");
+                case "StopFailure":
+                    return HookOutcome.Set(States.Stopped, StopReason(message));
                 case "SessionEnd":
                     return HookOutcome.Remove();
                 default:
                     return HookOutcome.Nothing();
+            }
+        }
+
+        // Why a turn stopped, in words, from StopFailure's error type (Claude Code's own list).
+        public static string StopReason(string error)
+        {
+            switch (error ?? "")
+            {
+                case "rate_limit": return "Hit a rate limit";
+                case "authentication_failed": return "Signed out of Claude";
+                case "oauth_org_not_allowed": return "Your organization doesn't allow this sign-in";
+                case "account_on_hold": return "Your account is on hold";
+                case "billing_error": return "A billing problem";
+                case "invalid_request": return "The API refused the request";
+                case "model_not_found": return "The model wasn't found";
+                case "server_error": return "The API is overloaded or down";
+                case "max_output_tokens": return "The reply hit its length limit";
+                case "cloud_credential_error": return "Cloud credentials failed";
+                default: return "An API error";
             }
         }
 
@@ -268,7 +289,7 @@ namespace Capsule
             HookOutcome outcome = Map(eventName,
                 Json.Str(Json.Get(root, "notification_type")),
                 Json.Str(Json.Get(root, "tool_name")),
-                Json.Str(Json.Get(root, "message")));
+                Json.Str(Json.Get(root, eventName == "StopFailure" ? "error" : "message")));
             string path = Path.Combine(Paths.SessionsDir, sessionId + ".json");
             if (outcome.Delete)
             {

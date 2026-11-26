@@ -87,6 +87,9 @@ namespace Capsule
         public HeldPrompt Current { get { return queue.Count > 0 ? queue[0] : null; } }
         public int Count { get { return queue.Count; } }
 
+        // The request held for a session, or null.
+        public HeldPrompt HeldFor(string sessionId) { return queue.FirstOrDefault(h => h.Request.SessionId == sessionId); }
+
         // How long until the request shown goes to the app.
         public long MsLeft(long now) { return Current == null ? 0 : Math.Max(0, Current.Deadline - now); }
 

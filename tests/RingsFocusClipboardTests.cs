@@ -117,10 +117,7 @@ namespace Capsule
             List<SessionRow> rows = SessionRow.ListFor(new List<SessionStatus> { new SessionStatus { SessionId = "a", State = States.Working, Project = "web", At = Now, Since = Now } }, Now, out more,
                 sid => new SessionUse { Model = "claude-opus-4-8", Tokens = 1200000 });
             TestRunner.Eq("Opus 4.8 · 1.2M tokens", rows[0].Usage, "a row carries its model and tokens");
-            var panel = new StackPanel();
-            panel.Children.Add(CardView.SessionLine(rows[0]));
-            Lay(panel);
-            TestRunner.Check(Texts(panel).Contains("Opus 4.8 · 1.2M tokens"), "the row draws them");
+            TestRunner.Check(rows[0].Tip.Contains("Opus 4.8 · 1.2M tokens"), "the row's hover tip has them");
         }
 
         static void Focus()

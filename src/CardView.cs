@@ -314,54 +314,53 @@ namespace Capsule
 
         // The project on the left, at its natural width up to ProjectMaxWidth; the status right-aligned in the
         // rest. Each ends in "…" when it doesn't fit, so a long status can't squeeze out the project name.
-        public static UIElement SessionLine(SessionRow s)
+        // One session (sessions redesign): a dot for its state, the project, a short note on the right, then one line of
+        // what it is doing, and its context as a thin bar under it. The prompt and the usage numbers are in the hover tip.
+        // reviewable: a waiting row says "Review ›" (the panel, where a click opens it); elsewhere it says "waiting".
+        public static UIElement SessionLine(SessionRow s, bool reviewable = false)
         {
-            var line = new Grid { Margin = new Thickness(0, 1, 0, 1) };
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            TextBlock project = MakeText(s.Project, 12.5, Palette.Text, FontWeights.Normal);
-            project.MaxWidth = ProjectMaxWidth;
-            TextBlock status = MakeText(s.Status, 12, s.Color, FontWeights.Normal);
-            status.Margin = new Thickness(8, 0, 0, 0);
-            status.HorizontalAlignment = HorizontalAlignment.Right;
-            Grid.SetColumn(status, 1);
-            line.Children.Add(project);
-            line.Children.Add(status);
-            if (s.Detail == "" && s.Usage == "") return line;
-            var both = new StackPanel { Margin = new Thickness(0, 1, 0, 3) };
-            line.Margin = new Thickness(0);
-            both.Children.Add(line);
-            // The prompt and last action, cut with "…", then the model, tokens, context and cache on a line of their own,
-            // always whole. Without a prompt or action, the usage takes the second line.
-            var second = new DockPanel { LastChildFill = true };
-            if (s.Usage != "")
+            var box = new StackPanel { Margin = new Thickness(0, 3, 0, 4), Background = Brushes.Transparent };
+            var top = new DockPanel { LastChildFill = true };
+            var dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 8, 0) };
+            if (s.State == States.Working)
             {
-                TextBlock usage = MakeText(s.Usage, 11, Palette.Secondary, FontWeights.Normal);
-                if (s.Context != "")
-                {
-                    usage.Inlines.Add(new System.Windows.Documents.Run(" · "));
-                    var context = new System.Windows.Documents.Run(s.ContextHigh ? s.Context + " · high" : s.Context);
-                    if (s.ContextHigh) context.Foreground = NotchView.Brush(Palette.Amber);
-                    usage.Inlines.Add(context);
-                }
-                if (s.Cache != "") usage.Inlines.Add(new System.Windows.Documents.Run(" · " + s.Cache));
-                if (s.Context != "" || s.Cache != "") usage.ToolTip = SessionContext.Tip;
-                if (s.Detail == "")
-                {
-                    DockPanel.SetDock(usage, Dock.Left);
-                    second.Children.Add(usage);
-                }
-                else
-                {
-                    second.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
-                    both.Children.Add(second);
-                    both.Children.Add(usage);
-                    return both;
-                }
+                dot.Stroke = NotchView.Brush(Palette.Text);
+                dot.StrokeThickness = 1.5;
             }
-            if (s.Detail != "") second.Children.Add(MakeText(s.Detail, 11, Palette.Secondary, FontWeights.Normal));
-            both.Children.Add(second);
-            return both;
+            else dot.Fill = NotchView.Brush(s.State == States.Waiting ? Palette.Amber : s.State == States.Stopped ? Palette.Red : Palette.Track);
+            DockPanel.SetDock(dot, Dock.Left);
+            top.Children.Add(dot);
+            string rightColor = s.State == States.Waiting ? Palette.Amber : s.State == States.Stopped ? Palette.Red : Palette.Secondary;
+            string note = s.State == States.Waiting && !reviewable ? "waiting" : s.Right != "" ? s.Right : s.Status;
+            TextBlock right = MakeText(note, 12, rightColor, s.State == States.Waiting ? FontWeights.SemiBold : FontWeights.Normal);
+            right.Margin = new Thickness(8, 0, 0, 0);
+            DockPanel.SetDock(right, Dock.Right);
+            top.Children.Add(right);
+            TextBlock project = MakeText(s.Project, 12.5, Palette.Text, FontWeights.SemiBold);
+            project.Opacity = s.Finished ? 0.7 : 1;
+            top.Children.Add(project);
+            box.Children.Add(top);
+            if (s.Line != "")
+            {
+                TextBlock line = MakeText(s.Line, 11.5, s.State == States.Stopped ? Palette.Red : Palette.Secondary, FontWeights.Normal);
+                line.Margin = new Thickness(16, 1, 0, 0);
+                box.Children.Add(line);
+            }
+            if (s.ContextPercent >= 0 && !s.Finished)
+            {
+                // Context as a thin bar, amber from SessionContext.WarnPercent.
+                var track = new Grid { Height = 3, Margin = new Thickness(16, 4, 0, 0) };
+                track.Children.Add(new Border { Background = NotchView.Brush(Palette.Track), CornerRadius = new CornerRadius(1.5) });
+                track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0, Math.Min(100, s.ContextPercent)), GridUnitType.Star) });
+                track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0, 100 - Math.Min(100, s.ContextPercent)), GridUnitType.Star) });
+                Grid.SetColumnSpan(track.Children[0], 2);
+                var fill = new Border { Background = NotchView.Brush(s.ContextHigh ? Palette.Amber : Palette.Secondary), CornerRadius = new CornerRadius(1.5) };
+                track.Children.Add(fill);
+                box.Children.Add(track);
+            }
+            if (s.Tip != "") box.ToolTip = s.Tip;
+            System.Windows.Automation.AutomationProperties.SetName(box, s.Project + ", " + note);
+            return box;
         }
 
         public static TextBlock MakeText(string text, double size, string color, FontWeight weight)

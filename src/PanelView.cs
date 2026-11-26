@@ -1437,6 +1437,12 @@ namespace Capsule
         UIElement CalendarBox(CalendarChoice c)
         {
             var label = new DockPanel();
+            // The month page's small box, not Windows' own white one.
+            var tick = new TextBlock();
+            Border mark = MonthView.Mark(tick, c.Shown);
+            mark.Margin = new Thickness(0, 0, 8, 0);
+            DockPanel.SetDock(mark, Dock.Left);
+            label.Children.Add(mark);
             var dot = new WEllipse { Width = 8, Height = 8, Fill = NotchView.Brush(c.Color), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
             DockPanel.SetDock(dot, Dock.Left);
             label.Children.Add(dot);
@@ -1445,10 +1451,14 @@ namespace Capsule
             {
                 Content = label,
                 IsChecked = c.Shown,
+                Template = MonthView.MakePlainCheckBox(),
+                Cursor = Cursors.Hand,
                 Margin = new Thickness(0, 2, 0, 2),
                 VerticalContentAlignment = VerticalAlignment.Center,
                 FocusVisualStyle = null,
             };
+            box.Checked += delegate { tick.Text = "\uE73E"; };
+            box.Unchecked += delegate { tick.Text = ""; };
             System.Windows.Automation.AutomationProperties.SetName(box, c.Name);
             string id = c.Id;
             box.Click += delegate { if (CalendarToggled != null) CalendarToggled(id, box.IsChecked == true); };
@@ -1756,13 +1766,56 @@ namespace Capsule
             return box;
         }
 
-        static UIElement SessionsContent(SessionsTile t)
+        bool finishedOpen;   // the folded "2 finished" line opened
+
+        public event Action<string> SessionClicked;   // a waiting session's id: open its request
+
+        // Waiting, working and stopped sessions each get a row; finished ones fold into one line that opens on a click.
+        UIElement SessionsContent(SessionsTile t)
         {
             var box = new StackPanel();
             box.Children.Add(TileHeader("Sessions"));
             if (t.Hint != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.Hint, 12, Palette.Secondary, FontWeights.Normal)));
             if (t.CodexHint != "") box.Children.Add(CardView.Wrap(CardView.MakeText(t.CodexHint, 12, Palette.Secondary, FontWeights.Normal)));
-            foreach (SessionRow s in t.Rows) box.Children.Add(CardView.SessionLine(s));
+            var finished = new List<SessionRow>();
+            foreach (SessionRow s in t.Rows)
+            {
+                if (s.Finished) { finished.Add(s); continue; }
+                UIElement row = CardView.SessionLine(s, s.SessionId != "");
+                if (s.State == States.Waiting && s.SessionId != "")
+                {
+                    string id = s.SessionId;
+                    var b = (FrameworkElement)row;
+                    b.Cursor = Cursors.Hand;
+                    b.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e) { e.Handled = true; if (SessionClicked != null) SessionClicked(id); };
+                }
+                box.Children.Add(row);
+            }
+            if (finished.Count > 0)
+            {
+                bool fold = finished.Count >= 2 && finished.Count < t.Rows.Count;   // one, or nothing else to show: no need to fold
+                bool open = !fold || finishedOpen;
+                var names = string.Join(", ", finished.Select(f => f.Project).Distinct().Take(3));
+                var line = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 3, 0, 2), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+                var chevron = new TextBlock { Text = open ? "\uE70E" : "\uE70D", FontFamily = new FontFamily(IconFont), FontSize = 10,
+                    Foreground = NotchView.Brush(Palette.Secondary), VerticalAlignment = VerticalAlignment.Center };
+                DockPanel.SetDock(chevron, Dock.Right);
+                line.Children.Add(chevron);
+                line.Children.Add(CardView.MakeText(finished.Count + " finished \u00B7 " + names, 12, Palette.Secondary, FontWeights.Normal));
+                System.Windows.Automation.AutomationProperties.SetName(line, finished.Count + " finished sessions");
+                if (fold)
+                {
+                    line.MouseLeftButtonUp += delegate(object sender, MouseButtonEventArgs e)
+                    {
+                        e.Handled = true;
+                        finishedOpen = !finishedOpen;
+                        sessionsTile.Child = SessionsContent(t);
+                        RaiseResized();
+                    };
+                    box.Children.Add(line);
+                }
+                if (open) foreach (SessionRow f in finished) box.Children.Add(CardView.SessionLine(f));
+            }
             if (t.More > 0) box.Children.Add(CardView.MakeText("+" + t.More + " more", 12, Palette.Secondary, FontWeights.Normal));
             return box;
         }

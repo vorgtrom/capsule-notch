@@ -77,7 +77,7 @@ namespace Capsule
         public static List<SessionStatus> ForCard(IEnumerable<SessionStatus> list, long now, out int more)
         {
             List<SessionStatus> picked = list
-                .Where(s => s.State == States.Waiting || s.State == States.Working || now - s.At <= RecentMs)
+                .Where(s => s.State == States.Waiting || s.State == States.Working || s.State == States.Stopped || now - s.At <= RecentMs)
                 .OrderBy(s => Rank(s.State))
                 .ThenByDescending(s => s.At)
                 .ToList();
@@ -90,6 +90,7 @@ namespace Capsule
             if (s.State == States.Working) return "working · " + Format.Elapsed(now - s.Since);
             if (s.State == States.Waiting) return "waiting · " + (s.Reason != "" ? s.Reason : "needs you");
             if (s.State == States.Done) return "done · " + Format.Ago(s.At, now);
+            if (s.State == States.Stopped) return "stopped · " + (s.Reason != "" ? s.Reason : "an API error");
             return "idle";
         }
 
@@ -97,7 +98,8 @@ namespace Capsule
         {
             if (state == States.Waiting) return 0;
             if (state == States.Working) return 1;
-            return 2;
+            if (state == States.Stopped) return 2;
+            return 3;
         }
     }
 }

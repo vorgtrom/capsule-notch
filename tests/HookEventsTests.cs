@@ -44,7 +44,8 @@ namespace Capsule
             Expect("PostToolUseFailure", null, "Bash", States.Working, "");
             Expect("PermissionDenied", null, "Bash", States.Working, "");
             Expect("Stop", null, null, States.Done, "");
-            Expect("StopFailure", null, null, States.Done, "");
+            Expect("StopFailure", null, null, States.Stopped, "An API error");
+            TestRunner.Eq("Hit a rate limit", HookEvents.StopReason("rate_limit"), "a stopped turn says why, in words");
             Expect("SomethingNew", null, null, null, null);
             TestRunner.Check(HookEvents.Map("SessionEnd", null, null, null).Delete, "SessionEnd deletes");
         }
