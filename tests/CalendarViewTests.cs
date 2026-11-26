@@ -55,6 +55,8 @@ namespace Capsule
         }
 
         // The element the automation name is on, or null.
+        internal static FrameworkElement NamedFor(DependencyObject root, string name) { return Named(root, name); }
+
         static FrameworkElement Named(DependencyObject root, string name)
         {
             var e = root as FrameworkElement;
@@ -303,6 +305,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Model(null));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             string id = null, secret = null;
             view.GoogleSignInClicked += delegate(string i, string s2) { id = i; secret = s2; };
             view.ShowGoogle(new GoogleSettings { ClientId = "cid", SecretSaved = true, SignedIn = true, Account = "a@example.com", NeedsSignInAgain = true });
@@ -327,6 +330,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Model(null));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "" });
             string draftId = null, draftSecret = null;
             int drafts = 0;
@@ -342,6 +346,7 @@ namespace Capsule
             view.ShowBoard();
             TestRunner.Check(drafts == 1 && draftId == "cid-typed" && draftSecret == "", "closing the settings hands over the typed client ID");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "cid-typed" });
             Lay(view);
             TestRunner.Eq("cid-typed", view.ClientIdBox.Text, "and it is there when they open again");
@@ -355,6 +360,7 @@ namespace Capsule
             TestRunner.Check(HasText(view, "Secret kept for the next sign-in. Paste a new one to replace it."), "a secret held for the next sign-in says so");
             view.ShowGoogle(new GoogleSettings { ClientId = "cid", SecretSaved = true, SignedIn = true });
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "cid", SecretSaved = true, SignedIn = true });
             drafts = 0;
             view.ShowBoard();
@@ -445,6 +451,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Model(null));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "cid-sample" });
             Lay(view);
             TestRunner.Check(HasText(view, "Google Calendar") && HasText(view, "Client ID") && HasText(view, "Client secret") && HasText(view, "Sign in with Google"), "signed out: the client's fields and Sign in with Google");
@@ -496,6 +503,7 @@ namespace Capsule
             view.ShowBoard();
             TestRunner.Eq("", view.ClientSecretBox.Password, "leaving the settings empties the client secret box");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(signedIn);
             Lay(view);
             TestRunner.Check(!HasText(view, "Client ID") && HasText(view, "Change client"), "opened again, the client's fields are folded away");
@@ -619,6 +627,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Model(null));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings());
             Lay(view);
             TestRunner.Check(!HasText(view, "Sign in with Google"), "a build without the client: no one-click sign-in");
@@ -639,6 +648,7 @@ namespace Capsule
             var fresh = new PanelView();
             fresh.Update(Model(null));
             fresh.ShowSettings(false, "", "Ctrl+Alt+N");
+            fresh.ShowEverySetting();
             fresh.ShowGoogle(new GoogleSettings { BuiltInAvailable = true, UsingBuiltIn = true, SignedIn = true, ClientId = "capsule-id" });
             TestRunner.Eq("", fresh.ClientIdBox.Text, "Capsule's client ID never fills your client's box");
         }
@@ -648,6 +658,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Model(null));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings());
             Lay(view);
             TestRunner.Check(HasText(view, "Calendar link") && HasText(view, "Save link") && HasText(view, "Use your own Google client instead"), "nothing set up: the calendar link first, your own client behind a link");
@@ -675,6 +686,7 @@ namespace Capsule
             view.ShowBoard();
             TestRunner.Eq("", view.CalendarLinkBox.Password, "leaving the settings empties the link box");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "cid", SecretSaved = true, SignedIn = true, LinkSaved = true });
             Lay(view);
             TestRunner.Check(!HasText(view, "Calendar link") && HasText(view, "Sign out"), "signed in with your own client, the link steps back");

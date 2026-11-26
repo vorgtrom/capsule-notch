@@ -5,6 +5,9 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **Settings in three pages.** General, Connections and Keys, instead of one long list. Each service on Connections is
+  one line saying how it stands, and opens when you click it. Start with Windows, Sounds and the alerts are now in
+  Settings as well as the menu. Buttons and choices use Capsule's own look instead of grey Windows controls.
 - **Sign in with Google in one click.** Capsule now comes with its own Google sign-in: click **Sign in with Google** in
   Settings and allow access, with no Google Cloud setup. The calendar link and your own client stay as other ways.
   While Google reviews the app, its sign-in page warns that the app isn't verified yet.

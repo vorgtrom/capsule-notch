@@ -444,6 +444,7 @@ namespace Capsule
             foreach (string name in Config.RingNames) if (name != "claude") c.Rings[name] = false;
             view.ShowRings(c);
             view.ShowSettings(false, "", HotkeyText.Default);
+            view.ShowEverySetting();
             Lay(view);
             texts = Texts(view);
             TestRunner.Check(texts.Contains("Rings") && texts.Contains("Focus timer") && texts.Contains("Clipboard history"), "Settings lists the rings");

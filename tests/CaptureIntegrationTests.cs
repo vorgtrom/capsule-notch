@@ -405,6 +405,7 @@ namespace Capsule
             if (button != null) button.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
             TestRunner.Check(clicked, "panel Capture click reaches coordinator entry event");
             view.ShowSettings(false, "", HotkeyText.Default);
+            view.ShowEverySetting();
             status.Invoke(view, new object[] { false, "Ctrl+Alt+S", "Shortcut unavailable" });
             view.Measure(new Size(1200, 2000)); view.Arrange(new Rect(view.DesiredSize)); view.UpdateLayout();
             TestRunner.Check(All(view).OfType<TextBlock>().Any(t => t.Text == "Ctrl+Alt+S") && All(view).OfType<TextBlock>().Any(t => t.Text == "Shortcut unavailable"), "capture settings show configured shortcut and registration result");

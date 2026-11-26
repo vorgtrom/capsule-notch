@@ -262,6 +262,12 @@ namespace Capsule
                 panel.View.MicShortcut.Show(config.MicHotkey, micRegistered);
             };
             panel.View.AskClaude += delegate(string text, bool code) { Guard("ask claude", delegate { OnAskClaude(text, code); }); };
+            panel.View.AutostartOn = delegate
+            {
+                try { return Autostart.IsEnabled(); }
+                catch (Exception) { return false; }
+            };
+            panel.View.OptionToggled += (name, on) => Guard("settings", delegate { OnOptionToggled(name, on); });
             panel.View.MicShortcut.Chosen += delegate(string text) { Guard("mic shortcut", delegate { OnMicShortcutChosen(text); }); };
             panel.View.NotionSaved += OnNotionSaved;
             panel.View.ShortcutChosen += OnShortcutChosen;
@@ -1600,6 +1606,25 @@ namespace Capsule
         {
             if (text.Length > PanelView.AskMaxChars) text = text.Substring(0, PanelView.AskMaxChars - (char.IsHighSurrogate(text[PanelView.AskMaxChars - 1]) ? 1 : 0));
             return (code ? "claude://code/new?q=" : "claude://claude.ai/new?q=") + Uri.EscapeDataString(text);
+        }
+
+        // The switches on Settings' General page that the menu has too: the same settings, saved the same way.
+        void OnOptionToggled(string name, bool on)
+        {
+            if (name == "autostart")
+            {
+                try { Autostart.Set(on, ExePath()); }
+                catch (Exception e) { Log.Error("start with Windows", e); }
+            }
+            else if (name == "sounds")
+            {
+                config.Sounds = on;
+                if (on) Sounds.Play(Capsule.Cue.Attention, Clock.NowMs());   // so you hear what it sounds like
+            }
+            else if (name == "limit_alerts") config.LimitAlerts = on;
+            else if (name == "finished_alerts") config.FinishedAlerts = on;
+            if (name != "autostart") config.Save(Paths.ConfigFile);
+            panel.View.ShowRings(config);
         }
 
         const string MicOffGlyph = "";   // U+EC54 MicOff in the Segoe icon fonts

@@ -59,7 +59,9 @@ namespace Capsule
             weatherUnits.Items.Add(new ComboBoxItem { Content = "Automatic", Tag = "automatic" });
             weatherUnits.Items.Add(new ComboBoxItem { Content = "°C", Tag = "celsius" });
             weatherUnits.Items.Add(new ComboBoxItem { Content = "°F", Tag = "fahrenheit" });
+            weatherUnits.Visibility = Visibility.Collapsed;   // shown as pills; the box keeps the choice
             section.Children.Add(weatherUnits);
+            section.Children.Add(Pills(weatherUnits));
             ShowWeatherSettings(null, "automatic", true);
             return section;
         }
@@ -68,6 +70,7 @@ namespace Capsule
         {
             ClearWeatherSearch();
             weatherPlace.Text = place != null ? place.Label : "";
+            SetConnectionStatus("weather", place != null ? place.Label : "Off");
             weatherOff.Visibility = place != null ? Visibility.Visible : Visibility.Collapsed;   // a disabled button draws white
             weatherUnits.SelectionChanged -= OnWeatherUnitsChanged;
             foreach (ComboBoxItem choice in weatherUnits.Items)

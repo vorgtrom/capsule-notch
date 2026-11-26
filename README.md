@@ -134,7 +134,13 @@ Each shortcut can be changed in Settings. Ctrl+Alt+N isn't Ctrl+Alt+Space, becau
   it. It stays full while something waits on you, the mic is muted, or its card or the panel is open.
 - It hides while a fullscreen app covers its screen, such as a game, a video or a presentation.
 
-**Settings (⚙ in the panel):**
+**Settings (⚙ in the panel)** has three pages:
+- **General:** the capsule's own options (Slim capsule, Start with Windows, Sounds, Limit alerts, Notify when long
+  turns finish, Clipboard history), which tab the panel opens on, the rings, and the focus lengths.
+- **Connections:** Google Calendar, Weather, GitHub checks and Ideas → Notion, one line each with how it stands
+  ("Off", your city, "Connected"). Click one to set it up.
+- **Keys:** the shortcuts for the panel and Ideas, Capture, and Mute microphone.
+
 - **Your rings.** A switch each for Claude, Codex, Calendar, Music and Focus. A ring that's off leaves the capsule and
   the panel, and Capsule stops its work: no checks, alerts or sounds for it. A request that ring would hold goes
   straight to the Claude or Codex app. One ring always stays on.

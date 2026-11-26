@@ -37,6 +37,7 @@ namespace Capsule
             ShowsTheSettingsIcons();
             SurvivesBeingClosed();
             DiskNoteIsAmberEvenBeforeSetup();
+            SettingsPages();
             PagesScrollInsideTheWorkArea();
             SettingsAndFormsKeepThePanelOpen();
             PanelOpeningPreference();
@@ -185,6 +186,7 @@ namespace Capsule
             view.Update(Sample(5));
             foreach (double height in new[] { 320.0, 240.0, 192.0 }) CheckScroll(view, height, "Capsule");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             view.ShowGoogle(new GoogleSettings { ClientId = "synthetic-client" });
             CheckScroll(view, 320, "Settings");
             view.ClientIdBox.Text = "unfinished-client";
@@ -207,6 +209,7 @@ namespace Capsule
             view.Update(Sample(0));
             TestRunner.Check(!view.KeepOpenOnDeactivate, "the normal board still dismisses on an app switch");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             TestRunner.Check(view.KeepOpenOnDeactivate, "settings remain open while copying values from another app");
             view.ShowBoard();
             TestRunner.Check(!view.KeepOpenOnDeactivate, "Back restores normal dismissal");
@@ -241,6 +244,33 @@ namespace Capsule
             TestRunner.Check(setup != null && ((SolidColorBrush)setup.Foreground).Color == NotchView.Brush(Palette.Secondary).Color, "while the setup hint stays grey");
         }
 
+        // Settings in three pages: General first; each service on Connections is one line with how it stands.
+        static void SettingsPages()
+        {
+            var view = new PanelView();
+            view.Update(Sample(2));
+            view.ShowRings(new Config());
+            view.ShowSettings(true, NotionTests.Db, "Ctrl+Alt+N");
+            view.ShowGitHubSettings("owner/repo");
+            Lay(view);
+            TestRunner.Check(view.SettingsPage == "general" && HasText(view, "Slim capsule") && HasText(view, "Start with Windows") && !HasText(view, "Notion secret"), "Settings open on General, without the services");
+            view.ShowSettingsPage("connections");
+            Lay(view);
+            TestRunner.Check(HasText(view, "Google Calendar") && HasText(view, "owner/repo") && HasText(view, "Connected") && !HasText(view, "Notion secret"), "Connections lists each service with how it stands, closed");
+            Click(CalendarViewTests.NamedFor(view, "Ideas → Notion"));
+            Lay(view);
+            TestRunner.Check(HasText(view, "Notion secret"), "clicking one opens its setup");
+            view.ShowSettingsPage("keys");
+            Lay(view);
+            TestRunner.Check(HasText(view, "Ctrl+Alt+N") && !HasText(view, "Slim capsule"), "Keys has the shortcuts");
+            string toggled = null;
+            view.OptionToggled += (name, on) => toggled = name + "=" + on;
+            view.ShowSettingsPage("general");
+            Lay(view);
+            Click(CalendarViewTests.NamedFor(view, "Sounds, on"));
+            TestRunner.Eq("sounds=False", toggled, "the Sounds switch hands over its new state");
+        }
+
         static void SettingsShowWhatIsSaved()
         {
             var view = new PanelView();
@@ -248,8 +278,9 @@ namespace Capsule
             int resized = 0;
             view.Resized += delegate { resized++; };
             view.ShowSettings(true, NotionTests.Db, "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
-            TestRunner.Check(view.ShowingSettings && resized == 1, "the settings take the tiles' place, and the window is told to resize");
+            TestRunner.Check(view.ShowingSettings && resized >= 1, "the settings take the tiles' place, and the window is told to resize");
             TestRunner.Check(HasText(view, "Saved. Paste a new one to replace it."), "a saved secret is mentioned, not shown");
             TestRunner.Check(!HasText(view, "73% used"), "the tiles are hidden");
             TestRunner.Check(HasText(view, "Ctrl+Alt+N"), "the shortcut");
@@ -267,6 +298,7 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(!view.ShowingSettings && HasText(view, "73% used"), "back to the tiles");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             TestRunner.Check(HasText(view, "Your connection's secret, from app.notion.com/developers (Configuration tab)."), "no secret yet: where to find one");
         }
@@ -299,6 +331,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Sample(0));
             view.ShowSettings(true, NotionTests.Db, "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             TextBox link = null;
             PasswordBox secret = null;
@@ -310,6 +343,7 @@ namespace Capsule
             }
             secret.Password = "x";
             view.ShowSettings(true, NotionTests.Db, "Ctrl+Alt+N");
+            view.ShowEverySetting();
             TestRunner.Check(secret.Password == "", "showing the settings starts with an empty secret box");
             secret.Password = "x";
             view.ShowBoard();
@@ -323,6 +357,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Sample(0));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             TextBox link = null;
             PasswordBox secret = null;
@@ -360,6 +395,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Sample(0));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             FrameworkElement save = Holder(view, "Save and test");
             if (save == null)
@@ -383,6 +419,7 @@ namespace Capsule
             var view = new PanelView();
             view.Update(Sample(0));
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             FrameworkElement box = Holder(view, "Ctrl+Alt+N");
             TestRunner.Check(box != null && !InputMethod.GetIsInputMethodEnabled(box), "the shortcut box turns the input method off, so key presses reach it as keys");
@@ -623,6 +660,7 @@ namespace Capsule
             Lay(view);
             TestRunner.Check(HasText(view, gear) && !HasText(view, back), "the header has the settings gear, U+E713, and the tiles have no back arrow");
             view.ShowSettings(false, "", "Ctrl+Alt+N");
+            view.ShowEverySetting();
             Lay(view);
             TestRunner.Check(HasText(view, back), "with the settings shown, the back button has its arrow, U+E72B");
         }
