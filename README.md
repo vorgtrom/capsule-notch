@@ -191,12 +191,17 @@ to pick one with the keyboard.
 ### Hover a ring
 
 - **Claude:** every limit and when it resets, with its pace (see [Pace](#pace)), then your live Claude Code sessions.
-  Each shows:
-  - the start of your last prompt and what Claude did last ("“fix the auth bug…” · Edited middleware.ts");
-  - its model and tokens so far, how full its context window is, and how long its prompt cache stays warm ("Opus 4.8
-    · 1.2M tokens · ctx 64% · cache 41m").
-  - The context is measured against the model's window (200K, or 1M for models that have it) and reads "high" in
-    amber from 80%.
+  Each is one row:
+  - a dot for its state: amber waiting on you, an open circle working, red stopped on an API error, grey done;
+  - the project, and on the right how long it has worked, how long ago it finished, or "waiting";
+  - one line of what it needs or did last ("Needs permission: Bash", "Edited middleware.ts"), or why it stopped
+    ("Hit a rate limit", "The API is overloaded or down");
+  - a thin bar for how full its context window is, amber from 80%, measured against the model's window (200K, or 1M
+    for models that have it).
+  - Hover a row for your last prompt, the model and tokens so far, and how long its prompt cache stays warm
+    ("Opus 4.8 · 1.2M tokens · ctx 64% · cache 41m").
+  - On the panel's Home tab the same rows sit under **Sessions**: click a waiting one (**Review ›**) to answer it on
+    the card, and finished ones fold into one line ("2 finished · docs, api") that opens on a click.
   - The cache time is an estimate, counted from the latest reply: an hour on a Claude plan, 5 minutes with an API key.
     Claude doesn't publish the exact expiry.
 - **Codex:** every limit, then your latest Codex chat and its model. Once the chat records a token count, how full its

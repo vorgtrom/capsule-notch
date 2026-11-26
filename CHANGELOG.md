@@ -5,6 +5,12 @@ download for each one. A release takes its notes from its section here.
 
 ## Unreleased
 
+- **A tidier sessions list.** One row per session: a dot for its state, the project, one line of what it needs or did
+  last, and its context as a thin bar. Your prompt, the model, tokens and cache moved into the row's hover tip. Click
+  a waiting session in the panel to answer it, and finished ones fold into one line.
+- **Stopped sessions.** A turn that ends on an API error (a rate limit, an outage, signed out) shows in red with why,
+  instead of looking done, and plays the attention sound.
+- **Calendar choices** in Settings use Capsule's own small boxes.
 - **Settings in three pages.** General, Connections and Keys, instead of one long list. Each service on Connections is
   one line saying how it stands, and opens when you click it. Start with Windows, Sounds and the alerts are now in
   Settings as well as the menu. Buttons and choices use Capsule's own look instead of grey Windows controls.

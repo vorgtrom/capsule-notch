@@ -268,6 +268,7 @@ namespace Capsule
                 catch (Exception) { return false; }
             };
             panel.View.OptionToggled += (name, on) => Guard("settings", delegate { OnOptionToggled(name, on); });
+            panel.View.SessionClicked += id => Guard("session", delegate { OpenSessionRequest(id); });
             panel.View.MicShortcut.Chosen += delegate(string text) { Guard("mic shortcut", delegate { OnMicShortcutChosen(text); }); };
             panel.View.NotionSaved += OnNotionSaved;
             panel.View.ShortcutChosen += OnShortcutChosen;
@@ -1625,6 +1626,14 @@ namespace Capsule
             else if (name == "finished_alerts") config.FinishedAlerts = on;
             if (name != "autostart") config.Save(Paths.ConfigFile);
             panel.View.ShowRings(config);
+        }
+
+        // A waiting session clicked in the panel: its request, on the card, as Needs you's Review does. Nothing held for it
+        // (answered meanwhile, or asked in the app itself): nothing happens.
+        void OpenSessionRequest(string sessionId)
+        {
+            // Requests are answered oldest first ("1 of 3"), so the card opens on the first one held.
+            if (prompts.HeldFor(sessionId) != null && prompts.Current != null) OpenHeldPrompt(prompts, prompts.Current, Clock.NowMs());
         }
 
         const string MicOffGlyph = "";   // U+EC54 MicOff in the Segoe icon fonts

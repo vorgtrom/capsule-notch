@@ -31,13 +31,13 @@ namespace Capsule
             var model = CardModel.From(ClaudeReading(), null, true, Now, En);
             model.Rows.Add(new CardRow { Label = "Weekly", Used = 50, UsedText = "50% used" });
             model.Rows.Add(new CardRow { Label = "Daily", Used = 49.9, UsedText = "50% used" });
-            model.SessionRows.Add(new SessionRow { Project = "sample", Usage = "Sonnet", Context = "ctx 85%", ContextHigh = true });
+            model.SessionRows.Add(new SessionRow { Project = "sample", Usage = "Sonnet", Context = "ctx 85%", ContextHigh = true, ContextPercent = 85, State = States.Working });
             var view = new CardView();
             view.Show(model, true);
             ArrangeCard(view);
             TestRunner.Check(FindText(view, "73% used · near limit") != null && FindText(view, "50% used · high") != null &&
                 FindText(view, "50% used") != null, "the usage card shows warning words at the unrounded thresholds");
-            TestRunner.Check(FindText(view, "ctx 85% · high") != null, "high context is described in words");
+            TestRunner.Check(AllBorders(view).Any(b => b.Background is SolidColorBrush && ((SolidColorBrush)b.Background).Color == NotchView.Brush(Palette.Amber).Color), "high context draws its bar amber");
         }
 
         static void AQueueBadgeResizesAnOpenCard()
@@ -200,7 +200,7 @@ namespace Capsule
         static void LongTextStaysInsideTheSessionRow()
         {
             const string LongProject = "a-really-long-project-folder-name-that-goes-on";
-            const string LongStatus = "waiting · needs permission: mcp__plugin_claude-mem_mcp-search__smart_search";
+            const string LongStatus = "Needs permission: mcp__plugin_claude-mem_mcp-search__smart_search";
             var sessions = new List<SessionStatus>
             {
                 new SessionStatus { SessionId = "a", State = States.Waiting, At = Now, Since = Now, Project = "confetti", Reason = "needs permission: mcp__plugin_claude-mem_mcp-search__smart_search" },
@@ -213,16 +213,23 @@ namespace Capsule
             TextBlock project = FindText(view, "confetti");
             TextBlock status = FindText(view, LongStatus);
             TextBlock longProject = FindText(view, LongProject);
-            TextBlock working = FindText(view, "working · 2m");
+            TextBlock working = FindText(view, "2m");
             if (project == null || status == null || longProject == null || working == null)
             {
                 TestRunner.Check(false, "the session texts are on the card");
                 return;
             }
-            TestRunner.Check(project.ActualWidth >= NaturalWidth(project) - 1, "a long status leaves the project name whole: " + project.ActualWidth);
-            TestRunner.Check(project.ActualWidth + 8 + status.ActualWidth <= CardView.CardWidth - 2 * CardView.Inset + 1, "and is trimmed to fit the row");
-            TestRunner.Check(longProject.ActualWidth <= CardView.ProjectMaxWidth + 1, "a long project name stops at its limit: " + longProject.ActualWidth);
-            TestRunner.Check(working.ActualWidth >= NaturalWidth(working) - 1, "leaving its status whole");
+            TestRunner.Check(project.ActualWidth >= NaturalWidth(project) - 1, "a short project name stays whole: " + project.ActualWidth);
+            TestRunner.Check(status.ActualWidth <= CardView.CardWidth - 2 * CardView.Inset + 1, "a long reason is trimmed to fit the row");
+            TestRunner.Check(longProject.ActualWidth < NaturalWidth(longProject), "a long project name is cut: " + longProject.ActualWidth);
+            TestRunner.Check(working.ActualWidth >= NaturalWidth(working) - 1, "leaving the time beside it whole");
+        }
+
+        static IEnumerable<Border> AllBorders(DependencyObject root)
+        {
+            if (root is Border) yield return (Border)root;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+                foreach (Border b in AllBorders(VisualTreeHelper.GetChild(root, i))) yield return b;
         }
 
         // The TextBlock showing exactly this text, searched through the visual tree.

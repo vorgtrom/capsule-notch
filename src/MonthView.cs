@@ -423,7 +423,7 @@ namespace Capsule
         }
 
         // The small rounded box of a task, or of All day: ticked when on.
-        static Border Mark(TextBlock tick, bool on)
+        internal static Border Mark(TextBlock tick, bool on)
         {
             tick.Text = on ? CheckGlyph : "";
             tick.FontFamily = new FontFamily(PanelView.IconFont);
@@ -447,7 +447,7 @@ namespace Capsule
         // the page's own thread.
         readonly ControlTemplate plainCheckBox = MakePlainCheckBox();
 
-        static ControlTemplate MakePlainCheckBox()
+        internal static ControlTemplate MakePlainCheckBox()
         {
             var back = new FrameworkElementFactory(typeof(Border));
             back.SetValue(Border.BackgroundProperty, Brushes.Transparent);

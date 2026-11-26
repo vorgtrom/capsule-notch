@@ -38,6 +38,7 @@ namespace Capsule
             SurvivesBeingClosed();
             DiskNoteIsAmberEvenBeforeSetup();
             SettingsPages();
+            SessionsFold();
             PagesScrollInsideTheWorkArea();
             SettingsAndFormsKeepThePanelOpen();
             PanelOpeningPreference();
@@ -242,6 +243,27 @@ namespace Capsule
             TextBlock setup = FindText(view, "Set up Notion to send ideas there.");
             TestRunner.Check(disk != null && ((SolidColorBrush)disk.Foreground).Color == NotchView.Brush(Palette.Amber).Color, "the note about the disk is amber, though Notion isn't set up");
             TestRunner.Check(setup != null && ((SolidColorBrush)setup.Foreground).Color == NotchView.Brush(Palette.Secondary).Color, "while the setup hint stays grey");
+        }
+
+        // Finished sessions fold into one line that opens on a click; a waiting one asks for its request.
+        static void SessionsFold()
+        {
+            var view = new PanelView();
+            PanelModel m = Sample(0);
+            m.Sessions = new SessionsTile();
+            m.Sessions.Rows.Add(new SessionRow { SessionId = "a", State = States.Waiting, Project = "web", Right = "Review ›", Line = "Asked you a question" });
+            m.Sessions.Rows.Add(new SessionRow { SessionId = "b", State = States.Done, Project = "docs", Right = "4 min ago" });
+            m.Sessions.Rows.Add(new SessionRow { SessionId = "c", State = States.Done, Project = "api", Right = "9 min ago" });
+            view.Update(m);
+            Lay(view);
+            TestRunner.Check(HasText(view, "2 finished · docs, api") && !HasText(view, "4 min ago"), "finished sessions fold into one line");
+            string clicked = null;
+            view.SessionClicked += id => clicked = id;
+            Click(CalendarViewTests.NamedFor(view, "web, Review ›"));
+            TestRunner.Eq("a", clicked, "a waiting session asks for its request");
+            Click(CalendarViewTests.NamedFor(view, "2 finished sessions"));
+            Lay(view);
+            TestRunner.Check(HasText(view, "4 min ago") && HasText(view, "9 min ago"), "the line opens to show them");
         }
 
         // Settings in three pages: General first; each service on Connections is one line with how it stands.
@@ -575,7 +597,7 @@ namespace Capsule
             TestRunner.Check(HasText(view, "Capsule"), "the header");
             TestRunner.Check(HasText(view, "73% used") && HasText(view, "Resets in 51 min") && HasText(view, "Max"), "the Claude tile");
             TestRunner.Check(HasText(view, "Codex isn't set up on this PC"), "the Codex tile says why it's empty");
-            TestRunner.Check(HasText(view, "confetti") && HasText(view, "waiting · asked you a question") && HasText(view, "working · 2m"), "the Sessions tile");
+            TestRunner.Check(HasText(view, "confetti") && HasText(view, "Asked you a question") && HasText(view, "Review ›") && HasText(view, "2m"), "the Sessions tile: a dot, the project, what it needs, and Review");
             int resized = 0;
             view.Resized += delegate { resized++; };
             view.SelectTab("ideas");

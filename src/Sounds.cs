@@ -91,6 +91,7 @@ namespace Capsule
                 string was;
                 before.TryGetValue(s.Key, out was);
                 if (s.Value == States.Waiting && was != States.Waiting) return Cue.Attention;   // the most urgent wins
+                if (s.Value == States.Stopped && was != States.Stopped) return Cue.Attention;   // stopped on an error: look at it
                 if (s.Value == States.Done && was == States.Working) cue = Cue.Done;
             }
             return cue;
